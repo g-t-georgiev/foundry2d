@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Pixel Art Creator</title>
+    <style>
+      body {
+        margin: 0;
+        background: #121212;
+        color: #fff;
+        font-family: sans-serif;
+        display: flex;
+        height: 100vh;
+        overflow: hidden;
+      }
+      #sidebar {
+        width: 240px;
+        border-right: 1px solid #333;
+        padding: 12px;
+      }
+      #viewport {
+        flex: 1;
+        position: relative;
+      }
+      canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        image-rendering: pixelated;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="sidebar">
+      <h3>Pixel Editor</h3>
+      <layers-manager id="layerManager"></layers-manager>
+    </div>
+    <div id="viewport">
+      <canvas id="paintCanvas"></canvas>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
