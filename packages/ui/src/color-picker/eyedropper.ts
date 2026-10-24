@@ -9,15 +9,12 @@ declare global {
     signal?: AbortSignal;
   }
 
-  /** Declares the EyeDropper class constructor and instance method */
-  interface EyeDropper {
-    open(options?: ColorSelectionOptions): Promise<ColorSelectionResult>;
-  }
-
   // Adds the EyeDropper constructor to the global scope
+  /** Declares the EyeDropper class constructor and instance method */
   var EyeDropper: {
-    prototype: EyeDropper;
-    new (): EyeDropper;
+    prototype: typeof EyeDropper;
+    new (): typeof EyeDropper;
+    open(options?: ColorSelectionOptions): Promise<ColorSelectionResult>;
   };
 
   // Extend the Window interface to recognize window.EyeDropper

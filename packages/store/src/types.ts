@@ -12,9 +12,9 @@ export type ActionDefinition<State, Type extends string, Schema extends JSONSche
 export type ActionConstraint<State> = {
   type: string;
   schema?: JSONSchema;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // oxlint-disable-next-line @typescript-eslint/no-explicit-any
   reducer?: (state: State, payload: any) => void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // oxlint-disable-next-line @typescript-eslint/no-explicit-any
   effect?: (event: StoreEvent<State, string, any>) => void;
 };
 

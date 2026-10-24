@@ -8,8 +8,8 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vp test run",
+    "test:watch": "vp test",
     "tsc:check": "tsc --noEmit"
   },
   "dependencies": {
@@ -19,6 +19,6 @@
   },
   "devDependencies": {
     "typescript": "^5.4.0",
-    "vitest": "^1.5.0"
+    "vite-plus": "catalog:"
   }
 }

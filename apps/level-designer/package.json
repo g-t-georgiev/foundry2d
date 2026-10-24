@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview",
+    "dev": "vp dev",
+    "build": "tsc && vp build",
+    "preview": "vp preview",
     "tsc:check": "tsc --noEmit"
   },
   "dependencies": {
@@ -16,6 +16,7 @@
   "devDependencies": {
     "@types/node": "^26.4.0",
     "typescript": "^5.4.0",
-    "vite": "^5.2.0"
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
   }
 }

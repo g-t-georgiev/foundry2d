@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vite-plus/test";
 import { Store, defineAction } from "../src";
 
 type AppState = { user: { id: string; name: string } | null; counter: number };

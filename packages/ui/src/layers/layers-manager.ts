@@ -430,7 +430,7 @@ export default class LayersManager extends LayersManagerBase implements WebCompo
     } else {
       // Closing
       this._panelContent.style.setProperty("height", `${this._panelContent.scrollHeight}px`);
-      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+      // oxlint-disable-next-line @typescript-eslint/no-unused-expressions
       this._panelContent.offsetHeight; // Force Reflow
 
       this._panelContent.style.setProperty("will-change", "height");
