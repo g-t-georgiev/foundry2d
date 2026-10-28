@@ -1,10 +1,12 @@
 import "../eyedropper";
 import { type WebComponent, WebComponentBase, customElement } from "../../core";
 import {
-  type ColorChangeEventShape,
+  type ColorPickerEventMap,
+  type ColorChangedEventShape,
   ColorFormat,
   type SupportedColorFormat,
   type onMoveCallback,
+  ColorPickerEvents,
 } from "../types";
 import { ColorUtils, SUPPORTED_COLOR_FORMATS } from "../utils";
 
@@ -274,7 +276,7 @@ template.innerHTML = `
   </div>
 `;
 
-const ColorPickerPanelBase = WebComponentBase({ mode: "open" }, { abstract: true });
+const ColorPickerPanelBase = WebComponentBase<ColorPickerEventMap>({ mode: "open" });
 
 @customElement("color-picker-panel")
 export default class ColorPickerPanel extends ColorPickerPanelBase implements WebComponent {
@@ -282,6 +284,7 @@ export default class ColorPickerPanel extends ColorPickerPanelBase implements We
 
   private _hsv: [number, number, number] = [0, 1, 1];
   private _alpha: number = 1;
+  private displayString!: string;
   private _format: SupportedColorFormat = ColorFormat.HEX;
   private _formatOptionsList = SUPPORTED_COLOR_FORMATS;
   private _formatListExpanded: boolean = false;
@@ -424,17 +427,15 @@ export default class ColorPickerPanel extends ColorPickerPanelBase implements We
     if (this._format === ColorFormat.HEX) {
       output = ColorUtils.rgbToHex(r, g, b, this._alpha);
     } else if (this._format === ColorFormat.RGB) {
-      output =
-        this._alpha < 1
-          ? `rgba(${r}, ${g}, ${b}, ${this._alpha.toFixed(2)})`
-          : `rgb(${r}, ${g}, ${b})`;
+      output = ColorUtils.getRgbString(r, g, b, this._alpha);
     } else if (this._format === ColorFormat.HSL) {
-      const [hslH, hslS, hslL] = ColorUtils.rgbToHsl(r, g, b);
-      output =
-        this._alpha < 1
-          ? `hsla(${hslH}, ${Math.round(hslS * 100)}%, ${Math.round(hslL * 100)}%, ${this._alpha.toFixed(2)})`
-          : `hsl(${hslH}, ${Math.round(hslS * 100)}%, ${Math.round(hslL * 100)}%)`;
+      const [h, s, l] = ColorUtils.rgbToHsl(r, g, b);
+      output = ColorUtils.getHslString(h, s, l, this._alpha);
     }
+
+    if (!output) return;
+
+    this.displayString = output;
 
     // Update elements
     this._elemsMap.colorDisplay.textContent = output;
@@ -455,7 +456,7 @@ export default class ColorPickerPanel extends ColorPickerPanelBase implements We
     const hex = ColorUtils.rgbToHex(r, g, b, this._alpha);
 
     this.dispatchEvent(
-      new CustomEvent<ColorChangeEventShape>("color-changed", {
+      new CustomEvent<ColorChangedEventShape>(ColorPickerEvents.ColorChanged, {
         bubbles: true,
         composed: true,
         detail: {
@@ -464,7 +465,7 @@ export default class ColorPickerPanel extends ColorPickerPanelBase implements We
           g,
           b,
           alpha: this._alpha,
-          displayString: this._elemsMap.colorDisplay.textContent,
+          displayString: this.displayString,
         },
       })
     );

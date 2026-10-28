@@ -31,10 +31,6 @@ export interface WebComponentConstructor extends CustomElementConstructor {
   readonly observedAttributes?: string[];
 }
 
-export type WebComponentBaseOptions = {
-  abstract?: boolean;
-};
-
 export type TemplateFactory<T> = (props: T) => string;
 
 /** Allow strings, numbers, booleans, or a function that evaluates to one of those based on props */

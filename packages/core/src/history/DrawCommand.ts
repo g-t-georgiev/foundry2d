@@ -1,9 +1,9 @@
-import type { ICommand } from "./HistoryManager";
-import type { GridLayer, CellChange } from "../document/GridLayer";
+import type { ICommand } from "./types";
+import type { GridLayer, CellChange } from "../document";
 
-export class DrawCommand<TArray extends Uint32Array | Int32Array> implements ICommand {
+export class DrawCommand<Buffer extends Uint32Array | Int32Array> implements ICommand {
   constructor(
-    private layer: GridLayer<TArray>,
+    private layer: GridLayer<Buffer>,
     private changes: CellChange<number>[]
   ) {}
 

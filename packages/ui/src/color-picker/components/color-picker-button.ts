@@ -1,5 +1,5 @@
 import { customElement, type WebComponent, WebComponentBase } from "../../core";
-import type { ColorChangeEventShape } from "../types";
+import { ColorPickerEvents, type ColorChangedEventShape, type ColorPickerEventMap } from "../types";
 import type ColorPickerPanel from "./color-picker-panel";
 import { ColorUtils } from "../utils";
 
@@ -66,14 +66,7 @@ template.innerHTML = `
   </div>
 `;
 
-export type ColorPickerButtonEventMap = HTMLElementEventMap & {
-  "color-changed": CustomEvent<ColorChangeEventShape>;
-};
-
-const ColorPickerButtonBase = WebComponentBase<ColorPickerButtonEventMap>(
-  { mode: "open" },
-  { abstract: true }
-);
+const ColorPickerButtonBase = WebComponentBase<ColorPickerEventMap>({ mode: "open" });
 
 @customElement("color-picker-button")
 export default class ColorPickerButton extends ColorPickerButtonBase implements WebComponent {
@@ -88,8 +81,9 @@ export default class ColorPickerButton extends ColorPickerButtonBase implements 
   private _popoverElement: HTMLElement;
   private _panel: ColorPickerPanel;
   private _isOpen: boolean = false;
-
   private _abortController!: AbortController;
+  /** Guard flag to prevent echoing upstream changes back down into the {@link ColorPickerPanel panel}. */
+  private _isInternalChange: boolean = false;
 
   constructor() {
     super();
@@ -100,6 +94,15 @@ export default class ColorPickerButton extends ColorPickerButtonBase implements 
     this._triggerColor = this._shadowRoot.querySelector<HTMLElement>("#triggerColor")!;
     this._popoverElement = this._shadowRoot.querySelector<HTMLElement>("#popover")!;
     this._panel = this._shadowRoot.querySelector<ColorPickerPanel>("#panel")!;
+  }
+
+  get value(): string {
+    return this.getAttribute("value") || FALLBACK_COLOR;
+  }
+
+  set value(v: string) {
+    if (this.value.toLowerCase() === v.toLowerCase()) return;
+    this.setAttribute("value", v);
   }
 
   connectedCallback() {
@@ -115,7 +118,7 @@ export default class ColorPickerButton extends ColorPickerButtonBase implements 
   }
 
   attributeChangedCallback(name: string, oldValue: string | null, newValue: string | null) {
-    if (name === "value" && oldValue !== newValue) {
+    if (name === "value" && oldValue?.toLowerCase() !== newValue?.toLowerCase()) {
       this._handleColorValueAttrChanges(oldValue, newValue);
     }
   }
@@ -171,11 +174,20 @@ export default class ColorPickerButton extends ColorPickerButtonBase implements 
     // Close on outside click
     document.addEventListener("click", this._handleOutsideClick, { signal });
     // Listen for internal panel changes to update the trigger color button
-    this._panel.addEventListener("color-changed", this._onColorChange as EventListener, { signal });
+    this._panel.addEventListener(ColorPickerEvents.ColorChanged, this._onColorChange, { signal });
   }
 
-  private _onColorChange = (ev: CustomEvent<ColorChangeEventShape>) => {
-    this._triggerColor.style.background = ev.detail.hex;
+  /** Upstream Event: Triggered when the user interacts with the {@link ColorPickerPanel panel}. */
+  private _onColorChange = (ev: CustomEvent<ColorChangedEventShape>) => {
+    const { hex } = ev.detail;
+
+    // Update trigger switch color style immediately
+    this._triggerColor.style.background = hex;
+
+    // Synchronize "value" attr while suppresing downstream callback
+    this._isInternalChange = true;
+    this.setAttribute("value", hex);
+    this._isInternalChange = false;
   };
 
   private _handleToggleBtnClick = (ev: PointerEvent) => {
@@ -190,10 +202,24 @@ export default class ColorPickerButton extends ColorPickerButtonBase implements 
     this.close();
   };
 
+  /**
+   * Downstram Handler: Triggered when external code mutates "value" attribute or property.
+   *
+   * Updates the active color UI and delegates the chosen color value to the color panel component.
+   *
+   * Uses fallback if color value is invalid or not supported format. By default switches
+   * back to previous color value if available, otherwise uses the {@link FALLBACK_COLOR fallback color}.
+   *
+   * @param oldColorValue
+   * @param newColorValue
+   * @returns
+   */
   private _handleColorValueAttrChanges(oldColorValue: string | null, newColorValue: string | null) {
+    if (this._isInternalChange) return;
+
     const parsedNewColor = ColorUtils.parseColor(newColorValue);
 
-    if (!parsedNewColor) {
+    if (!newColorValue || !parsedNewColor) {
       console.warn(`"${newColorValue}" is not valid/supported color format.`);
 
       const fallbackColor = ColorUtils.parseColor(oldColorValue) ? oldColorValue : FALLBACK_COLOR;
@@ -202,7 +228,7 @@ export default class ColorPickerButton extends ColorPickerButtonBase implements 
       return;
     }
 
-    this._panel.setColor(newColorValue!);
-    this._triggerColor.style.background = newColorValue!;
+    this._panel.setColor(newColorValue);
+    this._triggerColor.style.background = newColorValue;
   }
 }

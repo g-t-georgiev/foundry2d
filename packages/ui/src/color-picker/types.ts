@@ -16,7 +16,7 @@ export type SupportedColorFormat = ColorFormat.HEX | ColorFormat.RGB | ColorForm
 
 export type onMoveCallback = (x: number, y: number) => void;
 
-export type ColorChangeEventShape = {
+export type ColorChangedEventShape = {
   hex: string;
   r: number;
   g: number;
@@ -24,3 +24,19 @@ export type ColorChangeEventShape = {
   alpha: number;
   displayString: string;
 };
+
+export const ColorPickerEvents = {
+  ColorChanged: "color-changed",
+} as const;
+
+export type ColorPickerEventPayloads = {
+  [ColorPickerEvents.ColorChanged]: ColorChangedEventShape;
+};
+
+export type ColorPickerEventName = (typeof ColorPickerEvents)[keyof typeof ColorPickerEvents];
+export type ColorPickerEventPayload<T extends ColorPickerEventName> = ColorPickerEventPayloads[T];
+
+export type ColorPickerEventMap<T extends ColorPickerEventName = ColorPickerEventName> =
+  HTMLElementEventMap & {
+    [EventName in T]: CustomEvent<ColorPickerEventPayload<EventName>>;
+  };

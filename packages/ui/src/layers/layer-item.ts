@@ -133,7 +133,7 @@ const getLayerItemHtml = html<{ name: string }>`
   </div>
 `;
 
-const LayerItemBase = WebComponentBase({ mode: "open" }, { abstract: true });
+const LayerItemBase = WebComponentBase({ mode: "open" });
 
 @customElement("layer-item")
 export default class LayerItem extends LayerItemBase implements WebComponent {

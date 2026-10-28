@@ -1,14 +1,9 @@
-export interface CellChange<TCell> {
-  x: number;
-  y: number;
-  oldValue: TCell;
-  newValue: TCell;
-}
+import type { CellChange } from "./types";
 
-export class GridLayer<TArray extends Uint32Array | Int32Array> {
+export class GridLayer<Buffer extends Uint32Array | Int32Array> {
   public opacity: number = 1;
   public visible: boolean = true;
-  public data: TArray;
+  public data: Buffer;
 
   constructor(
     public readonly id: string,
@@ -16,7 +11,7 @@ export class GridLayer<TArray extends Uint32Array | Int32Array> {
     public width: number,
     public height: number,
     public readonly emptyValue: number,
-    private bufferCtor: new (size: number) => TArray,
+    private bufferCtor: new (size: number) => Buffer,
     visible = true
   ) {
     this.visible = visible;

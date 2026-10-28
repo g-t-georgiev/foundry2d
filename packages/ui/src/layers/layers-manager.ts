@@ -140,10 +140,7 @@ const getLayersManagerHtml = html<{ isExpanded: boolean }>`
   </div>
 `;
 
-const LayersManagerBase = WebComponentBase<LayersManagerEventMap>(
-  { mode: "open" },
-  { abstract: true }
-);
+const LayersManagerBase = WebComponentBase<LayersManagerEventMap>({ mode: "open" });
 
 @customElement("layers-manager")
 export default class LayersManager extends LayersManagerBase implements WebComponent {

@@ -1,8 +1,8 @@
-import type { GridLayer, CellChange } from "../document/GridLayer";
+import type { GridLayer, CellChange } from "../document";
 
 export class FloodFill {
-  static execute<TArray extends Uint32Array | Int32Array>(
-    layer: GridLayer<TArray>,
+  static execute<Buffer extends Uint32Array | Int32Array>(
+    layer: GridLayer<Buffer>,
     startX: number,
     startY: number,
     fillValue: number

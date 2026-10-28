@@ -1,7 +1,4 @@
-export interface ICommand {
-  execute(): void;
-  undo(): void;
-}
+import type { ICommand } from "./types";
 
 export class HistoryManager {
   private undoStack: ICommand[] = [];

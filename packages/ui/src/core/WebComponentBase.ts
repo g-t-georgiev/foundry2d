@@ -1,16 +1,17 @@
-import type { WebComponent, WebComponentBaseOptions } from "./types";
+import type { WebComponent } from "./types";
 
+/** Web Component base class */
 export default function WebComponentBase<
   EventMap extends HTMLElementEventMap = HTMLElementEventMap,
->(shadowRootInit: ShadowRootInit, options: WebComponentBaseOptions) {
+>(shadowRootInit: ShadowRootInit) {
   return class WebComponentBase extends HTMLElement implements WebComponent {
     public readonly _shadowRoot: ShadowRoot;
 
     constructor() {
       super();
 
-      if (options.abstract && new.target === WebComponentBase) {
-        throw new Error("Cannot construct abstract class WebComponentBase directly.");
+      if (new.target === WebComponentBase) {
+        throw new Error(`Cannot construct abstract class ${this.constructor.name} directly.`);
       }
 
       this._shadowRoot = this.attachShadow(shadowRootInit);
