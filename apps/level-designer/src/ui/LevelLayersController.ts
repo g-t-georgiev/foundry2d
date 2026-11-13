@@ -1,0 +1,102 @@
+import { SetLayerPropertyCommand, type HistoryManager, type Unsubscribe } from "@foundry2d/core";
+import { LayerPanelEvents, type LayersPanel } from "@foundry2d/ui";
+import { defUidOf, type Level, type LevelProject } from "../model/LevelProject";
+
+/**
+ * Bridges `<layers-panel>` and a level. Layer structure (order, names) comes
+ * from the project's definitions, so moving/renaming edits the defs and
+ * applies to every level; visibility and opacity are per level and undoable.
+ */
+export default class LevelLayersController {
+  private subscriptions: Unsubscribe[] = [];
+  private readonly abort = new AbortController();
+  private opacityDrag: { id: string; start: number } | null = null;
+
+  constructor(
+    private readonly panel: LayersPanel,
+    private readonly project: LevelProject,
+    private readonly level: Level,
+    private readonly history: HistoryManager
+  ) {
+    const sync = () => this.sync();
+    const { doc } = level;
+    this.subscriptions = [
+      doc.events.on("layers:changed", sync),
+      doc.events.on("layer:updated", sync),
+      doc.events.on("layer:activated", sync),
+      project.events.on("defs:changed", sync),
+    ];
+    this.attach();
+    this.sync();
+  }
+
+  sync(): void {
+    this.panel.layers = this.level.doc.layers.map(({ id, name, visible, opacity }) => ({
+      id,
+      name,
+      visible,
+      opacity,
+    }));
+    this.panel.activeId = this.level.doc.activeLayerId;
+  }
+
+  destroy(): void {
+    this.subscriptions.forEach((unsubscribe) => unsubscribe());
+    this.abort.abort();
+  }
+
+  private attach(): void {
+    const { panel, project, history } = this;
+    const { doc } = this.level;
+    const signal = this.abort.signal;
+
+    panel.addEventListener(LayerPanelEvents.Select, (ev) => doc.setActiveLayer(ev.detail.id), {
+      signal,
+    });
+    panel.addEventListener(
+      LayerPanelEvents.Move,
+      (ev) => {
+        const uid = defUidOf(ev.detail.id);
+        if (uid !== null) project.moveLayerDef(uid, ev.detail.direction);
+      },
+      { signal }
+    );
+    panel.addEventListener(
+      LayerPanelEvents.Rename,
+      (ev) => {
+        const uid = defUidOf(ev.detail.id);
+        if (uid !== null) project.renameLayerDef(uid, ev.detail.name);
+      },
+      { signal }
+    );
+    panel.addEventListener(
+      LayerPanelEvents.Visibility,
+      (ev) =>
+        history.execute(
+          new SetLayerPropertyCommand(doc, ev.detail.id, "visible", ev.detail.visible)
+        ),
+      { signal }
+    );
+    panel.addEventListener(
+      LayerPanelEvents.Opacity,
+      (ev) => {
+        const { id, opacity, final } = ev.detail;
+        const layer = doc.getLayer(id);
+        if (!layer) return;
+        if (!this.opacityDrag || this.opacityDrag.id !== id) {
+          this.opacityDrag = { id, start: layer.opacity };
+        }
+        if (!final) {
+          doc.setLayerProperty(id, "opacity", opacity);
+          return;
+        }
+        const start = this.opacityDrag.start;
+        this.opacityDrag = null;
+        if (start !== opacity) {
+          history.execute(new SetLayerPropertyCommand(doc, id, "opacity", opacity, start));
+        }
+      },
+      { signal }
+    );
+  }
+}

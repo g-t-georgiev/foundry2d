@@ -24,6 +24,11 @@ export interface LayerStackPassOptions {
   dimming?: number;
   /** Value → color mapping for id layers. Omit for RGBA layers. */
   colorize?: CellColorizer;
+  /**
+   * Per-layer value → color mapping (e.g. each IntGrid layer has its own
+   * palette). Takes precedence over `colorize`.
+   */
+  getColorizer?: (layer: GridLayer<CellBuffer>) => CellColorizer | undefined;
   /** Bump when the colorize mapping changes so cached bitmaps refresh. */
   getPaletteVersion?: () => number;
 }
@@ -60,7 +65,8 @@ export class LayerStackPass implements RenderPass {
       const isActive = layer.id === source.activeLayerId;
       const alpha = mode === "focus" && !isActive ? layer.opacity * dimming : layer.opacity;
 
-      const bitmap = this.cache.get(layer, colorize, paletteVersion);
+      const colorizer = this.options.getColorizer?.(layer) ?? colorize;
+      const bitmap = this.cache.get(layer, colorizer, paletteVersion);
       ctx.globalAlpha = alpha;
       ctx.drawImage(
         bitmap,

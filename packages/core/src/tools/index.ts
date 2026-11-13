@@ -4,4 +4,5 @@ export * from "./PenTool";
 export * from "./EraserTool";
 export * from "./BucketTool";
 export * from "./EyedropperTool";
+export * from "./RectangleTool";
 export * from "./ToolManager";

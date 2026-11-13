@@ -3,6 +3,7 @@ import {
   type CellBuffer,
   type Dimensions,
   type GridDocument,
+  type GridLayer,
   type Position,
   type Rect,
   type ToolContext,
@@ -38,6 +39,8 @@ export interface GridDocumentSceneOptions<Buffer extends CellBuffer> {
   onPickValue?: (value: number) => void;
   /** Value → color for id layers; omit for RGBA documents. */
   colorize?: CellColorizer;
+  /** Per-layer value → color mapping; takes precedence over `colorize`. */
+  getColorizer?: (layer: GridLayer<CellBuffer>) => CellColorizer | undefined;
   getPaletteVersion?: () => number;
   /** CSS color for the brush preview fill. */
   getCursorFill?: () => string | null;
@@ -75,6 +78,7 @@ export class GridDocumentScene<Buffer extends CellBuffer = CellBuffer> implement
       cellSize: this.cellSize,
       getMode: () => (this.isPreview ? "composite" : (this.options.getLayerMode?.() ?? "focus")),
       colorize: options.colorize,
+      getColorizer: options.getColorizer,
       getPaletteVersion: options.getPaletteVersion,
     });
     this.gridPass = new GridLinesPass({

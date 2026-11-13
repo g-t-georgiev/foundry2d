@@ -141,3 +141,35 @@ describe("FloodFill", () => {
     expect(FloodFill.execute(layer, 0, 0, -1)).toEqual([]);
   });
 });
+
+describe("RectangleTool", () => {
+  it("previews while dragging and commits one undoable rectangle", async () => {
+    const { RectangleTool } = await import("../src");
+    const { layer, history, tools, ctx } = setup(5, 5);
+    tools.registerTool(new RectangleTool<Int32Array>("rect"));
+    tools.setTool("rect");
+    tools.executePointerAction("down", { x: 0, y: 0 }, ctx());
+    tools.executePointerAction("move", { x: 4, y: 4 }, ctx());
+    tools.executePointerAction("move", { x: 1, y: 2 }, ctx());
+    // Shrinking the drag reverts cells outside the new rectangle.
+    expect(layer.get(4, 4)).toBe(-1);
+    tools.executePointerAction("up", { x: 1, y: 2 }, ctx());
+    let filled = 0;
+    for (let i = 0; i < layer.data.length; i++) if (layer.data[i] === 1) filled++;
+    expect(filled).toBe(6);
+    history.undo();
+    expect(layer.isEmpty()).toBe(true);
+    expect(history.canUndo).toBe(false);
+  });
+
+  it("draws only the border when not filled", async () => {
+    const { RectangleTool } = await import("../src");
+    const { layer, tools, ctx } = setup(5, 5);
+    tools.registerTool(new RectangleTool<Int32Array>("outline", false));
+    tools.setTool("outline");
+    tools.executePointerAction("down", { x: 0, y: 0 }, ctx());
+    tools.executePointerAction("up", { x: 2, y: 2 }, ctx());
+    expect(layer.get(1, 1)).toBe(-1);
+    expect(layer.get(2, 1)).toBe(1);
+  });
+});

@@ -119,12 +119,18 @@ _Done: defects fixed, open tool registry, history events/limit/composite, full l
 - Not needed yet: the `ResolvePayload` type shield in the store (no TS2589 errors so far). Add it if deep schemas trigger them.
 - Outdated: the ESLint/Prettier setup, which Vite+ (`vp check`) has replaced.
 
-### Phase 2: Level Designer foundation (single level, Pac-Man usable)
+### Phase 2: Level Designer foundation (single level, Pac-Man usable) ✅ (2026-11-14)
 
-1. Project model, JSON schema and serializer (RLE-encoded `Int32Array`). Ship a Pac-Man seed project with a 28×36 grid and IntGrid defs from `layersData`.
-2. Port the reference layout and theme tokens. Build a layer-def panel and an IntGrid value picker (the "palette" for ids).
-3. Build LevelScene on the Workspace with pen, eraser, bucket, rect fill and eyedropper. Add level resize with deltas on all four sides.
-4. Add export JSON, import JSON, and "copy layer as array" in the format the Pac-Man game expects.
+1. Project model (`LevelProject`): shared IntGrid layer definitions, levels that each own a `GridDocument<Int32Array>`. Definition edits (add, remove, reorder, rename, values, colors) apply to every level. The native format is `.f2dlevel.json` with RLE layer data. The Pac-Man seed is a 28×36 level with an 8 px grid and `collision`, `collectibles` and `spawns` layers.
+2. Reference layout and theme tokens ported: toolbar, tools, level panel, `<layers-panel>` (reorder and rename only), IntGrid palette, status bar, and a project settings dialog for grid size and layer definitions.
+3. Level editing on the shared Workspace: pen, eraser (also right mouse), rectangle fill (new core `RectangleTool`), bucket, value picker (I or hold Alt), keys 1–9 for values, and an undoable resize with a delta on each edge.
+4. Export game JSON in the original editor's shape (`metadata` plus flat arrays keyed by layer identifier) and import it back. "Copy layer" copies the active layer as a row-per-line array. IndexedDB autosave works through the new core `JsonRecovery`, which the pixel editor now uses too.
+
+**Decisions:**
+
+- One grid size per project. Every layer in a level shares the level's grid, which keeps the "equal-size layers" document invariant. Per-layer grid sizes (LDtk allows them) can come with tile layers.
+- Definition edits are not undoable, like in LDtk. Edits that delete data (removing a value or a layer) ask for confirmation and clear the undo history.
+- `power_pellet` now gets its own color (`#ff8a65`). The old editor gave it the same color as `pellet`.
 
 ### Phase 3: World view
 
