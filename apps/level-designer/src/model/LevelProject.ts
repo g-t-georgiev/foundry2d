@@ -1,6 +1,6 @@
-import { EventEmitter, GridDocument, PixelUtils } from "@foundry2d/core";
+import { EventEmitter, GridDocument, PixelUtils, type Rect } from "@foundry2d/core";
 import type { CellColorizer } from "@foundry2d/render";
-import type { IntGridValueDef, LayerDef, ProjectDefs } from "./types";
+import type { IntGridValueDef, LayerDef, ProjectDefs, WorldLayout } from "./types";
 
 /** IntGrid cells use 0 for "empty", like LDtk. */
 export const EMPTY_CELL = 0;
@@ -23,12 +23,22 @@ export class Level {
   get height(): number {
     return this.doc.height;
   }
+
+  /** Level rectangle in world pixels. */
+  worldRect(gridSize: number): Rect {
+    return {
+      x: this.worldX,
+      y: this.worldY,
+      width: this.width * gridSize,
+      height: this.height * gridSize,
+    };
+  }
 }
 
 export type ProjectEventMap = {
   /** Layer definitions (identifiers, values, colors, order) changed. */
   "defs:changed": () => void;
-  /** Levels were added, removed or renamed. */
+  /** Levels were added, removed, reordered, renamed or moved. */
   "levels:changed": () => void;
   /** Project-wide settings (name, grid size) changed. */
   "settings:changed": () => void;
@@ -67,6 +77,10 @@ export class LevelProject {
   public readonly levels: Level[] = [];
   /** Bumped whenever colors change so cached layer bitmaps are refreshed. */
   public paletteVersion = 0;
+  /** How levels are arranged in the world view. */
+  public worldLayout: WorldLayout = "free";
+  /** World grid cell in pixels; levels snap to it in the "gridvania" layout. */
+  public worldGrid = { width: 256, height: 256 };
   private nextUid = 1;
   private colorizers = new Map<number, CellColorizer>();
 
@@ -99,6 +113,22 @@ export class LevelProject {
     this.events.emit("settings:changed");
   }
 
+  setWorldLayout(layout: WorldLayout): void {
+    if (layout === this.worldLayout) return;
+    this.worldLayout = layout;
+    this.arrangeLevels();
+    this.events.emit("settings:changed");
+    this.events.emit("levels:changed");
+  }
+
+  setWorldGrid(width: number, height: number): void {
+    const w = Math.max(1, Math.round(width));
+    const h = Math.max(1, Math.round(height));
+    if (w === this.worldGrid.width && h === this.worldGrid.height) return;
+    this.worldGrid = { width: w, height: h };
+    this.events.emit("settings:changed");
+  }
+
   setName(name: string): void {
     if (!name || name === this.name) return;
     this.name = name;
@@ -125,14 +155,179 @@ export class LevelProject {
     doc.setActiveLayer(doc.layers.at(-1)?.id ?? null);
     const uid = options.uid ?? this.allocateUid();
     this.reserveUid(uid);
-    const level = new Level(uid, identifier, options.worldX ?? 0, options.worldY ?? 0, doc);
+    const level = new Level(
+      uid,
+      this.uniqueLevelIdentifier(identifier),
+      options.worldX ?? 0,
+      options.worldY ?? 0,
+      doc
+    );
     this.levels.push(level);
+    this.arrangeLevels();
     this.events.emit("levels:changed");
     return level;
   }
 
   getLevel(uid: number): Level | undefined {
     return this.levels.find((l) => l.uid === uid);
+  }
+
+  indexOfLevel(uid: number): number {
+    return this.levels.findIndex((l) => l.uid === uid);
+  }
+
+  /** A level identifier not used by any other level. */
+  uniqueLevelIdentifier(base: string, ignoreUid?: number): string {
+    const taken = new Set(this.levels.filter((l) => l.uid !== ignoreUid).map((l) => l.identifier));
+    if (!taken.has(base)) return base;
+    const stem = base.replace(/_\d+$/, "");
+    let n = 1;
+    while (taken.has(`${stem}_${n}`)) n++;
+    return `${stem}_${n}`;
+  }
+
+  /** Detaches a level (at least one must remain). Returns its old index, or -1. */
+  removeLevel(uid: number): number {
+    const index = this.indexOfLevel(uid);
+    if (index === -1 || this.levels.length <= 1) return -1;
+    this.levels.splice(index, 1);
+    this.arrangeLevels();
+    this.events.emit("levels:changed");
+    return index;
+  }
+
+  /** Inserts a detached level (undo of remove, or a duplicate). */
+  insertLevel(level: Level, index = this.levels.length): void {
+    this.reserveUid(level.uid);
+    this.levels.splice(Math.max(0, Math.min(index, this.levels.length)), 0, level);
+    this.arrangeLevels();
+    this.events.emit("levels:changed");
+  }
+
+  /** Builds (but does not insert) a copy of a level with a new uid and identifier. */
+  cloneLevel(uid: number, worldX: number, worldY: number): Level | null {
+    const source = this.getLevel(uid);
+    if (!source) return null;
+    const doc = new GridDocument<Int32Array>({
+      width: source.width,
+      height: source.height,
+      emptyValue: EMPTY_CELL,
+      bufferCtor: Int32Array,
+    });
+    for (const layer of source.doc.layers) {
+      doc.addLayer({
+        id: layer.id,
+        name: layer.name,
+        visible: layer.visible,
+        opacity: layer.opacity,
+        data: layer.data,
+        activate: false,
+      });
+    }
+    doc.setActiveLayer(source.doc.activeLayerId);
+    const identifier = this.uniqueLevelIdentifier(`${source.identifier}_copy`);
+    return new Level(this.allocateUid(), identifier, worldX, worldY, doc);
+  }
+
+  moveLevel(uid: number, worldX: number, worldY: number): void {
+    const level = this.getLevel(uid);
+    if (!level || (level.worldX === worldX && level.worldY === worldY)) return;
+    level.worldX = worldX;
+    level.worldY = worldY;
+    this.events.emit("levels:changed");
+  }
+
+  /** Changes a level position in the list (matters for linear layouts). */
+  reorderLevel(from: number, to: number): boolean {
+    const count = this.levels.length;
+    if (from === to || from < 0 || to < 0 || from >= count || to >= count) return false;
+    const [level] = this.levels.splice(from, 1);
+    this.levels.splice(to, 0, level);
+    this.arrangeLevels();
+    this.events.emit("levels:changed");
+    return true;
+  }
+
+  renameLevel(uid: number, identifier: string): void {
+    const level = this.getLevel(uid);
+    const clean = identifier.trim();
+    if (!level || !clean || clean === level.identifier) return;
+    level.identifier = this.uniqueLevelIdentifier(clean, uid);
+    this.events.emit("levels:changed");
+  }
+
+  /** Whether levels may be dragged in the current layout. */
+  get canDragLevels(): boolean {
+    return this.worldLayout === "free" || this.worldLayout === "gridvania";
+  }
+
+  /** Snaps a world position to the layout grid (world grid or level grid). */
+  snapPosition(x: number, y: number): { x: number; y: number } {
+    const step =
+      this.worldLayout === "gridvania"
+        ? this.worldGrid
+        : { width: this.gridSize, height: this.gridSize };
+    return {
+      x: Math.round(x / step.width) * step.width,
+      y: Math.round(y / step.height) * step.height,
+    };
+  }
+
+  /**
+   * In linear layouts positions are derived from list order: levels sit
+   * side by side (or stacked) with a gap of two grid cells.
+   */
+  arrangeLevels(): void {
+    if (this.worldLayout !== "linearH" && this.worldLayout !== "linearV") return;
+    const gap = this.gridSize * 2;
+    let offset = 0;
+    for (const level of this.levels) {
+      const rect = level.worldRect(this.gridSize);
+      if (this.worldLayout === "linearH") {
+        level.worldX = offset;
+        level.worldY = 0;
+        offset += rect.width + gap;
+      } else {
+        level.worldX = 0;
+        level.worldY = offset;
+        offset += rect.height + gap;
+      }
+    }
+  }
+
+  /** Union of all level rectangles in world pixels, or `null` when there are none. */
+  getWorldBounds(): Rect | null {
+    if (this.levels.length === 0) return null;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const level of this.levels) {
+      const r = level.worldRect(this.gridSize);
+      minX = Math.min(minX, r.x);
+      minY = Math.min(minY, r.y);
+      maxX = Math.max(maxX, r.x + r.width);
+      maxY = Math.max(maxY, r.y + r.height);
+    }
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  }
+
+  /** Topmost level containing a world point. */
+  levelAt(worldX: number, worldY: number): Level | undefined {
+    for (let i = this.levels.length - 1; i >= 0; i--) {
+      const r = this.levels[i].worldRect(this.gridSize);
+      if (worldX >= r.x && worldY >= r.y && worldX < r.x + r.width && worldY < r.y + r.height) {
+        return this.levels[i];
+      }
+    }
+    return undefined;
+  }
+
+  /** A free spot to the right of the existing levels, aligned to the layout. */
+  nextFreePosition(): { x: number; y: number } {
+    const bounds = this.getWorldBounds();
+    if (!bounds) return { x: 0, y: 0 };
+    return this.snapPosition(bounds.x + bounds.width + this.gridSize * 2, bounds.y);
   }
 
   // ------------------------------------------------------------------ layer defs

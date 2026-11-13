@@ -8,6 +8,11 @@
   },
   "name": "untitled",
   "gridSize": 16,
+  "worldLayout": "free",
+  "worldGrid": {
+    "width": 512,
+    "height": 512
+  },
   "nextUid": 3,
   "defs": {
     "layers": [
@@ -15,7 +20,13 @@
         "uid": 1,
         "identifier": "intgrid",
         "type": "IntGrid",
-        "intGridValues": [{ "value": 1, "identifier": "solid", "color": "#4c9ffe" }]
+        "intGridValues": [
+          {
+            "value": 1,
+            "identifier": "solid",
+            "color": "#4c9ffe"
+          }
+        ]
       }
     ]
   },
@@ -28,7 +39,14 @@
       "width": 32,
       "height": 32,
       "activeDefUid": 1,
-      "layers": [{ "defUid": 1, "visible": true, "opacity": 1, "data": [1024, 0] }]
+      "layers": [
+        {
+          "defUid": 1,
+          "visible": true,
+          "opacity": 1,
+          "data": [1024, 0]
+        }
+      ]
     }
   ]
 }

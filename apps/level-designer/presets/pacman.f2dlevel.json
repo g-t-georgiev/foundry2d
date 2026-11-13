@@ -8,6 +8,11 @@
   },
   "name": "pacman",
   "gridSize": 8,
+  "worldLayout": "free",
+  "worldGrid": {
+    "width": 224,
+    "height": 288
+  },
   "nextUid": 5,
   "defs": {
     "layers": [
@@ -16,11 +21,31 @@
         "identifier": "collision",
         "type": "IntGrid",
         "intGridValues": [
-          { "value": 1, "identifier": "wall", "color": "#1919a3" },
-          { "value": 2, "identifier": "intersection_a", "color": "#47a400" },
-          { "value": 3, "identifier": "intersection_b", "color": "#a69801" },
-          { "value": 4, "identifier": "ghost_house_door", "color": "#fcb9f8" },
-          { "value": 5, "identifier": "tunnel_entry", "color": "#ffffff" }
+          {
+            "value": 1,
+            "identifier": "wall",
+            "color": "#1919a3"
+          },
+          {
+            "value": 2,
+            "identifier": "intersection_a",
+            "color": "#47a400"
+          },
+          {
+            "value": 3,
+            "identifier": "intersection_b",
+            "color": "#a69801"
+          },
+          {
+            "value": 4,
+            "identifier": "ghost_house_door",
+            "color": "#fcb9f8"
+          },
+          {
+            "value": 5,
+            "identifier": "tunnel_entry",
+            "color": "#ffffff"
+          }
         ]
       },
       {
@@ -28,8 +53,16 @@
         "identifier": "collectibles",
         "type": "IntGrid",
         "intGridValues": [
-          { "value": 1, "identifier": "pellet", "color": "#ffb8ae" },
-          { "value": 2, "identifier": "power_pellet", "color": "#ff8a65" }
+          {
+            "value": 1,
+            "identifier": "pellet",
+            "color": "#ffb8ae"
+          },
+          {
+            "value": 2,
+            "identifier": "power_pellet",
+            "color": "#ff8a65"
+          }
         ]
       },
       {
@@ -37,11 +70,31 @@
         "identifier": "spawns",
         "type": "IntGrid",
         "intGridValues": [
-          { "value": 1, "identifier": "pacman", "color": "#ffff00" },
-          { "value": 2, "identifier": "blinky", "color": "#ff0000" },
-          { "value": 3, "identifier": "inky", "color": "#00eeff" },
-          { "value": 4, "identifier": "pinky", "color": "#ff00ea" },
-          { "value": 5, "identifier": "clyde", "color": "#ff7300" }
+          {
+            "value": 1,
+            "identifier": "pacman",
+            "color": "#ffff00"
+          },
+          {
+            "value": 2,
+            "identifier": "blinky",
+            "color": "#ff0000"
+          },
+          {
+            "value": 3,
+            "identifier": "inky",
+            "color": "#00eeff"
+          },
+          {
+            "value": 4,
+            "identifier": "pinky",
+            "color": "#ff00ea"
+          },
+          {
+            "value": 5,
+            "identifier": "clyde",
+            "color": "#ff7300"
+          }
         ]
       }
     ]
@@ -56,9 +109,24 @@
       "height": 36,
       "activeDefUid": 1,
       "layers": [
-        { "defUid": 1, "visible": true, "opacity": 1, "data": [1008, 0] },
-        { "defUid": 2, "visible": true, "opacity": 1, "data": [1008, 0] },
-        { "defUid": 3, "visible": true, "opacity": 1, "data": [1008, 0] }
+        {
+          "defUid": 1,
+          "visible": true,
+          "opacity": 1,
+          "data": [1008, 0]
+        },
+        {
+          "defUid": 2,
+          "visible": true,
+          "opacity": 1,
+          "data": [1008, 0]
+        },
+        {
+          "defUid": 3,
+          "visible": true,
+          "opacity": 1,
+          "data": [1008, 0]
+        }
       ]
     }
   ]

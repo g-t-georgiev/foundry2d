@@ -1,6 +1,11 @@
 import { decodeRLE, encodeRLE } from "@foundry2d/core";
 import { LevelProject, layerIdFor } from "../model/LevelProject";
-import type { IntGridValueDef, LayerDef } from "../model/types";
+import {
+  WORLD_LAYOUTS,
+  type IntGridValueDef,
+  type LayerDef,
+  type WorldLayout,
+} from "../model/types";
 
 export const PROJECT_FORMAT = "foundry2d.level";
 export const PROJECT_VERSION = 1;
@@ -30,6 +35,8 @@ export interface LevelProjectFile {
   version: number;
   name: string;
   gridSize: number;
+  worldLayout: WorldLayout;
+  worldGrid: { width: number; height: number };
   nextUid: number;
   defs: { layers: LayerDef[] };
   levels: SerializedLevel[];
@@ -45,6 +52,8 @@ export function serializeProject(project: LevelProject): LevelProjectFile {
     version: PROJECT_VERSION,
     name: project.name,
     gridSize: project.gridSize,
+    worldLayout: project.worldLayout,
+    worldGrid: { ...project.worldGrid },
     nextUid: project.uidCounter,
     defs: { layers: structuredClone(project.defs.layers) },
     levels: project.levels.map((level) => {
@@ -148,6 +157,15 @@ export function deserializeProject(json: unknown): LevelProject {
     project.reserveUid(raw.uid);
   }
   if (isInt(json.nextUid)) project.reserveUid(json.nextUid - 1);
+  if (WORLD_LAYOUTS.includes(json.worldLayout as WorldLayout)) {
+    project.worldLayout = json.worldLayout as WorldLayout;
+  }
+  if (isRecord(json.worldGrid) && isInt(json.worldGrid.width) && isInt(json.worldGrid.height)) {
+    project.worldGrid = {
+      width: Math.max(1, json.worldGrid.width),
+      height: Math.max(1, json.worldGrid.height),
+    };
+  }
 
   for (const raw of json.levels as Record<string, unknown>[]) {
     const width = raw.width as number;

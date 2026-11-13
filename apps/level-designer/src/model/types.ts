@@ -26,3 +26,11 @@ export interface ProjectDefs {
   /** Bottom → top stacking order, same as document layer order. */
   layers: LayerDef[];
 }
+
+/**
+ * World arrangement, as in LDtk: `free` places levels anywhere, `gridvania`
+ * snaps them to a world grid, and the linear layouts derive positions from
+ * the level order.
+ */
+export type WorldLayout = "free" | "gridvania" | "linearH" | "linearV";
+export const WORLD_LAYOUTS: readonly WorldLayout[] = ["free", "gridvania", "linearH", "linearV"];

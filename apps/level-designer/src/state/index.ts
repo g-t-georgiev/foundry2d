@@ -3,7 +3,13 @@ import { Store, defineAction } from "@foundry2d/store";
 export const LEVEL_TOOLS = ["pen", "eraser", "rect", "bucket", "eyedropper"] as const;
 export type LevelTool = (typeof LEVEL_TOOLS)[number];
 
+export type EditorView = "world" | "level";
+
 export interface LevelEditorState {
+  /** World overview or single-level editing. */
+  view: EditorView;
+  /** Level selected in the world (and edited in the level view). */
+  selectedLevelUid: number | null;
   currentTool: LevelTool;
   /** Tool to return to after a one-shot pick with the eyedropper. */
   previousTool: LevelTool;
@@ -16,12 +22,16 @@ export enum LevelActions {
   SetTool = "level:tool:set",
   SelectValue = "level:value:select",
   ToggleGrid = "level:grid:toggle",
+  SetView = "level:view:set",
+  SelectLevel = "level:level:select",
 }
 
 export type LevelActionsMap = {
   [LevelActions.SetTool]: LevelTool;
   [LevelActions.SelectValue]: { defUid: number; value: number };
   [LevelActions.ToggleGrid]: { enabled: boolean };
+  [LevelActions.SetView]: EditorView;
+  [LevelActions.SelectLevel]: { uid: number | null };
 };
 
 const setToolSchema = { type: "string", enum: [...LEVEL_TOOLS] } as const;
@@ -42,6 +52,36 @@ const toggleSchema = {
   required: ["enabled"],
   additionalProperties: false,
 } as const;
+
+const setViewSchema = { type: "string", enum: ["world", "level"] } as const;
+
+const selectLevelSchema = {
+  type: "object",
+  properties: { uid: { type: ["integer", "null"] } },
+  required: ["uid"],
+  additionalProperties: false,
+} as const;
+
+const setView = defineAction<LevelEditorState, LevelActions.SetView, typeof setViewSchema>(
+  LevelActions.SetView,
+  {
+    schema: setViewSchema,
+    reducer(state, view) {
+      state.view = view;
+    },
+  }
+);
+
+const selectLevel = defineAction<
+  LevelEditorState,
+  LevelActions.SelectLevel,
+  typeof selectLevelSchema
+>(LevelActions.SelectLevel, {
+  schema: selectLevelSchema,
+  reducer(state, { uid }) {
+    state.selectedLevelUid = uid;
+  },
+});
 
 const setTool = defineAction<LevelEditorState, LevelActions.SetTool, typeof setToolSchema>(
   LevelActions.SetTool,
@@ -78,10 +118,12 @@ const toggleGrid = defineAction<LevelEditorState, LevelActions.ToggleGrid, typeo
 
 export const levelStore = new Store<LevelEditorState, LevelActionsMap>({
   initialState: {
+    view: "level",
+    selectedLevelUid: null,
     currentTool: "pen",
     previousTool: "pen",
     selectedValues: {},
     grid: { enabled: true },
   },
-  actions: [setTool, selectValue, toggleGrid],
+  actions: [setTool, selectValue, toggleGrid, setView, selectLevel],
 });

@@ -132,11 +132,20 @@ _Done: defects fixed, open tool registry, history events/limit/composite, full l
 - Definition edits are not undoable, like in LDtk. Edits that delete data (removing a value or a layer) ask for confirmation and clear the undo history.
 - `power_pellet` now gets its own color (`#ff8a65`). The old editor gave it the same color as `pellet`.
 
-### Phase 3: World view
+### Phase 3: World view ✅ (2026-11-14)
 
-1. WorldScene: every level drawn as a cached thumbnail at `worldX/worldY`, with an unbounded camera.
-2. Select, drag (with snapping for gridvania), create, duplicate, delete and rename levels. Double-click enters LevelScene and Esc returns, with an animated camera transition.
-3. Add a levels list panel and world layout modes.
+1. `WorldScene`: every level drawn at its world position (pixels) from the same cached layer bitmaps as the level view. It has an unbounded camera, a background grid, origin axes, and level labels with selection and hover outlines.
+2. Level operations: click to select, drag to move (snapped to the level grid, or to the world grid in GridVania), double-click empty space to create, and duplicate, delete, rename and reorder from the levels list. All of them are undo steps in the same history as cell edits. Resizing a level on its left or top edge also moves it in the world, so the other edges stay put.
+3. World/Level switch in the toolbar. Double-click or Enter opens a level with a zoom-in transition; Escape goes back with a zoom-out. A single-level project (like the Pac-Man preset) opens straight into the level.
+4. World layouts as in LDtk: free, GridVania (editable world cell size), linear horizontal and linear vertical (positions follow list order). They are saved in the project file and set per preset.
+
+**Presets:** project templates are ordinary `.f2dlevel.json` files in `apps/level-designer/presets/`, picked up automatically and offered under **New**. The Pac-Man data no longer lives in code.
+
+**Fixes made along the way:**
+
+- The workspace measures itself before computing a fit, because showing or hiding a sidebar changes the canvas size before `ResizeObserver` reports it.
+- Camera animations finish on a timer when `requestAnimationFrame` is paused (background tab, hidden pane).
+- The level designer toolbar scrolls instead of widening the page on narrow windows.
 
 ### Phase 4: Tiles
 

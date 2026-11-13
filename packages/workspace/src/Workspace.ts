@@ -4,6 +4,7 @@ import {
   type CameraConfig,
   type CameraState,
   type Position,
+  type Rect,
 } from "@foundry2d/core";
 import {
   Renderer,
@@ -205,20 +206,32 @@ export class Workspace {
       return Promise.resolve();
     }
     return new Promise((resolve) => {
-      this.animation = {
+      const animation = {
         from: this.camera.getState(),
         to: target,
         start: performance.now(),
         duration,
         resolve,
       };
+      this.animation = animation;
       this.requestRender();
+      // requestAnimationFrame is paused in background tabs and hidden panes;
+      // make sure the camera still lands and callers aren't left waiting.
+      setTimeout(() => {
+        if (this.animation !== animation) return;
+        this.animation = null;
+        this.setCamera(target);
+        resolve();
+      }, duration + 200);
     });
   }
 
-  /** Camera state that fits the current scene's bounds. */
-  computeFitState(): CameraState | null {
-    const bounds = this._scene?.getBounds();
+  /** Camera state that fits `rect` (default: the current scene bounds) into the view. */
+  computeFitState(rect?: Rect): CameraState | null {
+    // The layout may have changed since the last ResizeObserver callback
+    // (e.g. a sidebar was just shown); measure now so the fit is exact.
+    this.handleResize();
+    const bounds = rect ?? this._scene?.getBounds();
     if (!bounds || !this.viewWidth || !this.viewHeight) return null;
     const probe = new Camera({
       cellSize: this.camera.cellSize,

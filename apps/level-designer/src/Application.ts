@@ -1,20 +1,33 @@
 import {
+  CompositeCommand,
   HistoryManager,
   JsonRecovery,
   RectangleTool,
   ResizeCommand,
   ToolManager,
+  type CameraState,
+  type ICommand,
+  type Rect,
   type Unsubscribe,
 } from "@foundry2d/core";
 import { GridDocumentScene, Workspace } from "@foundry2d/workspace";
 import type { LayersPanel } from "@foundry2d/ui";
 import type { Level, LevelProject } from "./model/LevelProject";
-import type { LayerDef } from "./model/types";
+import { WORLD_LAYOUTS, type LayerDef, type WorldLayout } from "./model/types";
 import { createProjectFromPreset, presets, DEFAULT_PRESET_ID } from "./model/presets";
-import { LevelActions, levelStore, type LevelTool } from "./state";
+import {
+  AddLevelCommand,
+  MoveLevelCommand,
+  RemoveLevelCommand,
+  RenameLevelCommand,
+  ReorderLevelCommand,
+} from "./model/commands";
+import { LevelActions, levelStore, type EditorView, type LevelTool } from "./state";
 import PaletteView from "./ui/PaletteView";
 import LevelLayersController from "./ui/LevelLayersController";
+import LevelsListView from "./ui/LevelsListView";
 import SettingsDialog from "./ui/SettingsDialog";
+import { WorldScene } from "./world/WorldScene";
 import {
   PROJECT_EXTENSION,
   ProjectFormatError,
@@ -27,6 +40,8 @@ import { formatLayerAsArray, fromGameFormat, isGameFormat, toGameFormat } from "
 const $ = <T extends Element = HTMLElement>(selector: string) =>
   document.querySelector<T>(selector)!;
 
+const TRANSITION_MS = 320;
+
 function download(text: string, filename: string): void {
   const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
   const link = document.createElement("a");
@@ -36,13 +51,25 @@ function download(text: string, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+/** Grows a rectangle by `amount` on every side. */
+const inflate = (r: Rect, amount: number): Rect => ({
+  x: r.x - amount,
+  y: r.y - amount,
+  width: r.width + amount * 2,
+  height: r.height + amount * 2,
+});
+
 /**
  * Composition root of the level designer.
  *
- * The workspace, tools, store bindings and static DOM wiring live for the
- * whole session. Everything tied to a particular project (scene, layer
- * controller, model subscriptions) lives in `session` and is rebuilt when a
- * project is opened or created.
+ * Lifetimes:
+ * - app: workspace, tools, store and static DOM wiring;
+ * - project session: world scene and project subscriptions, rebuilt on New/Open;
+ * - level session: level scene, layers panel bridge, document subscriptions,
+ *   rebuilt whenever another level is opened.
+ *
+ * One undo history spans the whole project: cell edits and world edits
+ * (add, move, delete levels) undo in the order they were made.
  */
 export default class Application {
   readonly history = new HistoryManager();
@@ -50,14 +77,18 @@ export default class Application {
   readonly workspace: Workspace;
   project: LevelProject;
   level: Level;
-  scene!: GridDocumentScene<Int32Array>;
+  levelScene!: GridDocumentScene<Int32Array>;
+  worldScene!: WorldScene;
 
-  private session: { layers: LevelLayersController; unsubscribe: Unsubscribe[] } | null = null;
+  private projectSession: Unsubscribe[] = [];
+  private levelSession: { layers: LevelLayersController; unsubscribe: Unsubscribe[] } | null = null;
   private readonly palette: PaletteView;
+  private readonly levelsList: LevelsListView;
   private readonly settings: SettingsDialog;
   private readonly recovery: JsonRecovery;
   private readonly layersPanel: LayersPanel;
   private altHeld = false;
+  private transitioning = false;
   private messageTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
@@ -68,7 +99,10 @@ export default class Application {
 
     this.workspace = new Workspace($("#viewport"), {
       canvas: $<HTMLCanvasElement>("#levelCanvas"),
-      rulers: { unitScale: () => this.project.gridSize, unitLabel: () => "t" },
+      rulers: {
+        unitScale: () => (this.view === "level" ? this.project.gridSize : 1),
+        unitLabel: () => (this.view === "level" ? "t" : "px"),
+      },
       theme: {
         workspaceBackground: "#0e0e11",
         checkerLight: "#1c1c22",
@@ -82,6 +116,15 @@ export default class Application {
       $<HTMLElement>("#paletteLayer"),
       (value) => this.selectValue(value)
     );
+    this.levelsList = new LevelsListView($("#levelsList"), $("#levelsRail"), {
+      select: (uid) => this.selectLevel(uid, true),
+      open: (uid) => void this.enterLevel(uid),
+      add: () => this.addLevel(),
+      duplicate: (uid) => this.duplicateLevel(uid),
+      remove: (uid) => this.removeLevel(uid),
+      move: (uid, direction) => this.reorderLevel(uid, direction),
+      rename: (uid, identifier) => this.renameLevel(uid, identifier),
+    });
     this.settings = new SettingsDialog($<HTMLDialogElement>("#settingsDialog"), {
       confirm: (message) => window.confirm(message),
       onDestructiveChange: () => this.history.clear(),
@@ -110,57 +153,98 @@ export default class Application {
     void this.restoreAutosave();
   }
 
+  get view(): EditorView {
+    return levelStore.getState().view;
+  }
+
   // ------------------------------------------------------------------ project lifecycle
 
-  loadProject(project: LevelProject, levelUid?: number): void {
+  loadProject(project: LevelProject): void {
     this.workspace.input.cancelStroke();
-    this.session?.layers.destroy();
-    this.session?.unsubscribe.forEach((unsubscribe) => unsubscribe());
+    this.projectSession.forEach((unsubscribe) => unsubscribe());
 
     this.project = project;
-    this.level =
-      (levelUid !== undefined ? project.getLevel(levelUid) : undefined) ?? project.levels[0];
     this.history.clear();
+    this.worldScene = this.createWorldScene();
 
-    const { doc } = this.level;
+    const persist = () => this.recovery.schedule();
+    this.projectSession = [
+      project.events.on("defs:changed", () => {
+        this.renderPalette();
+        this.workspace.refreshCursor();
+        this.levelScene.invalidate();
+        persist();
+      }),
+      project.events.on("settings:changed", () => {
+        this.refreshScenes();
+        this.renderProjectInfo();
+        this.renderWorldSettings();
+        persist();
+      }),
+      project.events.on("levels:changed", () => {
+        // The open level may have been deleted (e.g. undo of "add level").
+        if (!project.getLevel(this.level.uid)) {
+          this.openLevelSession(project.levels[0]);
+          if (this.view === "level") void this.showWorld(false);
+        }
+        if (!project.getLevel(levelStore.getState().selectedLevelUid ?? -1)) {
+          levelStore.dispatch(LevelActions.SelectLevel, { uid: this.level.uid });
+        }
+        this.renderLevelsList();
+        this.renderLevelInfo();
+        persist();
+      }),
+    ];
+
+    this.openLevelSession(project.levels[0]);
+    levelStore.dispatch(LevelActions.SelectLevel, { uid: this.level.uid });
+    this.renderProjectInfo();
+    this.renderWorldSettings();
+    this.renderLevelsList();
+
+    // Single-level projects open straight into the level; multi-level ones in the world.
+    const view: EditorView = project.levels.length > 1 ? "world" : "level";
+    levelStore.dispatch(LevelActions.SetView, view);
+    void this.workspace.setScene(view === "world" ? this.worldScene : this.levelScene, {
+      fit: true,
+    });
+    this.renderView();
+  }
+
+  /** Binds the panels and the level scene to `level`. */
+  private openLevelSession(level: Level): void {
+    this.workspace.input.cancelStroke();
+    this.levelSession?.layers.destroy();
+    this.levelSession?.unsubscribe.forEach((unsubscribe) => unsubscribe());
+
+    this.level = level;
+    const { doc } = level;
     const refreshLayerUi = () => {
       this.renderPalette();
       this.workspace.refreshCursor();
     };
-    const persist = () => this.recovery.schedule();
-
-    this.session = {
-      layers: new LevelLayersController(this.layersPanel, project, this.level, this.history),
+    this.levelSession = {
+      layers: new LevelLayersController(this.layersPanel, this.project, level, this.history),
       unsubscribe: [
         doc.events.on("layer:activated", refreshLayerUi),
-        doc.events.on("layer:activated", persist),
-        doc.events.on("resized", () => this.renderLevelInfo()),
-        project.events.on("defs:changed", () => {
-          refreshLayerUi();
-          this.scene.invalidate();
-          persist();
+        doc.events.on("layer:activated", () => this.recovery.schedule()),
+        doc.events.on("resized", () => {
+          this.project.arrangeLevels();
+          this.renderLevelInfo();
+          this.renderLevelsList();
         }),
-        project.events.on("settings:changed", () => {
-          this.rebuildScene(false);
-          this.renderProjectInfo();
-          persist();
-        }),
-        project.events.on("levels:changed", persist),
       ],
     };
-
-    this.rebuildScene(true);
-    this.renderProjectInfo();
+    this.levelScene = this.createLevelScene(level);
     this.renderLevelInfo();
     refreshLayerUi();
   }
 
-  /** The scene's cell size is fixed, so a grid size change needs a new scene. */
-  private rebuildScene(fit: boolean): void {
+  private createLevelScene(level: Level): GridDocumentScene<Int32Array> {
     const project = this.project;
     const { gridSize } = project;
-    this.scene = new GridDocumentScene<Int32Array>({
-      doc: this.level.doc,
+    return new GridDocumentScene<Int32Array>({
+      doc: level.doc,
       tools: this.tools,
       history: this.history,
       cellSize: { width: gridSize, height: gridSize },
@@ -176,9 +260,187 @@ export default class Application {
       majorGridEvery: 4,
       checkerboard: true,
     });
-    const camera = fit ? undefined : this.workspace.camera.getState();
-    void this.workspace.setScene(this.scene, { fit, camera });
   }
+
+  private createWorldScene(): WorldScene {
+    return new WorldScene(this.project, {
+      getSelectedUid: () => levelStore.getState().selectedLevelUid,
+      select: (uid) => this.selectLevel(uid, false),
+      open: (uid) => void this.enterLevel(uid),
+      createAt: (x, y) => this.addLevel(x, y),
+      commitMove: (uid, from, to) =>
+        this.history.record(new MoveLevelCommand(this.project, uid, from, to)),
+    });
+  }
+
+  /** Scene cell sizes are fixed, so a grid size change needs new scenes. */
+  private refreshScenes(): void {
+    const camera = this.workspace.camera.getState();
+    this.levelScene = this.createLevelScene(this.level);
+    this.worldScene = this.createWorldScene();
+    void this.workspace.setScene(this.view === "world" ? this.worldScene : this.levelScene, {
+      camera,
+    });
+  }
+
+  // ------------------------------------------------------------------ views
+
+  /** Opens a level for editing, zooming in from its place in the world. */
+  async enterLevel(uid: number, animate = true): Promise<void> {
+    const level = this.project.getLevel(uid);
+    if (!level || this.transitioning) return;
+    levelStore.dispatch(LevelActions.SelectLevel, { uid });
+    if (level !== this.level) this.openLevelSession(level);
+
+    const fromWorld = this.view === "world";
+    levelStore.dispatch(LevelActions.SetView, "level");
+    this.renderView();
+
+    if (!fromWorld || !animate) {
+      await this.workspace.setScene(this.levelScene, { fit: true });
+      return;
+    }
+    // Same picture, level-local coordinates; then frame the level.
+    const world = this.workspace.camera.getState();
+    const start: CameraState = {
+      zoom: world.zoom,
+      x: world.x + level.worldX * world.zoom,
+      y: world.y + level.worldY * world.zoom,
+    };
+    this.transitioning = true;
+    try {
+      await this.workspace.setScene(this.levelScene, { camera: start });
+      await this.workspace.fitToView(TRANSITION_MS);
+    } finally {
+      this.transitioning = false;
+    }
+  }
+
+  /** Returns to the world, zooming out around the level that was open. */
+  async showWorld(animate = true): Promise<void> {
+    if (this.view === "world" || this.transitioning) return;
+    this.workspace.input.cancelStroke();
+    const level = this.level;
+    const local = this.workspace.camera.getState();
+    levelStore.dispatch(LevelActions.SetView, "world");
+    levelStore.dispatch(LevelActions.SelectLevel, { uid: level.uid });
+    this.renderView();
+
+    const start: CameraState = {
+      zoom: local.zoom,
+      x: local.x - level.worldX * local.zoom,
+      y: local.y - level.worldY * local.zoom,
+    };
+    const rect = level.worldRect(this.project.gridSize);
+    const target = this.workspace.computeFitState(
+      inflate(rect, Math.max(rect.width, rect.height) * 0.75)
+    );
+    this.transitioning = true;
+    try {
+      await this.workspace.setScene(this.worldScene, { camera: start });
+      if (target) await this.workspace.animateTo(target, animate ? TRANSITION_MS : 0);
+    } finally {
+      this.transitioning = false;
+    }
+  }
+
+  /** Selects a level in the world; optionally pans it into view. */
+  selectLevel(uid: number | null, reveal: boolean): void {
+    levelStore.dispatch(LevelActions.SelectLevel, { uid });
+    if (uid === null || !reveal || this.view !== "world") return;
+    const level = this.project.getLevel(uid);
+    if (!level) return;
+    const rect = level.worldRect(this.project.gridSize);
+    const { camera } = this.workspace;
+    const view = this.workspace.viewSize;
+    const centerX = camera.uiPadding + (view.width - camera.uiPadding) / 2;
+    const centerY = camera.uiPadding + (view.height - camera.uiPadding) / 2;
+    void this.workspace.animateTo(
+      {
+        zoom: camera.zoom,
+        x: centerX - (rect.x + rect.width / 2) * camera.zoom,
+        y: centerY - (rect.y + rect.height / 2) * camera.zoom,
+      },
+      220
+    );
+  }
+
+  // ------------------------------------------------------------------ world edits
+
+  /** Adds a level the size of the selected one, at `x, y` or the next free spot. */
+  addLevel(x?: number, y?: number): void {
+    const template = this.selectedLevel() ?? this.level;
+    const position =
+      x !== undefined && y !== undefined
+        ? this.project.snapPosition(x, y)
+        : this.project.nextFreePosition();
+    const level = this.project.createLevel("level_0", template.width, template.height, {
+      worldX: position.x,
+      worldY: position.y,
+    });
+    // Start on the same layer the user was working on.
+    level.doc.setActiveLayer(template.doc.activeLayerId);
+    // createLevel already inserted it; record the step for undo/redo.
+    this.history.record(
+      new AddLevelCommand(this.project, level, this.project.indexOfLevel(level.uid))
+    );
+    this.selectLevel(level.uid, x === undefined);
+    this.showMessage(`Added ${level.identifier}`);
+  }
+
+  duplicateLevel(uid: number): void {
+    const source = this.project.getLevel(uid);
+    if (!source) return;
+    const rect = source.worldRect(this.project.gridSize);
+    const position = this.project.snapPosition(
+      rect.x + rect.width + this.project.gridSize * 2,
+      rect.y
+    );
+    const copy = this.project.cloneLevel(uid, position.x, position.y);
+    if (!copy) return;
+    this.history.execute(
+      new AddLevelCommand(this.project, copy, this.project.indexOfLevel(uid) + 1)
+    );
+    this.selectLevel(copy.uid, true);
+    this.showMessage(`Duplicated ${source.identifier}`);
+  }
+
+  removeLevel(uid: number): void {
+    const level = this.project.getLevel(uid);
+    if (!level) return;
+    if (this.project.levels.length <= 1) {
+      this.showMessage("A project needs at least one level.", 3000);
+      return;
+    }
+    const index = this.project.indexOfLevel(uid);
+    const command = new RemoveLevelCommand(this.project, level);
+    command.execute();
+    if (!command.succeeded) return;
+    this.history.record(command);
+    const next = this.project.levels[Math.min(index, this.project.levels.length - 1)];
+    this.selectLevel(next?.uid ?? null, false);
+    this.showMessage(`Deleted ${level.identifier} (Ctrl+Z to undo)`, 3500);
+  }
+
+  reorderLevel(uid: number, direction: "up" | "down"): void {
+    const from = this.project.indexOfLevel(uid);
+    const to = direction === "up" ? from - 1 : from + 1;
+    if (from === -1 || to < 0 || to >= this.project.levels.length) return;
+    this.history.execute(new ReorderLevelCommand(this.project, from, to));
+  }
+
+  renameLevel(uid: number, identifier: string): void {
+    const level = this.project.getLevel(uid);
+    if (!level || !identifier.trim() || identifier.trim() === level.identifier) return;
+    this.history.execute(new RenameLevelCommand(this.project, level, identifier));
+  }
+
+  private selectedLevel(): Level | undefined {
+    const uid = levelStore.getState().selectedLevelUid;
+    return uid === null ? undefined : this.project.getLevel(uid);
+  }
+
+  // ------------------------------------------------------------------ files
 
   newProject(presetId: string = this.selectedPresetId()): void {
     const label = presets.find((p) => p.id === presetId)?.label ?? presetId;
@@ -239,10 +501,13 @@ export default class Application {
     this.showMessage("Project saved");
   }
 
+  /** Exports the level being edited (or the one selected in the world). */
   exportGame(): void {
-    const json = JSON.stringify(toGameFormat(this.project, this.level), null, 2);
-    download(json, `${this.project.name}.json`);
-    this.showMessage("Exported game JSON");
+    const level = (this.view === "world" ? this.selectedLevel() : undefined) ?? this.level;
+    const json = JSON.stringify(toGameFormat(this.project, level), null, 2);
+    const suffix = this.project.levels.length > 1 ? `-${level.identifier}` : "";
+    download(json, `${this.project.name}${suffix}.json`);
+    this.showMessage(`Exported ${level.identifier} as game JSON`);
   }
 
   async copyActiveLayer(): Promise<void> {
@@ -258,7 +523,10 @@ export default class Application {
     }
   }
 
-  /** Grows (+) or shrinks (−) the level on each edge, as one undo step. */
+  /**
+   * Grows (+) or shrinks (−) the level on each edge, as one undo step. The
+   * level also moves in the world so untouched edges stay where they were.
+   */
   resizeLevel(edges: { top: number; right: number; bottom: number; left: number }): boolean {
     const { doc } = this.level;
     const width = doc.width + edges.left + edges.right;
@@ -270,9 +538,16 @@ export default class Application {
     if (width === doc.width && height === doc.height && edges.left === 0 && edges.top === 0) {
       return false;
     }
-    this.history.execute(
-      new ResizeCommand(doc, { width, height }, { x: edges.left, y: edges.top })
-    );
+    const steps: ICommand[] = [
+      new ResizeCommand(doc, { width, height }, { x: edges.left, y: edges.top }),
+    ];
+    if ((edges.left !== 0 || edges.top !== 0) && this.project.canDragLevels) {
+      const { gridSize } = this.project;
+      const from = { x: this.level.worldX, y: this.level.worldY };
+      const to = { x: from.x - edges.left * gridSize, y: from.y - edges.top * gridSize };
+      steps.push(new MoveLevelCommand(this.project, this.level.uid, from, to));
+    }
+    this.history.execute(new CompositeCommand(steps, "Resize level"));
     void this.workspace.fitToView(200);
     return true;
   }
@@ -288,8 +563,9 @@ export default class Application {
     const def = this.activeDef();
     if (!def) return 0;
     const selected = levelStore.getState().selectedValues[String(def.uid)];
-    if (selected !== undefined && def.intGridValues.some((v) => v.value === selected))
+    if (selected !== undefined && def.intGridValues.some((v) => v.value === selected)) {
       return selected;
+    }
     return def.intGridValues[0]?.value ?? 0;
   }
 
@@ -325,7 +601,7 @@ export default class Application {
       (s) => s.selectedValues,
       () => {
         this.renderPalette();
-        this.scene.invalidate();
+        this.levelScene.invalidate();
       }
     );
     levelStore.select(
@@ -333,7 +609,14 @@ export default class Application {
       (enabled) => {
         const toggle = $<HTMLInputElement>("#gridToggle");
         if (toggle.checked !== enabled) toggle.checked = enabled;
-        this.scene.invalidate();
+        this.levelScene.invalidate();
+      }
+    );
+    levelStore.select(
+      (s) => s.selectedLevelUid,
+      () => {
+        this.renderLevelsList();
+        this.worldScene.invalidate();
       }
     );
     this.renderTools();
@@ -347,6 +630,12 @@ export default class Application {
     }
     for (const button of document.querySelectorAll<HTMLButtonElement>("[data-command]")) {
       button.addEventListener("click", () => this.runCommand(button.dataset.command ?? ""));
+    }
+    for (const tab of document.querySelectorAll<HTMLButtonElement>("[data-view]")) {
+      tab.addEventListener("click", () => {
+        if (tab.dataset.view === "world") void this.showWorld();
+        else void this.enterLevel(this.selectedLevel()?.uid ?? this.level.uid);
+      });
     }
 
     $<HTMLInputElement>("#gridToggle").addEventListener("change", (ev) =>
@@ -371,14 +660,29 @@ export default class Application {
 
     const levelName = $<HTMLInputElement>("#levelName");
     levelName.addEventListener("change", () => {
-      const name = levelName.value.trim();
-      if (name) {
-        this.level.identifier = name;
-        this.project.events.emit("levels:changed");
-      } else {
-        levelName.value = this.level.identifier;
-      }
+      this.renameLevel(this.level.uid, levelName.value);
+      levelName.value = this.level.identifier;
     });
+
+    const layoutSelect = $<HTMLSelectElement>("#worldLayoutSelect");
+    layoutSelect.addEventListener("change", () => {
+      const layout = layoutSelect.value as WorldLayout;
+      if (WORLD_LAYOUTS.includes(layout)) this.project.setWorldLayout(layout);
+      void this.workspace.fitToView(250);
+    });
+    const gridW = $<HTMLInputElement>("#worldGridWidth");
+    const gridH = $<HTMLInputElement>("#worldGridHeight");
+    const applyWorldGrid = () => {
+      const w = Number(gridW.value);
+      const h = Number(gridH.value);
+      if (Number.isInteger(w) && Number.isInteger(h) && w > 0 && h > 0) {
+        this.project.setWorldGrid(w, h);
+      } else {
+        this.renderWorldSettings();
+      }
+    };
+    gridW.addEventListener("change", applyWorldGrid);
+    gridH.addEventListener("change", applyWorldGrid);
 
     $("#applyResize").addEventListener("click", () => {
       const inputs = [...document.querySelectorAll<HTMLInputElement>("[data-edge]")];
@@ -420,12 +724,26 @@ export default class Application {
       case "fit":
         void this.workspace.fitToView(200);
         break;
+      case "open-level": {
+        const uid = this.selectedLevel()?.uid;
+        if (uid !== undefined) void this.enterLevel(uid);
+        break;
+      }
     }
   }
 
   private bindKeys(): void {
     const { keymap } = this.workspace;
-    const tool = (name: LevelTool) => () => void levelStore.dispatch(LevelActions.SetTool, name);
+    const inLevel = (fn: () => void) => () => {
+      if (this.view === "level") fn();
+      else return false;
+    };
+    const inWorld = (fn: () => void) => () => {
+      if (this.view === "world") fn();
+      else return false;
+    };
+    const tool = (name: LevelTool) =>
+      inLevel(() => void levelStore.dispatch(LevelActions.SetTool, name));
 
     keymap.bind("mod+z", () => void this.history.undo(), { repeat: true });
     keymap.bind("mod+shift+z", () => void this.history.redo(), { repeat: true });
@@ -433,7 +751,10 @@ export default class Application {
     keymap.bind("mod+s", () => this.saveProject());
     keymap.bind("mod+o", () => this.runCommand("open"));
     keymap.bind("mod+e", () => this.exportGame());
-    keymap.bind("mod+shift+c", () => void this.copyActiveLayer());
+    keymap.bind(
+      "mod+shift+c",
+      inLevel(() => void this.copyActiveLayer())
+    );
     keymap.bind("b", tool("pen"));
     keymap.bind("e", tool("eraser"));
     keymap.bind("r", tool("rect"));
@@ -449,18 +770,51 @@ export default class Application {
     keymap.bind("=", () => this.workspace.zoomBy(1.25), { repeat: true });
     keymap.bind("-", () => this.workspace.zoomBy(0.8), { repeat: true });
     for (let i = 1; i <= 9; i++) {
-      keymap.bind(String(i), () => {
-        const entry = this.activeDef()?.intGridValues[i - 1];
-        if (entry) this.selectValue(entry.value);
-      });
+      keymap.bind(
+        String(i),
+        inLevel(() => {
+          const entry = this.activeDef()?.intGridValues[i - 1];
+          if (entry) this.selectValue(entry.value);
+        })
+      );
     }
+
+    // View navigation.
+    keymap.bind(
+      "escape",
+      inLevel(() => void this.showWorld())
+    );
+    keymap.bind(
+      "enter",
+      inWorld(() => {
+        const uid = this.selectedLevel()?.uid;
+        if (uid !== undefined) void this.enterLevel(uid);
+      })
+    );
+    keymap.bind(
+      "delete",
+      inWorld(() => {
+        const uid = this.selectedLevel()?.uid;
+        if (uid !== undefined) this.removeLevel(uid);
+      })
+    );
+    keymap.bind(
+      "mod+d",
+      inWorld(() => {
+        const uid = this.selectedLevel()?.uid;
+        if (uid !== undefined) this.duplicateLevel(uid);
+      })
+    );
+
     keymap.hold(
       "alt",
       () => {
+        if (this.view !== "level") return;
         this.altHeld = true;
         levelStore.dispatch(LevelActions.SetTool, "eyedropper");
       },
       () => {
+        if (!this.altHeld) return;
         this.altHeld = false;
         const { currentTool, previousTool } = levelStore.getState();
         if (currentTool === "eyedropper") levelStore.dispatch(LevelActions.SetTool, previousTool);
@@ -471,7 +825,13 @@ export default class Application {
   private bindStatus(): void {
     const cell = $("#statCell");
     const value = $("#statValue");
-    this.workspace.events.on("pointer:move", ({ grid, inside }) => {
+    this.workspace.events.on("pointer:move", ({ grid, world, inside }) => {
+      if (this.view === "world") {
+        const level = inside ? this.project.levelAt(world.x, world.y) : undefined;
+        cell.textContent = inside ? `${Math.floor(world.x)}, ${Math.floor(world.y)} px` : "—";
+        value.textContent = level ? level.identifier : "—";
+        return;
+      }
       const { doc } = this.level;
       const onLevel =
         inside && grid.x >= 0 && grid.y >= 0 && grid.x < doc.width && grid.y < doc.height;
@@ -500,6 +860,16 @@ export default class Application {
 
   // ------------------------------------------------------------------ rendering
 
+  private renderView(): void {
+    const view = this.view;
+    document.body.dataset.view = view;
+    for (const tab of document.querySelectorAll<HTMLButtonElement>("[data-view]")) {
+      tab.setAttribute("aria-selected", String(tab.dataset.view === view));
+    }
+    $("#currentLevelName").textContent = this.level.identifier;
+    this.workspace.refreshCursor();
+  }
+
   private renderTools(): void {
     const { currentTool } = levelStore.getState();
     for (const button of document.querySelectorAll<HTMLButtonElement>("[data-tool]")) {
@@ -513,16 +883,30 @@ export default class Application {
     this.palette.render(this.activeDef(), this.currentValue());
   }
 
+  private renderLevelsList(): void {
+    this.levelsList.render(this.project, levelStore.getState().selectedLevelUid);
+  }
+
   private renderProjectInfo(): void {
     const name = $<HTMLInputElement>("#projectName");
     if (name.value !== this.project.name) name.value = this.project.name;
     $("#statGrid").textContent = `${this.project.gridSize}×${this.project.gridSize} px`;
   }
 
+  private renderWorldSettings(): void {
+    const { worldLayout, worldGrid } = this.project;
+    const select = $<HTMLSelectElement>("#worldLayoutSelect");
+    if (select.value !== worldLayout) select.value = worldLayout;
+    $<HTMLInputElement>("#worldGridWidth").value = String(worldGrid.width);
+    $<HTMLInputElement>("#worldGridHeight").value = String(worldGrid.height);
+    $("#worldGridFields").hidden = worldLayout !== "gridvania";
+  }
+
   private renderLevelInfo(): void {
     const levelName = $<HTMLInputElement>("#levelName");
     if (levelName.value !== this.level.identifier) levelName.value = this.level.identifier;
     $("#levelSize").textContent = `${this.level.width} × ${this.level.height} cells`;
+    $("#currentLevelName").textContent = this.level.identifier;
   }
 
   private showMessage(text: string, timeout = 2500): void {

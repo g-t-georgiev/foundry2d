@@ -11,6 +11,24 @@
       <div class="toolbar-start">
         <span class="brand">Foundry2D <small>Level</small></span>
         <input id="projectName" class="project-name" aria-label="Project name" spellcheck="false" />
+        <div class="view-switch" role="tablist" aria-label="View">
+          <button
+            class="view-tab"
+            role="tab"
+            data-view="world"
+            title="World view (Esc from a level)"
+          >
+            World
+          </button>
+          <button
+            class="view-tab"
+            role="tab"
+            data-view="level"
+            title="Edit the selected level (Enter)"
+          >
+            Level <span id="currentLevelName" class="view-level-name"></span>
+          </button>
+        </div>
       </div>
 
       <div class="toolbar-actions">
@@ -85,7 +103,90 @@
 
     <div class="main-layout">
       <aside class="sidebar left-sidebar">
-        <section class="panel-section">
+        <section class="panel-section world-only">
+          <h3 class="section-title">World</h3>
+          <label class="field">
+            <span class="label">Layout</span>
+            <select id="worldLayoutSelect" class="input">
+              <option value="free">Free</option>
+              <option value="gridvania">GridVania (snap to world grid)</option>
+              <option value="linearH">Linear · horizontal</option>
+              <option value="linearV">Linear · vertical</option>
+            </select>
+          </label>
+          <div class="world-grid-fields" id="worldGridFields">
+            <label
+              >World cell W <input type="number" class="input" id="worldGridWidth" min="1" step="1"
+            /></label>
+            <label
+              >World cell H
+              <input type="number" class="input" id="worldGridHeight" min="1" step="1"
+            /></label>
+          </div>
+        </section>
+
+        <section class="panel-section world-only flex-expand">
+          <div class="section-header">
+            <h3 class="section-title">Levels</h3>
+            <div class="mini-rail" id="levelsRail" role="toolbar" aria-label="Level actions">
+              <button
+                class="btn btn-icon btn-small"
+                data-level-action="add"
+                title="Add level"
+                aria-label="Add level"
+              >
+                +
+              </button>
+              <button
+                class="btn btn-icon btn-small"
+                data-level-action="duplicate"
+                title="Duplicate level (Ctrl+D)"
+                aria-label="Duplicate level"
+              >
+                ⧉
+              </button>
+              <button
+                class="btn btn-icon btn-small"
+                data-level-action="up"
+                title="Move up in list"
+                aria-label="Move level up"
+              >
+                ↑
+              </button>
+              <button
+                class="btn btn-icon btn-small"
+                data-level-action="down"
+                title="Move down in list"
+                aria-label="Move level down"
+              >
+                ↓
+              </button>
+              <button
+                class="btn btn-icon btn-small btn-danger"
+                data-level-action="delete"
+                title="Delete level (Delete)"
+                aria-label="Delete level"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+          <ul
+            id="levelsList"
+            class="levels-list"
+            role="listbox"
+            aria-label="Levels"
+            tabindex="0"
+          ></ul>
+          <p class="hint">
+            Double-click a level to open it, or empty space to create one. Drag to move.
+          </p>
+          <button class="btn btn-primary btn-full" data-command="open-level">
+            Open selected level
+          </button>
+        </section>
+
+        <section class="panel-section level-only">
           <h3 class="section-title">Tools</h3>
           <div class="tools-grid" role="toolbar" aria-label="Tools">
             <button class="tool-btn" data-tool="pen" title="Pen (B)" aria-label="Pen">
@@ -142,7 +243,7 @@
           </div>
         </section>
 
-        <section class="panel-section">
+        <section class="panel-section level-only">
           <h3 class="section-title">Level</h3>
           <label class="field">
             <span class="label">Name</span>
@@ -173,7 +274,7 @@
           </details>
         </section>
 
-        <section class="panel-section flex-expand">
+        <section class="panel-section flex-expand level-only">
           <layers-panel id="layersPanel" actions="up down"></layers-panel>
           <button class="btn btn-full" data-command="settings">Edit layer definitions…</button>
         </section>
@@ -190,7 +291,7 @@
         </div>
       </main>
 
-      <aside class="sidebar right-sidebar">
+      <aside class="sidebar right-sidebar level-only">
         <section class="panel-section flex-expand">
           <h3 class="section-title">Palette · <span id="paletteLayer"></span></h3>
           <div id="palette" class="palette" role="listbox" aria-label="IntGrid values"></div>
