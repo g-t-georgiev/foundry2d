@@ -16,6 +16,10 @@ export interface LevelEditorState {
   /** Selected IntGrid value per layer definition uid (as string key). */
   selectedValues: Record<string, number>;
   grid: { enabled: boolean };
+  /** Selected tile rectangle per tileset uid (in tiles). */
+  tileSelections: Record<string, { x: number; y: number; width: number; height: number }>;
+  /** Flip applied to painted tiles. */
+  tileFlip: { x: boolean; y: boolean };
 }
 
 export enum LevelActions {
@@ -24,6 +28,8 @@ export enum LevelActions {
   ToggleGrid = "level:grid:toggle",
   SetView = "level:view:set",
   SelectLevel = "level:level:select",
+  SelectTiles = "level:tiles:select",
+  SetTileFlip = "level:tiles:flip",
 }
 
 export type LevelActionsMap = {
@@ -32,6 +38,14 @@ export type LevelActionsMap = {
   [LevelActions.ToggleGrid]: { enabled: boolean };
   [LevelActions.SetView]: EditorView;
   [LevelActions.SelectLevel]: { uid: number | null };
+  [LevelActions.SelectTiles]: {
+    tilesetUid: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  [LevelActions.SetTileFlip]: { x: boolean; y: boolean };
 };
 
 const setToolSchema = { type: "string", enum: [...LEVEL_TOOLS] } as const;
@@ -83,6 +97,47 @@ const selectLevel = defineAction<
   },
 });
 
+const selectTilesSchema = {
+  type: "object",
+  properties: {
+    tilesetUid: { type: "integer", minimum: 0 },
+    x: { type: "integer", minimum: 0 },
+    y: { type: "integer", minimum: 0 },
+    width: { type: "integer", minimum: 1 },
+    height: { type: "integer", minimum: 1 },
+  },
+  required: ["tilesetUid", "x", "y", "width", "height"],
+  additionalProperties: false,
+} as const;
+
+const tileFlipSchema = {
+  type: "object",
+  properties: { x: { type: "boolean" }, y: { type: "boolean" } },
+  required: ["x", "y"],
+  additionalProperties: false,
+} as const;
+
+const selectTiles = defineAction<
+  LevelEditorState,
+  LevelActions.SelectTiles,
+  typeof selectTilesSchema
+>(LevelActions.SelectTiles, {
+  schema: selectTilesSchema,
+  reducer(state, { tilesetUid, ...rect }) {
+    state.tileSelections[String(tilesetUid)] = rect;
+  },
+});
+
+const setTileFlip = defineAction<LevelEditorState, LevelActions.SetTileFlip, typeof tileFlipSchema>(
+  LevelActions.SetTileFlip,
+  {
+    schema: tileFlipSchema,
+    reducer(state, flip) {
+      state.tileFlip = flip;
+    },
+  }
+);
+
 const setTool = defineAction<LevelEditorState, LevelActions.SetTool, typeof setToolSchema>(
   LevelActions.SetTool,
   {
@@ -124,6 +179,8 @@ export const levelStore = new Store<LevelEditorState, LevelActionsMap>({
     previousTool: "pen",
     selectedValues: {},
     grid: { enabled: true },
+    tileSelections: {},
+    tileFlip: { x: false, y: false },
   },
-  actions: [setTool, selectValue, toggleGrid, setView, selectLevel],
+  actions: [setTool, selectValue, toggleGrid, setView, selectLevel, selectTiles, setTileFlip],
 });

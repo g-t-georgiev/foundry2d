@@ -2,6 +2,7 @@ import type { Dimensions, Rect, Unsubscribe } from "@foundry2d/core";
 import { LayerBitmapCache, type RenderContext, type RenderPass } from "@foundry2d/render";
 import type { ScenePointerEvent, Workspace, WorkspaceScene } from "@foundry2d/workspace";
 import type { Level, LevelProject } from "../model/LevelProject";
+import { tileLayerRendererFor } from "../render/tileLayerRenderer";
 
 export interface WorldSceneHooks {
   getSelectedUid: () => number | null;
@@ -35,12 +36,14 @@ export class WorldScene implements WorkspaceScene {
     moved: boolean;
   } | null = null;
   private readonly passes: RenderPass[];
+  private readonly tileRenderer: ReturnType<typeof tileLayerRendererFor>;
 
   constructor(
     private readonly project: LevelProject,
     private readonly hooks: WorldSceneHooks
   ) {
     this.cellSize = { width: project.gridSize, height: project.gridSize };
+    this.tileRenderer = tileLayerRendererFor(project);
     this.passes = [
       {
         id: "world-grid",
@@ -74,6 +77,7 @@ export class WorldScene implements WorkspaceScene {
       this.project.events.on("levels:changed", rerender),
       this.project.events.on("defs:changed", rerender),
       this.project.events.on("settings:changed", rerender),
+      this.project.events.on("tilesets:loaded", rerender),
     ];
     // Level edits (cells, visibility) also show up in the world.
     for (const level of this.project.levels) this.watchLevel(level, rerender);
@@ -254,6 +258,11 @@ export class WorldScene implements WorkspaceScene {
       for (const layer of level.doc.layers) {
         if (!layer.visible || layer.opacity <= 0) continue;
         ctx.globalAlpha = layer.opacity;
+        const custom = this.tileRenderer(layer);
+        if (custom) {
+          custom(ctx, layer, r, visible);
+          continue;
+        }
         const bitmap = cache.get(layer, project.colorizerFor(layer.id), project.paletteVersion);
         ctx.drawImage(bitmap, r.x, r.y, r.width, r.height);
       }

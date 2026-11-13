@@ -147,24 +147,55 @@ _Done: defects fixed, open tool registry, history events/limit/composite, full l
 - Camera animations finish on a timer when `requestAnimationFrame` is paused (background tab, hidden pane).
 - The level designer toolbar scrolls instead of widening the page on narrow windows.
 
-### Phase 4: Tiles
+### Phase 4: Tiles ✅ (2026-11-14, auto-layers deferred)
 
-- Tileset import (PNG), a tileset picker component, Tile layers, rectangular stamps, flip bits encoded in the high bits of the id.
-- Optionally later: auto-layer rules driven by IntGrid values. This is LDtk's signature feature.
+1. **Tileset definitions** in the project: identifier, tile size, spacing, padding, and the source image. For now the image is embedded as a PNG data URL, so project files and autosave stay self-contained. Phase 5 moves images to an asset store.
+2. **Tiles layer type** next to IntGrid, bound to one tileset. Cells store `tileId + 1` (0 = empty) with flip flags in the high bits: bit 29 = flip X, bit 30 = flip Y. The sign bit is never used.
+3. **Rendering:** `LayerStackPass` gains a per-layer custom renderer, so tile layers draw visible tiles straight from the tileset image, interleaved correctly with IntGrid layers. The world view uses the same path.
+4. **Editing:** a tileset picker (click a tile, or drag to pick a rectangular stamp), a core `StampTool` that paints multi-tile patterns, X/Y keys to flip, and pen, eraser, bucket and rectangle working on single tiles.
+5. **Later:** auto-layer rules driven by IntGrid values, LDtk's signature feature.
 
-### Phase 5: Entities and custom data
+### Phase 5: Storage and project library
 
-- Entity defs with typed fields, placement and move tools, a property grid, and Enums.
+**Today:** `StorageDriver` (IndexedDB, one `recovery` object store) is used only through core `JsonRecovery`. Both apps write one crash-recovery snapshot per app and restore it on load.
 
-### Phase 6: Pixel Editor, the Piskel features
+**Plan:**
 
-- Frames/timeline, onion skin, animated preview, more shapes (line, rect, ellipse), selection/move, mirror drawing, palettes, and spritesheet/GIF export.
-- Bridge to the level designer: a sprite made in the pixel editor can be used as a tileset.
+1. **Split the storage contract** into three stores behind one IndexedDB database. The database version moves from 1 to 2 with an `upgrade` migration.
+   - `RecoveryStore`: what exists today, but keyed per project id instead of one slot per app.
+   - `ProjectStore`: list, get, put and delete projects, with metadata (id, app, name, `updatedAt`, thumbnail).
+   - `AssetStore`: binary blobs keyed by content hash. Tileset PNGs move here, and projects reference them by hash. Saving or exporting a file still embeds them, so files stay portable.
+2. **Add `MemoryStorageDriver`** for tests and for browsers where IndexedDB is unavailable (private mode).
+3. **Add `FileSystemAccessDriver`** (Chromium): Open and Save work on real files in place, and file handles are persisted for a "Recent files" list. Firefox and Safari fall back to download and upload.
+4. **UI:**
+   - a start screen and project browser (recent files, local library, presets);
+   - "Save" writes back to the open file, plus "Save as";
+   - a dirty indicator in the title, and a `beforeunload` prompt when there are unsaved changes.
+5. **Both apps share the same project-library component** (it lives in `@foundry2d/ui` and stays free of workspace dependencies).
+
+### Phase 6: Pixel Editor, exports, frames and spritesheets
+
+1. **Export controller** (a pixel editor module that replaces the single `exportPng` function):
+   - image formats: PNG, WebP (lossless and lossy), JPEG with a background color (it has no alpha), and BMP;
+   - options: scale (1–32×), current layer or the flattened image, a crop to content (trim), and a filename pattern;
+   - one `ExportOptions` → `Blob` pipeline, so the export dialog, the keyboard shortcut and tests share a single path.
+2. **Frames and timeline:** frames share the layer structure (Piskel model). Add onion skin, an animated preview with FPS, and per-frame duration.
+3. **Spritesheet export (TexturePacker-style):**
+   - Image: frames packed as a grid (rows or columns) or bin-packed, with padding, extrusion and trimming.
+   - JSON data: the TexturePacker "JSON Hash" and "JSON Array" formats, the ones Phaser, PixiJS and Aseprite read. Each frame has `frame`, `rotated`, `trimmed`, `spriteSourceSize`, `sourceSize` and `duration`; `meta` has `app`, `version`, `image`, `format`, `size`, `scale` and `frameTags`.
+   - Output is a single ZIP download, or PNG and JSON as two files.
+4. **GIF export** for animations.
+5. **More drawing:** line, rectangle and ellipse tools, selection/move, mirror drawing, and palettes.
+6. **Bridge to the level designer:** a sprite or spritesheet made here can be imported as a tileset.
+
+### Phase 7: Entities and custom data
+
+- Entity definitions with typed fields, placement and move tools, a property grid, and enums (LDtk model). Pac-Man spawns could move here from the IntGrid `spawns` layer.
 
 ---
 
-## 4. Open decisions
+## 4. Decisions log
 
-1. **Order after Phase 0.** The recommendation is Phase 1 (pixel parity) first. It is small, ports almost directly, and proves the Workspace kit before the level designer depends on it. If the Pac-Man maps are urgent, go straight to Phase 2.
-2. **Pac-Man tile size.** The arcade original uses 8 px tiles; the prototype uses 16 px. This is a per-layer `gridSize` in the defs, so it isn't locked in, but the seed project needs a value.
-3. **Project file format.** The recommendation is human-readable JSON with RLE buffers, so it diffs well in the game repo. The alternative is binary (`.f2d`) for size.
+1. **Order after Phase 0:** Phase 1 (pixel parity) came first. Done.
+2. **Pac-Man tile size:** 8 px, the arcade original, set in the Pac-Man preset and editable per project.
+3. **Project file format:** human-readable JSON with RLE layer data (`.f2d.json` for the pixel editor, `.f2dlevel.json` for the level designer).

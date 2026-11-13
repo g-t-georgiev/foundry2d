@@ -1,8 +1,21 @@
-import type { CellBuffer, Dimensions, GridLayer, Position } from "@foundry2d/core";
+import type { CellBuffer, Dimensions, GridLayer, Position, Rect } from "@foundry2d/core";
 import type { RenderContext, RenderPass } from "../types";
 import { LayerBitmapCache, type CellColorizer } from "../LayerBitmapCache";
 
 export type LayerStackMode = "composite" | "focus";
+
+/**
+ * Draws one layer itself instead of the default "one pixel per cell" bitmap,
+ * e.g. tile layers drawn from a tileset image. Called with `globalAlpha`
+ * already set. `dest` is the layer rectangle and `visible` the visible area,
+ * both in world units, for culling.
+ */
+export type LayerRenderer = (
+  ctx: CanvasRenderingContext2D,
+  layer: GridLayer<CellBuffer>,
+  dest: Rect,
+  visible: Rect
+) => void;
 
 export interface LayerStackSource {
   layers: readonly GridLayer<CellBuffer>[];
@@ -29,6 +42,8 @@ export interface LayerStackPassOptions {
    * palette). Takes precedence over `colorize`.
    */
   getColorizer?: (layer: GridLayer<CellBuffer>) => CellColorizer | undefined;
+  /** Custom per-layer drawing; takes precedence over the bitmap path. */
+  getLayerRenderer?: (layer: GridLayer<CellBuffer>) => LayerRenderer | undefined;
   /** Bump when the colorize mapping changes so cached bitmaps refresh. */
   getPaletteVersion?: () => number;
 }
@@ -65,6 +80,18 @@ export class LayerStackPass implements RenderPass {
       const isActive = layer.id === source.activeLayerId;
       const alpha = mode === "focus" && !isActive ? layer.opacity * dimming : layer.opacity;
 
+      const dest = {
+        x: origin.x,
+        y: origin.y,
+        width: layer.width * cellSize.width,
+        height: layer.height * cellSize.height,
+      };
+      const custom = this.options.getLayerRenderer?.(layer);
+      if (custom) {
+        ctx.globalAlpha = alpha;
+        custom(ctx, layer, dest, rc.camera.getVisibleWorldRect(rc.viewWidth, rc.viewHeight));
+        continue;
+      }
       const colorizer = this.options.getColorizer?.(layer) ?? colorize;
       const bitmap = this.cache.get(layer, colorizer, paletteVersion);
       ctx.globalAlpha = alpha;

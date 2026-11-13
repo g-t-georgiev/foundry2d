@@ -3,6 +3,8 @@ import {
   HistoryManager,
   JsonRecovery,
   RectangleTool,
+  StampTool,
+  type StampPattern,
   ResizeCommand,
   ToolManager,
   type CameraState,
@@ -24,6 +26,9 @@ import {
 } from "./model/commands";
 import { LevelActions, levelStore, type EditorView, type LevelTool } from "./state";
 import PaletteView from "./ui/PaletteView";
+import TilesetPickerView from "./ui/TilesetPickerView";
+import { tileLayerRendererFor } from "./render/tileLayerRenderer";
+import { decodeTile, selectionToPattern, tilesetGrid } from "./model/tiles";
 import LevelLayersController from "./ui/LevelLayersController";
 import LevelsListView from "./ui/LevelsListView";
 import SettingsDialog from "./ui/SettingsDialog";
@@ -83,6 +88,7 @@ export default class Application {
   private projectSession: Unsubscribe[] = [];
   private levelSession: { layers: LevelLayersController; unsubscribe: Unsubscribe[] } | null = null;
   private readonly palette: PaletteView;
+  private readonly tilePicker: TilesetPickerView;
   private readonly levelsList: LevelsListView;
   private readonly settings: SettingsDialog;
   private readonly recovery: JsonRecovery;
@@ -93,6 +99,8 @@ export default class Application {
 
   constructor() {
     this.tools.registerTool(new RectangleTool<Int32Array>("rect", true));
+    // Engine-only tool: the pen becomes a stamp when several tiles are selected.
+    this.tools.registerTool(new StampTool<Int32Array>(() => this.currentPattern(), "stamp"));
 
     this.project = createProjectFromPreset(DEFAULT_PRESET_ID);
     this.level = this.project.levels[0];
@@ -128,6 +136,7 @@ export default class Application {
     this.settings = new SettingsDialog($<HTMLDialogElement>("#settingsDialog"), {
       confirm: (message) => window.confirm(message),
       onDestructiveChange: () => this.history.clear(),
+      notify: (message) => this.showMessage(message, 5000),
     });
     this.recovery = new JsonRecovery(
       "level-designer:autosave",
@@ -137,6 +146,14 @@ export default class Application {
         onError: (error) => console.warn("Autosave failed", error),
       }
     );
+
+    this.tilePicker = new TilesetPickerView($("#tilesetCanvasHost"), (tileset, selection) => {
+      levelStore.dispatch(LevelActions.SelectTiles, { tilesetUid: tileset.uid, ...selection });
+      const { currentTool } = levelStore.getState();
+      if (currentTool === "eraser" || currentTool === "eyedropper") {
+        levelStore.dispatch(LevelActions.SetTool, "pen");
+      }
+    });
 
     this.renderPresets();
     this.bindStore();
@@ -169,7 +186,12 @@ export default class Application {
 
     const persist = () => this.recovery.schedule();
     this.projectSession = [
+      project.events.on("tilesets:loaded", () => {
+        this.workspace.requestRender();
+        this.tilePicker.draw();
+      }),
       project.events.on("defs:changed", () => {
+        this.syncEngineTool();
         this.renderPalette();
         this.workspace.refreshCursor();
         this.levelScene.invalidate();
@@ -250,8 +272,10 @@ export default class Application {
       cellSize: { width: gridSize, height: gridSize },
       getValue: () => this.currentValue(),
       getColorizer: (layer) => project.colorizerFor(layer.id),
+      getLayerRenderer: tileLayerRendererFor(project),
       getPaletteVersion: () => project.paletteVersion,
       getCursorFill: () => {
+        if (this.activeDef()?.type === "Tiles") return "rgba(56, 189, 248, 0.25)";
         const entry = this.activeDef()?.intGridValues.find((v) => v.value === this.currentValue());
         return entry ? `${entry.color}88` : null;
       },
@@ -562,11 +586,48 @@ export default class Application {
   currentValue(): number {
     const def = this.activeDef();
     if (!def) return 0;
+    if (def.type === "Tiles") return this.currentPattern()?.values[0] ?? 0;
     const selected = levelStore.getState().selectedValues[String(def.uid)];
     if (selected !== undefined && def.intGridValues.some((v) => v.value === selected)) {
       return selected;
     }
     return def.intGridValues[0]?.value ?? 0;
+  }
+
+  /** Tileset and selected tile rectangle for the active Tiles layer. */
+  private tileContext() {
+    const def = this.activeDef();
+    const tileset = def?.type === "Tiles" ? this.project.getTileset(def.tilesetUid) : undefined;
+    if (!tileset) return null;
+    const { columns, rows } = tilesetGrid(tileset);
+    if (columns === 0 || rows === 0) return null;
+    const stored = levelStore.getState().tileSelections[String(tileset.uid)];
+    // Drop selections that no longer fit (tileset resliced or replaced).
+    const selection =
+      stored && stored.x + stored.width <= columns && stored.y + stored.height <= rows
+        ? stored
+        : { x: 0, y: 0, width: 1, height: 1 };
+    return { tileset, selection };
+  }
+
+  /** Stamp pattern for the active Tiles layer, with the current flips applied. */
+  currentPattern(): StampPattern | null {
+    const context = this.tileContext();
+    if (!context) return null;
+    const { x, y } = levelStore.getState().tileFlip;
+    return selectionToPattern(context.tileset, context.selection, x, y);
+  }
+
+  /**
+   * The engine tool follows the store tool, except that the pen paints a
+   * stamp when a multi-tile selection is active on a Tiles layer.
+   */
+  private syncEngineTool(): void {
+    const { currentTool } = levelStore.getState();
+    const selection = this.tileContext()?.selection;
+    const multi = selection !== undefined && selection.width * selection.height > 1;
+    this.tools.setTool(currentTool === "pen" && multi ? "stamp" : currentTool);
+    this.workspace.refreshCursor();
   }
 
   selectValue(value: number): void {
@@ -580,7 +641,21 @@ export default class Application {
   }
 
   private pickValue(value: number): void {
-    if (value !== 0) this.selectValue(value);
+    const context = this.tileContext();
+    const tile = decodeTile(value);
+    if (context && tile) {
+      const { columns } = tilesetGrid(context.tileset);
+      levelStore.dispatch(LevelActions.SelectTiles, {
+        tilesetUid: context.tileset.uid,
+        x: tile.tileId % columns,
+        y: Math.floor(tile.tileId / columns),
+        width: 1,
+        height: 1,
+      });
+      levelStore.dispatch(LevelActions.SetTileFlip, { x: tile.flipX, y: tile.flipY });
+    } else if (value !== 0 && !context) {
+      this.selectValue(value);
+    }
     if (!this.altHeld) {
       levelStore.dispatch(LevelActions.SetTool, levelStore.getState().previousTool);
     }
@@ -592,9 +667,25 @@ export default class Application {
     this.tools.setTool(levelStore.getState().currentTool);
     levelStore.select(
       (s) => s.currentTool,
-      (tool) => {
-        this.tools.setTool(tool);
+      () => {
+        this.syncEngineTool();
         this.renderTools();
+      }
+    );
+    levelStore.select(
+      (s) => s.tileSelections,
+      () => {
+        this.syncEngineTool();
+        this.renderPalette();
+        this.levelScene.invalidate();
+      }
+    );
+    levelStore.select(
+      (s) => s.tileFlip,
+      (flip) => {
+        $<HTMLInputElement>("#flipX").checked = flip.x;
+        $<HTMLInputElement>("#flipY").checked = flip.y;
+        this.levelScene.invalidate();
       }
     );
     levelStore.select(
@@ -637,6 +728,13 @@ export default class Application {
         else void this.enterLevel(this.selectedLevel()?.uid ?? this.level.uid);
       });
     }
+
+    const flipX = $<HTMLInputElement>("#flipX");
+    const flipY = $<HTMLInputElement>("#flipY");
+    const setFlip = () =>
+      levelStore.dispatch(LevelActions.SetTileFlip, { x: flipX.checked, y: flipY.checked });
+    flipX.addEventListener("change", setFlip);
+    flipY.addEventListener("change", setFlip);
 
     $<HTMLInputElement>("#gridToggle").addEventListener("change", (ev) =>
       levelStore.dispatch(LevelActions.ToggleGrid, {
@@ -769,6 +867,15 @@ export default class Application {
     keymap.bind("+", () => this.workspace.zoomBy(1.25), { repeat: true });
     keymap.bind("=", () => this.workspace.zoomBy(1.25), { repeat: true });
     keymap.bind("-", () => this.workspace.zoomBy(0.8), { repeat: true });
+    const toggleFlip = (axis: "x" | "y") =>
+      inLevel(() => {
+        if (this.activeDef()?.type !== "Tiles") return;
+        const flip = { ...levelStore.getState().tileFlip };
+        flip[axis] = !flip[axis];
+        levelStore.dispatch(LevelActions.SetTileFlip, flip);
+      });
+    keymap.bind("x", toggleFlip("x"));
+    keymap.bind("y", toggleFlip("y"));
     for (let i = 1; i <= 9; i++) {
       keymap.bind(
         String(i),
@@ -844,6 +951,13 @@ export default class Application {
       const layer = doc.getActiveLayer();
       const v = layer?.get(grid.x, grid.y) ?? 0;
       const def = layer ? this.project.getLayerDefForLayer(layer.id) : undefined;
+      if (def?.type === "Tiles") {
+        const tile = decodeTile(v);
+        value.textContent = tile
+          ? `tile #${tile.tileId}${tile.flipX ? " ↔" : ""}${tile.flipY ? " ↕" : ""}`
+          : "empty";
+        return;
+      }
       value.textContent =
         v === 0
           ? "empty"
@@ -880,7 +994,22 @@ export default class Application {
   }
 
   private renderPalette(): void {
-    this.palette.render(this.activeDef(), this.currentValue());
+    const def = this.activeDef();
+    const isTiles = def?.type === "Tiles";
+    $("#palette").hidden = isTiles;
+    $("#paletteHint").hidden = isTiles;
+    $("#tilePicker").hidden = !isTiles;
+    if (!isTiles) {
+      this.palette.render(def, this.currentValue());
+      return;
+    }
+    const context = this.tileContext();
+    const tileset = this.project.getTileset(def.tilesetUid);
+    $("#paletteLayer").textContent = `${def.identifier} · ${tileset?.identifier ?? "no tileset"}`;
+    this.tilePicker.render(this.project, tileset, context?.selection ?? null);
+    $("#tilePickerHint").textContent = tileset
+      ? "Click a tile, or drag to pick a stamp. X / Y flip. Right mouse erases."
+      : "This layer has no tileset. Import one in Project settings.";
   }
 
   private renderLevelsList(): void {

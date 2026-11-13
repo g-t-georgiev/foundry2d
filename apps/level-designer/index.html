@@ -295,7 +295,17 @@
         <section class="panel-section flex-expand">
           <h3 class="section-title">Palette · <span id="paletteLayer"></span></h3>
           <div id="palette" class="palette" role="listbox" aria-label="IntGrid values"></div>
-          <p class="hint">Keys 1–9 pick a value. Right mouse erases.</p>
+          <div id="tilePicker" class="tile-picker" hidden>
+            <div class="tile-flip" role="group" aria-label="Flip painted tiles">
+              <label title="Flip horizontally (X)"
+                ><input type="checkbox" id="flipX" /> Flip X</label
+              >
+              <label title="Flip vertically (Y)"><input type="checkbox" id="flipY" /> Flip Y</label>
+            </div>
+            <div id="tilesetCanvasHost" class="tileset-host"></div>
+            <p class="hint" id="tilePickerHint"></p>
+          </div>
+          <p class="hint" id="paletteHint">Keys 1–9 pick a value. Right mouse erases.</p>
         </section>
       </aside>
     </div>
@@ -332,12 +342,26 @@
           <div class="defs-list-column">
             <div class="column-header">
               <span class="label">Layers</span>
-              <button class="btn btn-small" id="addLayerDef">+ IntGrid layer</button>
+              <span class="button-row">
+                <button class="btn btn-small" id="addLayerDef">+ IntGrid</button>
+                <button class="btn btn-small" id="addTilesLayerDef">+ Tiles</button>
+              </span>
             </div>
             <ul id="defsList" class="defs-list" role="listbox" aria-label="Layer definitions"></ul>
           </div>
           <div class="def-editor" id="defEditor"></div>
         </section>
+        <section class="dialog-columns">
+          <div class="defs-list-column">
+            <div class="column-header">
+              <span class="label">Tilesets</span>
+              <button class="btn btn-small" id="importTileset">Import PNG…</button>
+            </div>
+            <ul id="tilesetsList" class="defs-list" role="listbox" aria-label="Tilesets"></ul>
+          </div>
+          <div class="def-editor" id="tilesetEditor"></div>
+        </section>
+        <input type="file" id="tilesetFileInput" accept="image/png,image/webp,image/gif" hidden />
       </div>
     </dialog>
 

@@ -1,6 +1,7 @@
 import { LevelProject, layerIdFor, type Level } from "../model/LevelProject";
 import { createProjectFromPreset } from "../model/presets";
 import { ProjectFormatError } from "./projectFile";
+import { tilesetGrid } from "../model/tiles";
 
 /**
  * The flat format the Pac-Man game reads (same shape the original level
@@ -14,6 +15,14 @@ export interface GameLevelFile {
     tileSize: number;
   };
   layers: Record<string, number[]>;
+  /**
+   * Present when the level has Tiles layers. Their cells hold
+   * `tileId + 1` with flip flags in bits 29 (X) and 30 (Y); 0 is empty.
+   */
+  tileLayers?: Record<
+    string,
+    { tileset: string; tileSize: number; columns: number; image: string | null }
+  >;
 }
 
 export function toGameFormat(project: LevelProject, level: Level): GameLevelFile {
@@ -22,7 +31,19 @@ export function toGameFormat(project: LevelProject, level: Level): GameLevelFile
     const layer = level.doc.getLayer(layerIdFor(def.uid));
     if (layer) layers[def.identifier] = Array.from(layer.data);
   }
+  const tileLayers: NonNullable<GameLevelFile["tileLayers"]> = {};
+  for (const def of project.defs.layers) {
+    if (def.type !== "Tiles") continue;
+    const tileset = project.getTileset(def.tilesetUid);
+    tileLayers[def.identifier] = {
+      tileset: tileset?.identifier ?? "",
+      tileSize: tileset?.tileSize ?? project.gridSize,
+      columns: tileset ? tilesetGrid(tileset).columns : 0,
+      image: tileset?.image.fileName ?? null,
+    };
+  }
   return {
+    ...(Object.keys(tileLayers).length ? { tileLayers } : {}),
     metadata: {
       name: project.name,
       columns: level.width,

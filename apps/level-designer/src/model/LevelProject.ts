@@ -1,6 +1,6 @@
 import { EventEmitter, GridDocument, PixelUtils, type Rect } from "@foundry2d/core";
 import type { CellColorizer } from "@foundry2d/render";
-import type { IntGridValueDef, LayerDef, ProjectDefs, WorldLayout } from "./types";
+import type { IntGridValueDef, LayerDef, ProjectDefs, TilesetDef, WorldLayout } from "./types";
 
 /** IntGrid cells use 0 for "empty", like LDtk. */
 export const EMPTY_CELL = 0;
@@ -38,6 +38,8 @@ export class Level {
 export type ProjectEventMap = {
   /** Layer definitions (identifiers, values, colors, order) changed. */
   "defs:changed": () => void;
+  /** A tileset image finished decoding and can now be drawn. */
+  "tilesets:loaded": () => void;
   /** Levels were added, removed, reordered, renamed or moved. */
   "levels:changed": () => void;
   /** Project-wide settings (name, grid size) changed. */
@@ -73,7 +75,7 @@ export const defUidOf = (layerId: string): number | null => {
  */
 export class LevelProject {
   public readonly events = new EventEmitter<ProjectEventMap>();
-  public readonly defs: ProjectDefs = { layers: [] };
+  public readonly defs: ProjectDefs = { layers: [], tilesets: [] };
   public readonly levels: Level[] = [];
   /** Bumped whenever colors change so cached layer bitmaps are refreshed. */
   public paletteVersion = 0;
@@ -83,6 +85,10 @@ export class LevelProject {
   public worldGrid = { width: 256, height: 256 };
   private nextUid = 1;
   private colorizers = new Map<number, CellColorizer>();
+  private tilesetImages = new Map<
+    number,
+    { src: string; image: HTMLImageElement; ready: boolean }
+  >();
 
   constructor(
     public name: string,
@@ -356,6 +362,96 @@ export class LevelProject {
     }
     this.defsChanged();
     return def;
+  }
+
+  /** Adds a Tiles layer definition on top of the stack, in every level. */
+  addTilesLayer(identifier: string, tilesetUid: number | null = null): LayerDef {
+    const def: LayerDef = {
+      uid: this.allocateUid(),
+      identifier: this.uniqueIdentifier(identifier),
+      type: "Tiles",
+      intGridValues: [],
+      tilesetUid,
+    };
+    this.defs.layers.push(def);
+    for (const level of this.levels) {
+      level.doc.addLayer({ id: layerIdFor(def.uid), name: def.identifier, activate: false });
+    }
+    this.defsChanged();
+    return def;
+  }
+
+  setLayerTileset(uid: number, tilesetUid: number | null): void {
+    const def = this.getLayerDef(uid);
+    if (!def || def.type !== "Tiles" || def.tilesetUid === tilesetUid) return;
+    def.tilesetUid = tilesetUid;
+    this.defsChanged();
+  }
+
+  // ------------------------------------------------------------------ tilesets
+
+  getTileset(uid: number | null | undefined): TilesetDef | undefined {
+    return uid === null || uid === undefined
+      ? undefined
+      : this.defs.tilesets.find((t) => t.uid === uid);
+  }
+
+  /** Tileset used by a document layer, if it is a Tiles layer with one assigned. */
+  tilesetForLayer(layerId: string): TilesetDef | undefined {
+    const def = this.getLayerDefForLayer(layerId);
+    return def?.type === "Tiles" ? this.getTileset(def.tilesetUid) : undefined;
+  }
+
+  addTileset(tileset: Omit<TilesetDef, "uid">): TilesetDef {
+    const taken = new Set(this.defs.tilesets.map((t) => t.identifier));
+    let identifier = tileset.identifier || "tileset";
+    for (let n = 2; taken.has(identifier); n++) identifier = `${tileset.identifier}_${n}`;
+    const def: TilesetDef = { ...tileset, identifier, uid: this.allocateUid() };
+    this.defs.tilesets.push(def);
+    this.defsChanged();
+    return def;
+  }
+
+  updateTileset(uid: number, patch: Partial<Omit<TilesetDef, "uid">>): void {
+    const tileset = this.getTileset(uid);
+    if (!tileset) return;
+    Object.assign(tileset, patch);
+    if (patch.tileSize !== undefined) tileset.tileSize = Math.max(1, Math.round(tileset.tileSize));
+    if (patch.spacing !== undefined) tileset.spacing = Math.max(0, Math.round(tileset.spacing));
+    if (patch.padding !== undefined) tileset.padding = Math.max(0, Math.round(tileset.padding));
+    this.defsChanged();
+  }
+
+  /** Removes a tileset; layers using it keep their data but lose the binding. */
+  removeTileset(uid: number): void {
+    const index = this.defs.tilesets.findIndex((t) => t.uid === uid);
+    if (index === -1) return;
+    this.defs.tilesets.splice(index, 1);
+    for (const def of this.defs.layers) {
+      if (def.tilesetUid === uid) def.tilesetUid = null;
+    }
+    this.tilesetImages.delete(uid);
+    this.defsChanged();
+  }
+
+  /**
+   * Decoded image for a tileset, or `undefined` while it is still loading.
+   * Emits "tilesets:loaded" once it is ready so views can redraw.
+   */
+  getTilesetImage(tileset: TilesetDef): HTMLImageElement | undefined {
+    const cached = this.tilesetImages.get(tileset.uid);
+    if (cached && cached.src === tileset.image.dataUrl)
+      return cached.ready ? cached.image : undefined;
+    if (typeof Image === "undefined") return undefined;
+    const image = new Image();
+    const entry = { src: tileset.image.dataUrl, image, ready: false };
+    this.tilesetImages.set(tileset.uid, entry);
+    image.onload = () => {
+      entry.ready = true;
+      this.events.emit("tilesets:loaded");
+    };
+    image.src = tileset.image.dataUrl;
+    return undefined;
   }
 
   /** Removes a definition and its data from every level. */

@@ -17,6 +17,7 @@ import {
   LayerStackPass,
   type CellColorizer,
   type CursorShape,
+  type LayerRenderer,
   type LayerStackMode,
   type RenderContext,
   type RenderPass,
@@ -41,6 +42,8 @@ export interface GridDocumentSceneOptions<Buffer extends CellBuffer> {
   colorize?: CellColorizer;
   /** Per-layer value → color mapping; takes precedence over `colorize`. */
   getColorizer?: (layer: GridLayer<CellBuffer>) => CellColorizer | undefined;
+  /** Custom per-layer drawing (e.g. tiles); see `LayerStackPass`. */
+  getLayerRenderer?: (layer: GridLayer<CellBuffer>) => LayerRenderer | undefined;
   getPaletteVersion?: () => number;
   /** CSS color for the brush preview fill. */
   getCursorFill?: () => string | null;
@@ -79,6 +82,7 @@ export class GridDocumentScene<Buffer extends CellBuffer = CellBuffer> implement
       getMode: () => (this.isPreview ? "composite" : (this.options.getLayerMode?.() ?? "focus")),
       colorize: options.colorize,
       getColorizer: options.getColorizer,
+      getLayerRenderer: options.getLayerRenderer,
       getPaletteVersion: options.getPaletteVersion,
     });
     this.gridPass = new GridLinesPass({

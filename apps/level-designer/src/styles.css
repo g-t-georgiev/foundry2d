@@ -766,3 +766,71 @@ body {
     width: 110px;
   }
 }
+
+/* ------------------------------------------------------------------ tiles */
+
+.button-row {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.dialog {
+  overflow-y: auto;
+}
+
+.defs-list li.empty {
+  color: var(--theme-text-muted);
+  cursor: default;
+  background: transparent;
+  font-size: 12px;
+}
+
+.tileset-fields {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.tileset-preview {
+  max-width: 100%;
+  max-height: 180px;
+  align-self: flex-start;
+  image-rendering: pixelated;
+  background: repeating-conic-gradient(#222228 0% 25%, #18181c 0% 50%) 0 0 / 16px 16px;
+  border: 1px solid var(--theme-border-color);
+  border-radius: 4px;
+}
+
+.tile-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.tile-picker[hidden],
+.palette[hidden],
+#paletteHint[hidden] {
+  display: none;
+}
+
+.tile-flip {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--theme-text-muted);
+}
+
+.tileset-host {
+  overflow: auto;
+  max-height: 60vh;
+  background: repeating-conic-gradient(#222228 0% 25%, #18181c 0% 50%) 0 0 / 16px 16px;
+  border: 1px solid var(--theme-border-color);
+  border-radius: 4px;
+}
+
+.tileset-canvas {
+  display: block;
+  cursor: crosshair;
+  touch-action: none;
+}

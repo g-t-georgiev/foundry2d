@@ -4,6 +4,7 @@ import {
   WORLD_LAYOUTS,
   type IntGridValueDef,
   type LayerDef,
+  type TilesetDef,
   type WorldLayout,
 } from "../model/types";
 
@@ -38,7 +39,7 @@ export interface LevelProjectFile {
   worldLayout: WorldLayout;
   worldGrid: { width: number; height: number };
   nextUid: number;
-  defs: { layers: LayerDef[] };
+  defs: { layers: LayerDef[]; tilesets: TilesetDef[] };
   levels: SerializedLevel[];
 }
 
@@ -55,7 +56,10 @@ export function serializeProject(project: LevelProject): LevelProjectFile {
     worldLayout: project.worldLayout,
     worldGrid: { ...project.worldGrid },
     nextUid: project.uidCounter,
-    defs: { layers: structuredClone(project.defs.layers) },
+    defs: {
+      layers: structuredClone(project.defs.layers),
+      tilesets: structuredClone(project.defs.tilesets),
+    },
     levels: project.levels.map((level) => {
       const active = level.doc.activeLayerId;
       return {
@@ -97,6 +101,37 @@ function parseValues(raw: unknown, where: string): IntGridValueDef[] {
   });
 }
 
+function parseTileset(raw: unknown, index: number): TilesetDef {
+  const where = `Tileset #${index}`;
+  if (!isRecord(raw) || !isInt(raw.uid) || typeof raw.identifier !== "string") {
+    throw new ProjectFormatError(`${where} is invalid.`);
+  }
+  const image = raw.image;
+  if (
+    !isRecord(image) ||
+    typeof image.dataUrl !== "string" ||
+    !image.dataUrl.startsWith("data:image/") ||
+    !isInt(image.width) ||
+    !isInt(image.height)
+  ) {
+    throw new ProjectFormatError(`${where} ("${raw.identifier}") has no valid embedded image.`);
+  }
+  const int = (v: unknown, fallback: number, min: number) => (isInt(v) && v >= min ? v : fallback);
+  return {
+    uid: raw.uid,
+    identifier: raw.identifier,
+    tileSize: int(raw.tileSize, 8, 1),
+    spacing: int(raw.spacing, 0, 0),
+    padding: int(raw.padding, 0, 0),
+    image: {
+      dataUrl: image.dataUrl,
+      width: image.width,
+      height: image.height,
+      ...(typeof image.fileName === "string" ? { fileName: image.fileName } : {}),
+    },
+  };
+}
+
 export function isProjectFile(json: unknown): boolean {
   return isRecord(json) && json.format === PROJECT_FORMAT;
 }
@@ -125,21 +160,42 @@ export function deserializeProject(json: unknown): LevelProject {
     json.gridSize
   );
 
+  const rawTilesets = isRecord(json.defs) ? json.defs.tilesets : undefined;
+  if (rawTilesets !== undefined && !Array.isArray(rawTilesets)) {
+    throw new ProjectFormatError("Project tilesets must be a list.");
+  }
+  for (const [i, raw] of (rawTilesets ?? []).entries()) {
+    const tileset = parseTileset(raw, i);
+    project.defs.tilesets.push(tileset);
+    project.reserveUid(tileset.uid);
+  }
+
   for (const [i, raw] of defs.entries()) {
     if (!isRecord(raw) || !isInt(raw.uid) || typeof raw.identifier !== "string") {
       throw new ProjectFormatError(`Layer definition #${i} is invalid.`);
     }
-    if (raw.type !== "IntGrid") {
+    if (raw.type === "IntGrid") {
+      project.defs.layers.push({
+        uid: raw.uid,
+        identifier: raw.identifier,
+        type: "IntGrid",
+        intGridValues: parseValues(raw.intGridValues, `Layer "${raw.identifier}"`),
+      });
+    } else if (raw.type === "Tiles") {
+      const tilesetUid =
+        isInt(raw.tilesetUid) && project.getTileset(raw.tilesetUid) ? raw.tilesetUid : null;
+      project.defs.layers.push({
+        uid: raw.uid,
+        identifier: raw.identifier,
+        type: "Tiles",
+        intGridValues: [],
+        tilesetUid,
+      });
+    } else {
       throw new ProjectFormatError(
         `Layer "${raw.identifier}" has unsupported type ${String(raw.type)}.`
       );
     }
-    project.defs.layers.push({
-      uid: raw.uid,
-      identifier: raw.identifier,
-      type: "IntGrid",
-      intGridValues: parseValues(raw.intGridValues, `Layer "${raw.identifier}"`),
-    });
     project.reserveUid(raw.uid);
   }
 
