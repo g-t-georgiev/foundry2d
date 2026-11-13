@@ -595,3 +595,7 @@ layers-panel {
   justify-content: space-between;
   gap: 8px;
 }
+
+.preset-select {
+  width: 150px;
+}

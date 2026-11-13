@@ -1,11 +1,27 @@
 import { describe, it, expect } from "vite-plus/test";
 import type { LevelProject } from "../src/model/LevelProject";
 import { layerIdFor } from "../src/model/LevelProject";
-import { createPacmanProject } from "../src/model/seed";
+import { createProjectFromPreset, presets } from "../src/model/presets";
+
+const createPacmanProject = () => createProjectFromPreset("pacman");
 import { deserializeProject, ProjectFormatError, serializeProject } from "../src/io/projectFile";
 import { formatLayerAsArray, fromGameFormat, toGameFormat } from "../src/io/gameFormat";
 
 const names = (project: LevelProject) => project.levels[0].doc.layers.map((l) => l.name);
+
+describe("presets", () => {
+  it("discovers every preset file and builds independent projects", () => {
+    expect(presets.map((p) => p.id)).toEqual(["pacman", "blank"]);
+    expect(presets[0].label).toBe("Pac-Man (arcade)");
+    const a = createPacmanProject();
+    const b = createPacmanProject();
+    a.levels[0].doc.layers[0].set(0, 0, 1);
+    expect(b.levels[0].doc.layers[0].get(0, 0)).toBe(0);
+    expect(createProjectFromPreset("blank").defs.layers.map((d) => d.identifier)).toEqual([
+      "intgrid",
+    ]);
+  });
+});
 
 describe("LevelProject definitions", () => {
   it("seeds the Pac-Man project with three IntGrid layers on a 28x36 level", () => {

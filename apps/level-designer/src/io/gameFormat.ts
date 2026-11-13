@@ -1,5 +1,5 @@
 import { LevelProject, layerIdFor, type Level } from "../model/LevelProject";
-import { createPacmanProject } from "../model/seed";
+import { createProjectFromPreset } from "../model/presets";
 import { ProjectFormatError } from "./projectFile";
 
 /**
@@ -63,7 +63,7 @@ export function fromGameFormat(json: unknown): LevelProject {
     throw new ProjectFormatError("Game file has invalid columns/rows.");
   }
 
-  const seed = createPacmanProject();
+  const seed = createProjectFromPreset("pacman");
   const project = new LevelProject(
     typeof metadata.name === "string" && metadata.name ? metadata.name : "level",
     Number.isInteger(metadata.tileSize) && metadata.tileSize > 0 ? metadata.tileSize : seed.gridSize

@@ -10,7 +10,7 @@ import { GridDocumentScene, Workspace } from "@foundry2d/workspace";
 import type { LayersPanel } from "@foundry2d/ui";
 import type { Level, LevelProject } from "./model/LevelProject";
 import type { LayerDef } from "./model/types";
-import { createPacmanProject } from "./model/seed";
+import { createProjectFromPreset, presets, DEFAULT_PRESET_ID } from "./model/presets";
 import { LevelActions, levelStore, type LevelTool } from "./state";
 import PaletteView from "./ui/PaletteView";
 import LevelLayersController from "./ui/LevelLayersController";
@@ -63,7 +63,7 @@ export default class Application {
   constructor() {
     this.tools.registerTool(new RectangleTool<Int32Array>("rect", true));
 
-    this.project = createPacmanProject();
+    this.project = createProjectFromPreset(DEFAULT_PRESET_ID);
     this.level = this.project.levels[0];
 
     this.workspace = new Workspace($("#viewport"), {
@@ -95,6 +95,7 @@ export default class Application {
       }
     );
 
+    this.renderPresets();
     this.bindStore();
     this.bindDom();
     this.bindKeys();
@@ -179,16 +180,32 @@ export default class Application {
     void this.workspace.setScene(this.scene, { fit, camera });
   }
 
-  newProject(): void {
+  newProject(presetId: string = this.selectedPresetId()): void {
+    const label = presets.find((p) => p.id === presetId)?.label ?? presetId;
     if (
       this.history.canUndo &&
-      !confirm("Start a new Pac-Man project? Unsaved changes will be lost.")
+      !confirm(`Start a new "${label}" project? Unsaved changes will be lost.`)
     ) {
       return;
     }
-    this.loadProject(createPacmanProject());
+    this.loadProject(createProjectFromPreset(presetId));
     void this.recovery.clear();
-    this.showMessage("New project");
+    this.showMessage(`New project from "${label}"`);
+  }
+
+  private selectedPresetId(): string {
+    return $<HTMLSelectElement>("#presetSelect").value || DEFAULT_PRESET_ID;
+  }
+
+  private renderPresets(): void {
+    const select = $<HTMLSelectElement>("#presetSelect");
+    select.replaceChildren(
+      ...presets.map((preset) => {
+        const option = new Option(preset.label, preset.id, false, preset.id === DEFAULT_PRESET_ID);
+        option.title = preset.description;
+        return option;
+      })
+    );
   }
 
   async openFile(file: File): Promise<void> {

@@ -14,7 +14,15 @@
       </div>
 
       <div class="toolbar-actions">
-        <button class="btn" data-command="new" title="New Pac-Man project">New</button>
+        <select
+          id="presetSelect"
+          class="input preset-select"
+          aria-label="Preset for new projects"
+          title="Preset used by New"
+        ></select>
+        <button class="btn" data-command="new" title="New project from the selected preset">
+          New
+        </button>
         <button class="btn" data-command="open" title="Open project or game JSON (Ctrl+O)">
           <svg class="icon" viewBox="0 0 24 24">
             <path d="M5 20h14v-2H5m14-9h-4V3H9v6H5l7 7 7-7z" />
