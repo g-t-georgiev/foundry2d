@@ -55,3 +55,5 @@ export const documentResizeSchema = {
   required: ["width", "height"],
   additionalProperties: false,
 } as const;
+
+export const previewToggleSchema = gridToggleSchema;

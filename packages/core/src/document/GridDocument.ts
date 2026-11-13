@@ -15,6 +15,21 @@ export interface DocumentOptions<Buffer extends CellBuffer> {
   bufferCtor: CellBufferCtor<Buffer>;
 }
 
+export type LayerPolicyReason = "NO_LAYER" | "HIDDEN" | "TRANSPARENT" | "LOCKED";
+
+export interface LayerPolicy {
+  /** Drawing tools may modify the layer. */
+  canDraw: boolean;
+  /** Deleting keeps at least one layer. */
+  canDelete: boolean;
+  /** The layer is not already top-most. */
+  canMoveUp: boolean;
+  /** The layer is not already bottom-most. */
+  canMoveDown: boolean;
+  /** Why drawing is blocked, if it is. */
+  reason?: LayerPolicyReason;
+}
+
 export interface AddLayerOptions {
   id?: string;
   name?: string;
@@ -193,6 +208,55 @@ export class GridDocument<Buffer extends CellBuffer = Uint32Array> {
       }
     }
     return result;
+  }
+
+  /**
+   * What the UI may do with a layer (the active one by default). Single source
+   * for disabled buttons and the canvas "not-allowed" cursor.
+   */
+  public getPolicy(layerId: string | null = this._activeLayerId): LayerPolicy {
+    const layer = layerId ? this.getLayer(layerId) : this.getActiveLayer();
+    if (!layer) {
+      return {
+        canDraw: false,
+        canDelete: false,
+        canMoveUp: false,
+        canMoveDown: false,
+        reason: "NO_LAYER",
+      };
+    }
+    const index = this.indexOfLayer(layer.id);
+    const multi = this.layers.length > 1;
+    const reason: LayerPolicyReason | undefined = !layer.visible
+      ? "HIDDEN"
+      : layer.opacity <= 0.001
+        ? "TRANSPARENT"
+        : layer.locked
+          ? "LOCKED"
+          : undefined;
+    return {
+      canDraw: reason === undefined,
+      canDelete: multi,
+      canMoveUp: index < this.layers.length - 1,
+      canMoveDown: index > 0,
+      reason,
+    };
+  }
+
+  /**
+   * Replaces this document's size and layers with `source`'s, keeping this
+   * instance (and every reference to it) alive. Used when opening a project.
+   */
+  public replaceWith(source: GridDocument<Buffer>): void {
+    this.width = source.width;
+    this.height = source.height;
+    this.layers = source.layers.slice();
+    for (const layer of this.layers) layer.version++;
+    this.layerIdCounter = Math.max(this.layerIdCounter, source.layerIdCounter, this.layers.length);
+    this.events.emit("resized", { width: this.width, height: this.height });
+    this.events.emit("layers:changed");
+    this._activeLayerId = null;
+    this.setActiveLayer(source.activeLayerId ?? this.layers[0]?.id ?? null);
   }
 
   /** Call after mutating layer cells directly (tools do this once per stroke step). */

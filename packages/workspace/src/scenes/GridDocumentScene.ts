@@ -119,18 +119,24 @@ export class GridDocumentScene<Buffer extends CellBuffer = CellBuffer> implement
 
   getCursor(): string {
     if (this.isPreview) return "default";
-    return this.options.tools.getActiveTool()?.cursor ?? "crosshair";
+    const tool = this.options.tools.getActiveTool();
+    if (tool?.modifiesLayer && !this.options.doc.getPolicy().canDraw) return "not-allowed";
+    return tool?.cursor ?? "crosshair";
   }
 
   attach(workspace: Workspace): void {
     this.workspace = workspace;
     const rerender = () => workspace.requestRender();
+    const layerStateChanged = () => {
+      workspace.refreshCursor();
+      rerender();
+    };
     const { doc, history, tools } = this.options;
     this.subscriptions = [
       doc.events.on("cells:changed", rerender),
-      doc.events.on("layers:changed", rerender),
-      doc.events.on("layer:updated", rerender),
-      doc.events.on("layer:activated", rerender),
+      doc.events.on("layers:changed", layerStateChanged),
+      doc.events.on("layer:updated", layerStateChanged),
+      doc.events.on("layer:activated", layerStateChanged),
       doc.events.on("resized", rerender),
       history.onChange(rerender),
       tools.onChange(() => {

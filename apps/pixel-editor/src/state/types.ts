@@ -5,6 +5,7 @@ export enum ApplicationStateActions {
   SetColor = "store:color:set",
   EditPen = "store:pen:edit",
   ToggleGrid = "store:grid:toggle",
+  TogglePreview = "store:preview:toggle",
   ResizeDocument = "store:document:resize",
 }
 
@@ -13,6 +14,7 @@ export type ApplicationStateActionsMap = {
   [ApplicationStateActions.SetColor]: { color: string };
   [ApplicationStateActions.EditPen]: { size: number };
   [ApplicationStateActions.ToggleGrid]: { enabled: boolean };
+  [ApplicationStateActions.TogglePreview]: { enabled: boolean };
   [ApplicationStateActions.ResizeDocument]: { width: number; height: number };
 };
 
@@ -33,6 +35,10 @@ export interface ApplicationState {
   };
   preferences: {
     grid: {
+      enabled: boolean;
+    };
+    /** Read-only composite view: no grid, no dimming, no editing. */
+    preview: {
       enabled: boolean;
     };
   };

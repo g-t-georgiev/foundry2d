@@ -8,6 +8,7 @@ import { createSurface, type Surface } from "./canvas";
 export type CellColorizer = (value: number) => number;
 
 interface Entry {
+  layer: GridLayer<CellBuffer>;
   surface: Surface;
   width: number;
   height: number;
@@ -34,11 +35,11 @@ export class LayerBitmapCache {
     let entry = this.entries.get(layer.id);
     const { width, height } = layer;
 
-    if (!entry || entry.width !== width || entry.height !== height) {
+    if (!entry || entry.layer !== layer || entry.width !== width || entry.height !== height) {
       const surface = createSurface(width, height);
       const pixels = new Uint32Array(width * height);
       const image = new ImageData(new Uint8ClampedArray(pixels.buffer), width, height);
-      entry = { surface, width, height, version: -1, paletteVersion: -1, pixels, image };
+      entry = { layer, surface, width, height, version: -1, paletteVersion: -1, pixels, image };
       this.entries.set(layer.id, entry);
     }
 

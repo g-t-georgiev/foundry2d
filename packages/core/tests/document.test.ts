@@ -108,6 +108,52 @@ describe("GridDocument", () => {
   });
 });
 
+describe("GridDocument policy and replace", () => {
+  it("reports what the UI may do with a layer", () => {
+    const doc = makeDoc();
+    expect(doc.getPolicy()).toMatchObject({ canDraw: false, reason: "NO_LAYER" });
+    const a = doc.addLayer("A");
+    expect(doc.getPolicy()).toMatchObject({
+      canDraw: true,
+      canDelete: false,
+      canMoveUp: false,
+      canMoveDown: false,
+    });
+    const b = doc.addLayer("B");
+    expect(doc.getPolicy(a.id)).toMatchObject({
+      canDelete: true,
+      canMoveUp: true,
+      canMoveDown: false,
+    });
+    expect(doc.getPolicy(b.id)).toMatchObject({ canMoveUp: false, canMoveDown: true });
+    b.visible = false;
+    expect(doc.getPolicy(b.id)).toMatchObject({ canDraw: false, reason: "HIDDEN" });
+    a.opacity = 0;
+    expect(doc.getPolicy(a.id).reason).toBe("TRANSPARENT");
+  });
+
+  it("replaceWith swaps contents in place and notifies listeners", () => {
+    const doc = makeDoc(2, 2);
+    doc.addLayer("Old");
+    const source = makeDoc(3, 1);
+    const kept = source.addLayer("New");
+    kept.set(2, 0, 9);
+    const events: string[] = [];
+    doc.events.on("resized", () => events.push("resized"));
+    doc.events.on("layers:changed", () => events.push("layers"));
+    doc.events.on("layer:activated", () => events.push("active"));
+
+    doc.replaceWith(source);
+    expect([doc.width, doc.height]).toEqual([3, 1]);
+    expect(doc.layers.map((l) => l.name)).toEqual(["New"]);
+    expect(doc.activeLayerId).toBe(kept.id);
+    expect(doc.getActiveLayer()?.get(2, 0)).toBe(9);
+    expect(events).toEqual(["resized", "layers", "active"]);
+    // New layers must not collide with the adopted ids.
+    expect(doc.addLayer().id).not.toBe(kept.id);
+  });
+});
+
 describe("serialization", () => {
   it("round-trips RLE data", () => {
     const data = [0, 0, 0, 5, 5, -1, 0];

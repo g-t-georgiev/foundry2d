@@ -6,6 +6,7 @@ import {
   setColorSchema,
   setPenSizeSchema,
   gridToggleSchema,
+  previewToggleSchema,
   documentResizeSchema,
 } from "../schemas";
 
@@ -72,5 +73,16 @@ export const documentResizeAction = defineAction<
   reducer(state, payload) {
     state.doc.size.width = payload.width;
     state.doc.size.height = payload.height;
+  },
+});
+
+export const previewToggleAction = defineAction<
+  ApplicationState,
+  ApplicationStateActions.TogglePreview,
+  typeof previewToggleSchema
+>(ApplicationStateActions.TogglePreview, {
+  schema: previewToggleSchema,
+  reducer(state, payload) {
+    state.preferences.preview.enabled = payload.enabled;
   },
 });

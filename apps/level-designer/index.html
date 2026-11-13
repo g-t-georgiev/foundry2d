@@ -18,6 +18,12 @@
         border-right: 1px solid #2a2a32;
         background: #18181c;
         padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      layers-panel {
+        height: 260px;
       }
       #viewport {
         flex: 1;
@@ -34,7 +40,7 @@
   <body>
     <div id="sidebar">
       <h3>Level Designer</h3>
-      <layers-manager id="layerManager"></layers-manager>
+      <layers-panel id="layersPanel" actions=""></layers-panel>
     </div>
     <div id="viewport">
       <canvas id="levelCanvas"></canvas>

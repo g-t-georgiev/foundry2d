@@ -6,6 +6,7 @@ import {
   setColorAction,
   setPenSizeAction,
   gridToggleAction,
+  previewToggleAction,
   documentResizeAction,
 } from "./actions";
 
@@ -22,10 +23,11 @@ const initialState: ApplicationState = {
     position: { x: 0, y: 0 },
   },
   doc: {
-    size: { width: 16, height: 16 },
+    size: { width: 32, height: 32 },
   },
   preferences: {
     grid: { enabled: true },
+    preview: { enabled: false },
   },
 };
 
@@ -36,6 +38,7 @@ export const applicationStore = new Store<ApplicationState, ApplicationStateActi
     setColorAction,
     setPenSizeAction,
     gridToggleAction,
+    previewToggleAction,
     documentResizeAction,
   ],
 });

@@ -99,12 +99,25 @@ _Done: defects fixed, open tool registry, history events/limit/composite, full l
 4. Create `packages/workspace` with InputController, render loop, ResizeObserver and a keybinding map.
 5. Add Vitest specs for documents, commands, tools, flood fill and camera math (`vp test`).
 
-### Phase 1: Pixel Editor parity with the reference
+### Phase 1: Pixel Editor parity with the reference ✅ (2026-11-14)
 
-1. Port the toolbar, layers HUD and status bar HTML/CSS. Wire them through the store.
-2. Sync layers both ways: UI events → commands → `GridDocument` → UI. This covers add, delete, reorder, rename, visibility, opacity and lock.
-3. Wire up focus mode vs preview mode, grid toggle, rulers, brush cursor, Alt-eyedropper, undo/redo, clear, resize and Export PNG.
-4. Add IndexedDB autosave and recovery (the driver already exists), plus a `.f2d.json` project save/load.
+1. **Replace the layers UI with a Piskel-style `<layers-panel>`** (done first, since every later step wires layers). The old floating, draggable `layers-manager` with slotted `layer-item` children is removed. The new panel:
+   - is _controlled_: the app sets `layers` and `activeId`; the panel keeps no layer state of its own and only emits intent events (`layer-select`, `layer-add`, `layer-duplicate`, `layer-delete`, `layer-move`, `layer-rename`, `layer-visibility`, `layer-opacity`);
+   - has one action rail for the active layer (add, duplicate, move up, move down, delete, opacity slider) instead of per-row buttons, plus plain rows (eye toggle, name, double-click to rename) handled by event delegation;
+   - stays free of workspace dependencies: it speaks plain data and DOM events, and the apps translate those into core commands.
+2. Add `GridDocument.getPolicy()` (`canDraw`, `canDelete`, `canMoveUp`, `canMoveDown`, `reason`) so the UI and canvas share one source for disabled states and the `not-allowed` cursor.
+3. Port the toolbar and status bar HTML/CSS and wire them through the store. The store holds thin metadata only; cell buffers stay in core.
+4. Sync layers both ways: panel events → commands → `GridDocument` events → panel.
+5. Wire up focus vs preview mode, grid toggle, Alt-eyedropper, undo/redo, clear, resize and Export PNG.
+6. Add IndexedDB autosave and recovery, plus `.f2d.json` project save/load.
+
+**Decisions taken from the early architecture overview (AI Studio draft):**
+
+- Adopted: UI package without workspace dependencies, apps as the mediator, thin reactive store, the layer-policy idea, the centralized action rail.
+- Kept as is: `visible` and `opacity` stay separate properties, rather than visibility being derived from opacity. An eye toggle no longer has to remember the last non-zero opacity, and the level designer needs a plain visibility flag anyway.
+- Kept in core but not exposed in the pixel UI: `locked`. It is cheap and the level designer may want it; removing it later is a one-file change.
+- Not needed yet: the `ResolvePayload` type shield in the store (no TS2589 errors so far). Add it if deep schemas trigger them.
+- Outdated: the ESLint/Prettier setup, which Vite+ (`vp check`) has replaced.
 
 ### Phase 2: Level Designer foundation (single level, Pac-Man usable)
 

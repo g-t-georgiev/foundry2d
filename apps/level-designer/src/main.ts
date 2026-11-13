@@ -7,11 +7,11 @@ import { GridDocument, HistoryManager, PixelUtils, ToolManager } from "@foundry2
 import { GridDocumentScene, Workspace } from "@foundry2d/workspace";
 
 import "@foundry2d/ui";
-import type { LayersManager } from "@foundry2d/ui";
+import { LayerPanelEvents } from "@foundry2d/ui";
 
 const viewport = document.querySelector<HTMLElement>("#viewport")!;
 const canvas = document.querySelector<HTMLCanvasElement>("#levelCanvas")!;
-const layerManager = document.querySelector<LayersManager>("layers-manager")!;
+const layersPanel = document.querySelector("layers-panel")!;
 
 const TILE = 8;
 
@@ -34,10 +34,8 @@ const doc = new GridDocument<Int32Array>({
 const history = new HistoryManager();
 const tools = new ToolManager<Int32Array>();
 
-const collisions = doc.addLayer("Collisions");
-const collectibles = doc.addLayer("Collectibles");
-layerManager.addNewLayer({ id: collisions.id, name: collisions.name, active: true, visible: true });
-layerManager.addNewLayer({ id: collectibles.id, name: collectibles.name, visible: true });
+doc.addLayer("Collisions");
+doc.addLayer("Collectibles");
 
 let value = 1;
 
@@ -63,9 +61,27 @@ const workspace = new Workspace(viewport, {
 });
 void workspace.setScene(scene);
 
-layerManager.addEventListener("layer:selected", (ev) => doc.setActiveLayer(ev.detail.id));
-layerManager.addEventListener("layer:visibility-change", (ev) =>
+// Phase 2 replaces this with layer definitions and undoable commands.
+const syncLayers = () => {
+  layersPanel.layers = doc.layers.map(({ id, name, visible, opacity }) => ({
+    id,
+    name,
+    visible,
+    opacity,
+  }));
+  layersPanel.activeId = doc.activeLayerId;
+};
+doc.events.on("layers:changed", syncLayers);
+doc.events.on("layer:updated", syncLayers);
+doc.events.on("layer:activated", syncLayers);
+syncLayers();
+
+layersPanel.addEventListener(LayerPanelEvents.Select, (ev) => doc.setActiveLayer(ev.detail.id));
+layersPanel.addEventListener(LayerPanelEvents.Visibility, (ev) =>
   doc.setLayerProperty(ev.detail.id, "visible", ev.detail.visible)
+);
+layersPanel.addEventListener(LayerPanelEvents.Opacity, (ev) =>
+  doc.setLayerProperty(ev.detail.id, "opacity", ev.detail.opacity)
 );
 
 const { keymap } = workspace;
