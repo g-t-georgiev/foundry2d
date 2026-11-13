@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@foundry2d/core": "workspace:*",
+    "@foundry2d/render": "workspace:*",
+    "@foundry2d/workspace": "workspace:*",
     "@foundry2d/ui": "workspace:*",
     "@foundry2d/store": "workspace:*"
   },

@@ -1,35 +1,79 @@
 import type { Position, PointerAction } from "../types";
+import type { CellBuffer } from "../document";
 import type { ITool, ToolContext, ToolType } from "./types";
+import type { Unsubscribe } from "../utils/EventEmitter";
 import { PenTool } from "./PenTool";
 import { EraserTool } from "./EraserTool";
 import { BucketTool } from "./BucketTool";
 import { EyedropperTool } from "./EyedropperTool";
 
-export class ToolManager<Buffer extends Uint32Array | Int32Array = Uint32Array> {
+export interface ToolManagerOptions {
+  /** Register pen, eraser, bucket and eyedropper. Defaults to `true`. */
+  registerDefaults?: boolean;
+  /** Initially active tool. Defaults to the first registered tool. */
+  initialTool?: ToolType;
+}
+
+type ToolChangeListener = (tool: ToolType, previous: ToolType) => void;
+
+/**
+ * Registry of tools plus the active-tool state machine.
+ *
+ * Tools that write cells are refused on hidden, locked or fully transparent
+ * layers. "Transient" tools (the eyedropper by default) don't overwrite the
+ * remembered previous tool, so `returnToPreviousTool` can switch back.
+ */
+export class ToolManager<Buffer extends CellBuffer = CellBuffer> {
   private tools = new Map<ToolType, ITool<Buffer>>();
-  private activeToolName: ToolType = "pen";
-  private previousToolName: ToolType = "pen";
+  private transient = new Set<ToolType>(["eyedropper"]);
+  private listeners = new Set<ToolChangeListener>();
+  private activeToolName: ToolType = "";
+  private previousToolName: ToolType = "";
+  private strokeActive = false;
 
-  constructor() {
-    // Register standard default tools
-    this.registerTool(new PenTool<Buffer>());
-    this.registerTool(new EraserTool<Buffer>());
-    this.registerTool(new BucketTool<Buffer>());
-    this.registerTool(new EyedropperTool<Buffer>());
+  constructor(options: ToolManagerOptions = {}) {
+    if (options.registerDefaults ?? true) {
+      this.registerTool(new PenTool<Buffer>());
+      this.registerTool(new EraserTool<Buffer>());
+      this.registerTool(new BucketTool<Buffer>());
+      this.registerTool(new EyedropperTool<Buffer>());
+    }
+    if (options.initialTool) this.setTool(options.initialTool);
   }
 
-  public registerTool(tool: ITool<Buffer>): void {
+  public registerTool(tool: ITool<Buffer>, opts: { transient?: boolean } = {}): void {
     this.tools.set(tool.name, tool);
+    if (opts.transient) this.transient.add(tool.name);
+    if (!this.activeToolName) {
+      this.activeToolName = tool.name;
+      this.previousToolName = tool.name;
+    }
   }
 
+  public hasTool(name: ToolType): boolean {
+    return this.tools.has(name);
+  }
+
+  public get toolNames(): ToolType[] {
+    return [...this.tools.keys()];
+  }
+
+  public get activeTool(): ToolType {
+    return this.activeToolName;
+  }
+
+  public get previousTool(): ToolType {
+    return this.previousToolName;
+  }
+
+  /** Switches tool. Returns `false` when unknown or already active. */
   public setTool(name: ToolType): boolean {
     if (!this.tools.has(name) || this.activeToolName === name) return false;
 
-    if (this.activeToolName !== "eyedropper") {
-      this.previousToolName = this.activeToolName;
-    }
-
+    const previous = this.activeToolName;
+    if (!this.transient.has(previous)) this.previousToolName = previous;
     this.activeToolName = name;
+    for (const listener of this.listeners) listener(name, previous);
     return true;
   }
 
@@ -37,8 +81,22 @@ export class ToolManager<Buffer extends Uint32Array | Int32Array = Uint32Array> 
     this.setTool(this.previousToolName);
   }
 
-  public getActiveTool(): ITool<Buffer> {
-    return this.tools.get(this.activeToolName) || this.tools.get("pen")!;
+  public getActiveTool(): ITool<Buffer> | undefined {
+    return this.tools.get(this.activeToolName);
+  }
+
+  public onChange(listener: ToolChangeListener): Unsubscribe {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  /** Whether the active tool may act on the context's layer. */
+  public canApply(ctx: ToolContext<Buffer>): boolean {
+    const tool = this.getActiveTool();
+    if (!tool) return false;
+    return !tool.modifiesLayer || ctx.layer.isEditable;
   }
 
   public executePointerAction(
@@ -46,19 +104,31 @@ export class ToolManager<Buffer extends Uint32Array | Int32Array = Uint32Array> 
     coords: Position,
     ctx: ToolContext<Buffer>
   ): void {
-    // Guard against drawing on non-drawable or hidden layers
-    if (ctx.layer.opacity <= 0.001) return;
-
     const tool = this.getActiveTool();
-
     if (!tool) return;
 
     if (action === "down") {
+      if (!this.canApply(ctx)) return;
+      this.strokeActive = true;
       tool.onMouseDown(coords, ctx);
-    } else if (action === "move") {
-      tool.onMouseMove?.(coords, ctx);
-    } else if (action === "up") {
-      tool.onMouseUp?.(coords, ctx);
+      return;
     }
+
+    // Moves/ups only matter for a stroke that started on an editable layer.
+    if (!this.strokeActive) return;
+
+    if (action === "move") {
+      tool.onMouseMove?.(coords, ctx);
+    } else {
+      tool.onMouseUp?.(coords, ctx);
+      this.strokeActive = false;
+    }
+  }
+
+  /** Aborts an in-progress stroke (e.g. Escape or pointercancel). */
+  public cancelStroke(ctx: ToolContext<Buffer>): void {
+    if (!this.strokeActive) return;
+    this.getActiveTool()?.cancel?.(ctx);
+    this.strokeActive = false;
   }
 }

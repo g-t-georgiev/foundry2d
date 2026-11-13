@@ -5,4 +5,3 @@ export * from "./EraserTool";
 export * from "./BucketTool";
 export * from "./EyedropperTool";
 export * from "./ToolManager";
-export * from "./utils";

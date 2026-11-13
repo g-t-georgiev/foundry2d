@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pixel-editor",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "apps/pixel-editor", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "level-designer",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "apps/level-designer", "dev"],
+      "port": 3001
+    }
+  ]
+}

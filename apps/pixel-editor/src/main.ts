@@ -1,110 +1,93 @@
-import { GridDocument, Camera, HistoryManager, DrawCommand } from "@foundry2d/core";
+/**
+ * Phase 0 smoke entry: proves the shared Workspace kit end to end.
+ * Phase 1 replaces this with the full Application/UIManager wiring.
+ */
+import { GridDocument, HistoryManager, PixelUtils, ToolManager } from "@foundry2d/core";
+import { GridDocumentScene, Workspace } from "@foundry2d/workspace";
 
 import "@foundry2d/ui";
 import type { LayersManager } from "@foundry2d/ui";
 
+const viewport = document.querySelector<HTMLElement>("#viewport")!;
 const canvas = document.querySelector<HTMLCanvasElement>("#paintCanvas")!;
-const context = canvas.getContext("2d")!;
-
 const layerManager = document.querySelector<LayersManager>("layers-manager")!;
 
-// Pixel Art Model: 16x16 with Uint32Array (RGBA 0xAABBGGRR)
-const doc = new GridDocument({
-  width: 16,
-  height: 16,
+const doc = new GridDocument<Uint32Array>({
+  width: 32,
+  height: 32,
   emptyValue: 0x00000000,
   bufferCtor: Uint32Array,
 });
-
-const defaultLayer = doc.addLayer("Base Layer");
-layerManager.addNewLayer({
-  id: defaultLayer.id,
-  name: defaultLayer.name,
-  active: true,
-  visible: true,
-});
-
-const camera = new Camera({ cellSize: { width: 1, height: 1 } });
 const history = new HistoryManager();
+const tools = new ToolManager<Uint32Array>();
 
-function resizeCanvas() {
-  canvas.width = canvas.clientWidth * window.devicePixelRatio;
-  canvas.height = canvas.clientHeight * window.devicePixelRatio;
-  camera.x = canvas.width / 2 - (doc.width * camera.zoom) / 2;
-  camera.y = canvas.height / 2 - (doc.height * camera.zoom) / 2;
-  camera.zoom = 24 * window.devicePixelRatio;
-}
-window.addEventListener("resize", resizeCanvas);
-resizeCanvas();
+const background = doc.addLayer("Background");
+doc.addLayer({ name: "Character", activate: true });
+layerManager.addNewLayer({ id: background.id, name: background.name, visible: true });
+const active = doc.getActiveLayer()!;
+layerManager.addNewLayer({ id: active.id, name: active.name, active: true, visible: true });
 
-let isDrawing = false;
-let currentStroke: { x: number; y: number; oldValue: number; newValue: number }[] = [];
+let color = PixelUtils.hexToUint32("#ffee00");
+let brushSize = 1;
+let preview = false;
+let showGrid = true;
 
-canvas.addEventListener("pointerdown", (e) => {
-  isDrawing = true;
-  currentStroke = [];
-  drawAt(e);
+const scene = new GridDocumentScene<Uint32Array>({
+  doc,
+  tools,
+  history,
+  getValue: () => color,
+  getBrushSize: () => brushSize,
+  getCursorFill: () => `${PixelUtils.uint32ToHex(color)}66`,
+  onPickValue: (value) => {
+    if (value >>> 24 !== 0) color = value;
+    tools.returnToPreviousTool();
+  },
+  isPreview: () => preview,
+  showGrid: () => showGrid,
+  majorGridEvery: 8,
 });
 
-canvas.addEventListener("pointermove", (e) => {
-  if (isDrawing) drawAt(e);
+const workspace = new Workspace(viewport, { canvas });
+void workspace.setScene(scene);
+
+layerManager.addEventListener("layer:selected", (ev) => doc.setActiveLayer(ev.detail.id));
+layerManager.addEventListener("layer:visibility-change", (ev) =>
+  doc.setLayerProperty(ev.detail.id, "visible", ev.detail.visible)
+);
+
+const { keymap } = workspace;
+keymap.bind("mod+z", () => void history.undo(), { repeat: true });
+keymap.bind("mod+shift+z", () => void history.redo(), { repeat: true });
+keymap.bind("mod+y", () => void history.redo(), { repeat: true });
+keymap.bind("b", () => void tools.setTool("pen"));
+keymap.bind("e", () => void tools.setTool("eraser"));
+keymap.bind("g", () => void tools.setTool("bucket"));
+keymap.bind("i", () => void tools.setTool("eyedropper"));
+keymap.bind("[", () => {
+  brushSize = Math.max(1, brushSize - 1);
+  scene.invalidate();
 });
-
-window.addEventListener("pointerup", () => {
-  if (isDrawing && currentStroke.length > 0) {
-    history.record(new DrawCommand(doc.getActiveLayer()!, currentStroke));
-  }
-  isDrawing = false;
+keymap.bind("]", () => {
+  brushSize = Math.min(32, brushSize + 1);
+  scene.invalidate();
 });
+keymap.bind("#", () => {
+  showGrid = !showGrid;
+  scene.invalidate();
+});
+keymap.bind("p", () => {
+  preview = !preview;
+  scene.invalidate();
+});
+keymap.bind("f", () => void workspace.fitToView(200));
+keymap.bind("+", () => workspace.zoomBy(1.25), { repeat: true });
+keymap.bind("-", () => workspace.zoomBy(0.8), { repeat: true });
+keymap.hold(
+  "alt",
+  () => tools.setTool("eyedropper"),
+  () => tools.returnToPreviousTool()
+);
 
-function drawAt(e: PointerEvent) {
-  const rect = canvas.getBoundingClientRect();
-  const world = camera.screenToWorld(
-    e.clientX * window.devicePixelRatio,
-    e.clientY * window.devicePixelRatio,
-    {
-      left: rect.left * window.devicePixelRatio,
-      top: rect.top * window.devicePixelRatio,
-    } as DOMRect
-  );
-
-  const grid = camera.worldToGrid(world.worldX, world.worldY);
-  const activeLayer = doc.getActiveLayer();
-  if (!activeLayer || !activeLayer.isWithinBounds(grid.x, grid.y)) return;
-
-  const color = 0xffffcc00; // Yellow (ABGR)
-  const old = activeLayer.get(grid.x, grid.y);
-  if (old !== color) {
-    activeLayer.set(grid.x, grid.y, color);
-    currentStroke.push({ x: grid.x, y: grid.y, oldValue: old, newValue: color });
-  }
-}
-
-function render() {
-  requestAnimationFrame(render);
-  context.fillStyle = "#222";
-  context.fillRect(0, 0, canvas.width, canvas.height);
-
-  context.save();
-  context.translate(camera.x, camera.y);
-  context.scale(camera.zoom, camera.zoom);
-
-  const activeLayer = doc.getActiveLayer();
-  if (activeLayer) {
-    for (let y = 0; y < activeLayer.height; y++) {
-      for (let x = 0; x < activeLayer.width; x++) {
-        const val = activeLayer.get(x, y);
-        if (val !== 0) {
-          context.fillStyle = "#ffcc00";
-          context.fillRect(x, y, 1, 1);
-        }
-      }
-    }
-  }
-
-  context.strokeStyle = "rgba(255,255,255,0.2)";
-  context.lineWidth = 1 / camera.zoom;
-  context.strokeRect(0, 0, doc.width, doc.height);
-  context.restore();
-}
-render();
+// Handy for poking at the kit from devtools during Phase 0.
+Object.assign(window, { foundry: { doc, history, tools, workspace, scene } });

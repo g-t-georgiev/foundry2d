@@ -1,21 +1,27 @@
 import type { ICommand } from "./types";
-import type { GridLayer, CellChange } from "../document";
+import type { CellBuffer, CellChange, GridDocument } from "../document";
 
-export class DrawCommand<Buffer extends Uint32Array | Int32Array> implements ICommand {
+/** Cell edits on a single layer. Usually recorded after the stroke has already been applied. */
+export class DrawCommand<Buffer extends CellBuffer = CellBuffer> implements ICommand {
   constructor(
-    private layer: GridLayer<Buffer>,
-    private changes: CellChange<number>[]
+    private readonly doc: GridDocument<Buffer>,
+    private readonly layerId: string,
+    private readonly changes: CellChange<number>[],
+    public readonly label = "Draw"
   ) {}
 
-  execute() {
-    for (const change of this.changes) {
-      this.layer.set(change.x, change.y, change.newValue);
-    }
+  execute(): void {
+    this.apply("forward");
   }
 
-  undo() {
-    for (const change of this.changes) {
-      this.layer.set(change.x, change.y, change.oldValue);
-    }
+  undo(): void {
+    this.apply("backward");
+  }
+
+  private apply(direction: "forward" | "backward"): void {
+    const layer = this.doc.getLayer(this.layerId);
+    if (!layer) return;
+    layer.applyChanges(this.changes, direction);
+    this.doc.notifyCellsChanged(this.layerId);
   }
 }

@@ -9,6 +9,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@foundry2d/core": path.resolve(__dirname, "../../packages/core/src"),
+      "@foundry2d/render": path.resolve(__dirname, "../../packages/render/src"),
+      "@foundry2d/workspace": path.resolve(__dirname, "../../packages/workspace/src"),
       "@foundry2d/ui": path.resolve(__dirname, "../../packages/ui/src"),
       "@foundry2d/store": path.resolve(__dirname, "../../packages/store/src"),
     },

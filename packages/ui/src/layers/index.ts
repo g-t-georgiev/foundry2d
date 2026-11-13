@@ -13,7 +13,7 @@ import type { default as _LayersManager } from "./layers-manager";
 
 declare global {
   interface HTMLElementTagNameMap {
-    "layer-manager": _LayersManager;
+    "layers-manager": _LayersManager;
     "layer-item": _LayerItem;
   }
 }

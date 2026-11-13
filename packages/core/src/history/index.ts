@@ -1,3 +1,10 @@
 export type * from "./types";
 export * from "./HistoryManager";
+export * from "./CompositeCommand";
 export * from "./DrawCommand";
+export * from "./ClearCommand";
+export * from "./ResizeCommand";
+export * from "./AddLayerCommand";
+export * from "./DeleteLayerCommand";
+export * from "./MoveLayerCommand";
+export * from "./SetLayerPropertyCommand";

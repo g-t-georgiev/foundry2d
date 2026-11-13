@@ -1,0 +1,159 @@
+export type KeyHandler = (event: KeyboardEvent) => void | boolean;
+
+export interface KeyBinding {
+  /** e.g. "mod+z", "mod+shift+z", "b", "alt", "escape", "+" */
+  combo: string;
+  handler: KeyHandler;
+  /** Fire on key repeat as well. Defaults to `false`. */
+  repeat?: boolean;
+}
+
+interface ParsedCombo {
+  key: string;
+  mod: boolean;
+  shift: boolean;
+  alt: boolean;
+}
+
+const SHIFT_SENSITIVE = /^([a-z0-9]|[a-z]{2,}\d*)$/;
+
+const isMacPlatform = (): boolean =>
+  typeof navigator !== "undefined" && /mac|iphone|ipad/i.test(navigator.platform);
+
+/** Normalizes `KeyboardEvent.key` to the lowercase names used in combos. */
+export function normalizeKey(key: string): string {
+  if (key === " ") return "space";
+  return key.toLowerCase();
+}
+
+export function parseCombo(combo: string): ParsedCombo {
+  const parts = combo.toLowerCase().split("+");
+  // Support binding the "+" key itself, e.g. "mod++" or "+".
+  let key = parts.pop() ?? "";
+  if (key === "" && combo.endsWith("+")) {
+    key = "+";
+    parts.pop();
+  }
+  return {
+    key,
+    mod: parts.includes("mod") || parts.includes("ctrl") || parts.includes("cmd"),
+    shift: parts.includes("shift"),
+    alt: parts.includes("alt"),
+  };
+}
+
+/**
+ * Keyboard shortcut registry. "mod" means Cmd on macOS and Ctrl elsewhere.
+ * Bindings are ignored while the user types into a form field.
+ */
+export class Keymap {
+  private bindings: { parsed: ParsedCombo; binding: KeyBinding }[] = [];
+  private holds: { key: string; onPress: () => void; onRelease: () => void; held: boolean }[] = [];
+  private readonly isMac = isMacPlatform();
+
+  bind(combo: string, handler: KeyHandler, options: { repeat?: boolean } = {}): () => void {
+    const entry = { parsed: parseCombo(combo), binding: { combo, handler, ...options } };
+    this.bindings.push(entry);
+    return () => {
+      this.bindings = this.bindings.filter((b) => b !== entry);
+    };
+  }
+
+  /** Dispatches a keydown. Returns `true` when a binding handled it. */
+  handle(event: KeyboardEvent): boolean {
+    if (isTypingTarget(event.target)) return false;
+    const key = normalizeKey(event.key);
+    const mod = this.isMac ? event.metaKey : event.ctrlKey;
+
+    // Prefer the most specific match (most modifiers).
+    const matches = this.bindings
+      .filter(({ parsed }) => {
+        if (parsed.key !== key) return false;
+        if (parsed.mod !== mod) return false;
+        if (parsed.alt !== event.altKey) return false;
+        if (parsed.shift) return event.shiftKey;
+        // Symbols such as "+" or "?" need Shift on many layouts, so an
+        // undeclared Shift only disqualifies letters, digits and named keys.
+        return !event.shiftKey || !SHIFT_SENSITIVE.test(parsed.key);
+      })
+      .sort((a, b) => Number(b.parsed.shift) - Number(a.parsed.shift));
+
+    for (const { binding } of matches) {
+      if (event.repeat && !binding.repeat) return true;
+      if (binding.handler(event) === false) continue;
+      event.preventDefault();
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Binds a key that is held down, e.g. Alt for a temporary eyedropper.
+   * `onRelease` also fires when the window loses focus while held.
+   */
+  hold(key: string, onPress: () => void, onRelease: () => void): () => void {
+    const entry = { key: normalizeKey(key), onPress, onRelease, held: false };
+    this.holds.push(entry);
+    return () => {
+      this.holds = this.holds.filter((h) => h !== entry);
+    };
+  }
+
+  handleKeyDown(event: KeyboardEvent): boolean {
+    if (isTypingTarget(event.target)) return false;
+    const key = normalizeKey(event.key);
+    let handled = false;
+    for (const hold of this.holds) {
+      if (hold.key !== key) continue;
+      handled = true;
+      if (!hold.held) {
+        hold.held = true;
+        hold.onPress();
+      }
+    }
+    if (handled) {
+      event.preventDefault();
+      return true;
+    }
+    return this.handle(event);
+  }
+
+  handleKeyUp(event: KeyboardEvent): void {
+    const key = normalizeKey(event.key);
+    for (const hold of this.holds) {
+      if (hold.key === key && hold.held) {
+        hold.held = false;
+        hold.onRelease();
+      }
+    }
+  }
+
+  /** Releases every held key (used on window blur). */
+  releaseAll(): void {
+    for (const hold of this.holds) {
+      if (hold.held) {
+        hold.held = false;
+        hold.onRelease();
+      }
+    }
+  }
+
+  clear(): void {
+    this.bindings = [];
+    this.holds = [];
+  }
+}
+
+export function isTypingTarget(target: EventTarget | null): boolean {
+  if (!target || typeof HTMLElement === "undefined" || !(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  if (tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (tag === "INPUT") {
+    const type = (target as HTMLInputElement).type;
+    return !["checkbox", "radio", "button", "range", "color"].includes(type);
+  }
+  return false;
+}
