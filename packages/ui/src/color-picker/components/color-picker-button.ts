@@ -44,16 +44,25 @@ template.innerHTML = `
       background: transparent;
     }
 
+    /*
+     * The panel is a manual popover, so it renders in the top layer: above
+     * the canvas and every panel, whatever their stacking or overflow. It is
+     * placed in viewport coordinates next to the trigger (see _updatePosition).
+     */
     .popover {
-      position: absolute;
-      z-index: 1000;
+      position: fixed;
+      inset: auto;
+      margin: 0;
+      padding: 0;
+      border: none;
+      background: transparent;
+      overflow: visible;
+      z-index: 1000; /* only matters without popover support */
       display: none;
-      /* Default positioning - overridden by JS */
-      top: calc(100% + 8px);
-      left: 0;
     }
 
-    .popover.visible {
+    .popover.visible,
+    .popover:popover-open {
       display: block;
     }
   </style>
@@ -61,7 +70,7 @@ template.innerHTML = `
   <div class="trigger" id="trigger">
     <div class="trigger-color" id="triggerColor"></div>
   </div>
-  <div class="popover" id="popover">
+  <div class="popover" id="popover" popover="manual">
     <color-picker-panel id="panel"></color-picker-panel>
   </div>
 `;
@@ -133,33 +142,45 @@ export default class ColorPickerButton extends ColorPickerButtonBase implements 
 
   open() {
     this._isOpen = true;
-    this._popoverElement.classList.add("visible");
+    const popover = this._popoverElement;
+    if (typeof popover.showPopover === "function") popover.showPopover();
+    else popover.classList.add("visible");
     this._updatePosition();
+    window.addEventListener("resize", this._reposition);
+    window.addEventListener("scroll", this._reposition, true);
   }
 
   close() {
     this._isOpen = false;
-    this._popoverElement.classList.remove("visible");
+    const popover = this._popoverElement;
+    if (typeof popover.hidePopover === "function" && popover.matches(":popover-open")) {
+      popover.hidePopover();
+    }
+    popover.classList.remove("visible");
+    window.removeEventListener("resize", this._reposition);
+    window.removeEventListener("scroll", this._reposition, true);
   }
 
+  private _reposition = () => {
+    if (this._isOpen) this._updatePosition();
+  };
+
+  /**
+   * Places the panel below the trigger (or above it when there's no room),
+   * left-aligned with it, and always inside the viewport.
+   */
   private _updatePosition() {
-    // Spatial awareness for responsive popover
-    const triggerRect = this._triggerBtn.getBoundingClientRect();
-    const panelRect = this._popoverElement.getBoundingClientRect();
-
-    let top = triggerRect.height + 8; // Default bottom
-    let left = 0; // Default left aligned
-
-    // If it falls off the bottom edge, push it above the trigger
-    if (triggerRect.bottom + panelRect.height + 8 > window.innerHeight) {
-      top = -(panelRect.height + 8);
-    }
-
-    // If it falls off the right edge, align it to the right of the trigger
-    if (triggerRect.left + panelRect.width > window.innerWidth) {
-      left = -(panelRect.width - triggerRect.width);
-    }
-
+    const gap = 8;
+    const trigger = this._triggerBtn.getBoundingClientRect();
+    const panel = this._popoverElement.getBoundingClientRect();
+    const roomBelow = window.innerHeight - trigger.bottom;
+    let top =
+      roomBelow >= panel.height + gap || trigger.top < panel.height + gap
+        ? trigger.bottom + gap
+        : trigger.top - panel.height - gap;
+    let left = trigger.left;
+    left = Math.max(gap, Math.min(left, window.innerWidth - panel.width - gap));
+    top = Math.max(gap, Math.min(top, window.innerHeight - panel.height - gap));
     this._popoverElement.style.top = `${top}px`;
     this._popoverElement.style.left = `${left}px`;
   }

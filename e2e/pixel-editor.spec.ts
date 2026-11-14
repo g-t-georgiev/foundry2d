@@ -86,7 +86,7 @@ test("saves to the browser library and lists it on the start screen", async ({ p
   await page.reload();
   // With saved work and nothing to recover, the start screen opens.
   const browser = page.locator("project-browser");
-  await expect(browser.getByText("sprite", { exact: true })).toBeVisible();
+  await expect(browser.getByText("untitled", { exact: true })).toBeVisible();
 });
 
 test("reopens with the same zoom, tool and toggles (work file editor state)", async ({ page }) => {
@@ -116,13 +116,13 @@ test("saves a copy in the browser and duplicates it from the start screen", asyn
   const saveAs = page.locator("#saveAsButton");
   await saveAs.getByRole("button", { name: "More options" }).click();
   await saveAs.getByRole("menuitemradio", { name: /Save a copy in this browser/ }).click();
-  await expect(page.locator("#messageDisplay")).toContainText('Saved a copy as "sprite copy"');
+  await expect(page.locator("#messageDisplay")).toContainText('Saved a copy as "untitled copy"');
 
   await page.locator('[data-command="open"]').click();
   const browser = page.locator("project-browser");
-  await expect(browser.getByText("sprite copy", { exact: true })).toBeVisible();
-  await browser.getByRole("button", { name: "Duplicate sprite copy" }).click();
-  await expect(browser.getByText("sprite copy copy", { exact: true })).toBeVisible();
+  await expect(browser.getByText("untitled copy", { exact: true })).toBeVisible();
+  await browser.getByRole("button", { name: "Duplicate untitled copy" }).click();
+  await expect(browser.getByText("untitled copy copy", { exact: true })).toBeVisible();
   await expect(browser.locator("#usage")).toContainText("used");
 });
 

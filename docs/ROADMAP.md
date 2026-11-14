@@ -422,6 +422,18 @@ Foundry2D already has both, but the line between them isn't drawn deliberately y
     - **Shared `<split-button>` component** in `@foundry2d/ui`: the main part runs the current default, and the arrow opens the alternatives. Picking one makes it the default (the label follows) and runs it. Options are `<option>` children, the default can be remembered per browser, and it is keyboard accessible. The name "split button" is the common one (Microsoft and most design systems); "dropdown button" usually means a button that only opens a menu. Based on the `spritesheet-generator` prototype's SplitButton.
     - **Pixel editor undo/redo:** these existed but were easy to miss, as ↶ ↷ text glyphs at the start of the second toolbar row. They moved next to Export in the top row with the same icons as the level designer, and disabled icon buttons stay more visible.
 
+43. **Three reported issues** (2026-11-15), ✅ fixed:
+    - **Missing redo icon in the pixel editor:** its SVG path was `"redo"`. When the icon was copied from the level designer, the script matched the `d="` inside `data-command="redo"`. It now uses the real path.
+    - **Colour picker panel hidden behind the canvas:** the panel was absolutely positioned inside the tools column, which comes before the canvas column, so no `z-index` could lift it out of its stacking context. It is now a manual **popover** in the browser's top layer, placed in viewport coordinates next to the swatch (above it when there's no room below), kept inside the window, and repositioned on resize or scroll.
+    - **Blank project by default:** the level designer started with the Pac-Man preset. It now starts with the Blank preset, and Blank is first among the templates. The pixel editor already started blank. The start screen still opens when the browser library has saved work.
+
+44. **Open question: what the apps show at startup** (raised 2026-11-15, to decide). Today both apps start with a new blank, unsaved project ("untitled"). They restore unsaved work from the last session if there is any; otherwise, when the browser library or recent files have something, the start screen opens on top of the blank project.
+    1. Should the apps always start with a brand-new, blank, unsaved project behind the start screen?
+    2. Should the project saved last (if there is one) be open behind the start screen instead?
+    3. Should the start screen mark the project that was open last, with its saved changes?
+
+    **Suggestion so far (not decided):** combine 1 and 3. Always start with a brand-new project. On the start screen, mark the project that was worked on last, meaning the one with the most recently saved changes, so it is one click away without being opened automatically. This needs a closer look at how the apps should behave as a whole before it is settled.
+
 **Delivery and engine formats** (requested 2026-11-14)
 
 38. **Offline support (installable web app).** Each app gets a web app manifest, icons and a service worker that caches the app shell, so it installs from the browser and works offline. Items 33–34 (branded files, file association) build on the same manifest.

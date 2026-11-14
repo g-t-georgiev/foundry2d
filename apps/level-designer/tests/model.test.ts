@@ -11,8 +11,9 @@ const names = (project: LevelProject) => project.levels[0].doc.layers.map((l) =>
 
 describe("presets", () => {
   it("discovers every preset file and builds independent projects", () => {
-    expect(presets.map((p) => p.id)).toEqual(["pacman", "blank", "platformer"]);
-    expect(presets[0].label).toBe("Pac-Man (arcade)");
+    expect(presets.map((p) => p.id)).toEqual(["blank", "pacman", "platformer"]);
+    expect(presets[0].label).toBe("Blank");
+    expect(createProjectFromPreset().name).toBe("untitled"); // the default start
     const a = createPacmanProject();
     const b = createPacmanProject();
     a.levels[0].doc.layers[0].set(0, 0, 1);

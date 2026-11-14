@@ -39,7 +39,8 @@ export const presets: readonly PresetInfo[] = Object.entries(files)
   })
   .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
 
-export const DEFAULT_PRESET_ID = "pacman";
+/** What a fresh start opens: an empty project (pick other presets under New). */
+export const DEFAULT_PRESET_ID = "blank";
 
 export function getPreset(id: string): PresetInfo | undefined {
   return presets.find((p) => p.id === id);

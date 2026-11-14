@@ -73,7 +73,8 @@ export interface ApplicationElements {
   paletteRoot: HTMLElement;
 }
 
-const DEFAULT_NAME = "sprite";
+/** Name of a new, not yet named sprite (same as the level designer's blank project). */
+const DEFAULT_NAME = "untitled";
 const NEW_SIZES = [16, 32, 64, 128];
 const ONION_ALPHA = 0.28;
 

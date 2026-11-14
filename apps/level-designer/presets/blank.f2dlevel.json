@@ -4,7 +4,7 @@
   "preset": {
     "label": "Blank",
     "description": "One empty 32×32 level with a single IntGrid layer on a 16 px grid.",
-    "order": 1
+    "order": 0
   },
   "name": "untitled",
   "gridSize": 16,

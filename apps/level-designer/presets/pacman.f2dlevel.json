@@ -4,7 +4,7 @@
   "preset": {
     "label": "Pac-Man (arcade)",
     "description": "28×36 tile maze with collision and collectibles layers, plus Pac-Man, ghost and fruit entities.",
-    "order": 0
+    "order": 1
   },
   "name": "pacman",
   "gridSize": 8,

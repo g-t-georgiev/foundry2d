@@ -74,7 +74,7 @@ export function fromProjectFile(json: unknown): { name: string; sprite: Sprite }
   if (typeof json.version !== "number" || json.version > PROJECT_VERSION) {
     throw new ProjectFormatError(`Unsupported project version: ${String(json.version)}`);
   }
-  const name = typeof json.name === "string" && json.name ? json.name : "sprite";
+  const name = typeof json.name === "string" && json.name ? json.name : "untitled";
 
   if (json.version < 2) {
     return {
