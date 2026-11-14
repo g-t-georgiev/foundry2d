@@ -397,8 +397,12 @@
 
         <section data-export-panel="gif" hidden>
           <label class="check"><input id="exLoop" type="checkbox" checked /> Loop forever</label>
+          <label class="check" title="Only used when the sprite has more than 255 colours">
+            <input id="exDither" type="checkbox" /> Dither (smoother gradients above 255 colours)
+          </label>
           <p class="hint">
-            Uses each frame's duration. GIF supports 256 colours and on/off transparency.
+            Uses each frame's duration. GIF supports 255 colours plus on/off transparency: up to
+            that, colours are exact; above it, a palette is picked to cover the sprite's colours.
           </p>
         </section>
 

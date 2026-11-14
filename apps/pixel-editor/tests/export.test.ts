@@ -317,3 +317,68 @@ function decodeGif(bytes: Uint8Array) {
   }
   return { width, height, palette, frames, delays, transparent };
 }
+
+describe("GIF colour reduction", () => {
+  /** A 64×64 smooth RGB gradient: 4096 distinct colours. */
+  const gradient = () => {
+    const img = createImage(64, 64);
+    for (let y = 0; y < 64; y++) {
+      for (let x = 0; x < 64; x++) {
+        img.data.set([x * 4, y * 4, ((x + y) * 2) & 255, 255], (y * 64 + x) * 4);
+      }
+    }
+    return img;
+  };
+  /** Mean absolute error per channel between an image and its decoded GIF. */
+  const meanError = (img: ReturnType<typeof createImage>, dither = false) => {
+    const decoded = decodeGif(encodeGif([img], [100], { loop: null, dither }));
+    let sum = 0;
+    for (let i = 0; i < 64 * 64; i++) {
+      const rgb = decoded.palette[decoded.frames[0][i]];
+      for (let c = 0; c < 3; c++) sum += Math.abs(rgb[c] - img.data[i * 4 + c]);
+    }
+    return sum / (64 * 64 * 3);
+  };
+
+  it("keeps up to 255 colours exact and reduces more with median cut", async () => {
+    const { medianCut } = await import("../src/export/quantize");
+    const few = new Map([
+      [0xff0000, 3],
+      [0x00ff00, 1],
+    ]);
+    expect(medianCut(few, 255).sort()).toEqual([0x00ff00, 0xff0000].sort());
+
+    const counts = new Map<number, number>();
+    const img = gradient();
+    for (let i = 0; i < 64 * 64; i++) {
+      const [r, g, b] = img.data.subarray(i * 4, i * 4 + 3);
+      counts.set((r << 16) | (g << 8) | b, 1);
+    }
+    expect(counts.size).toBe(4096);
+    expect(new Set(medianCut(counts, 255)).size).toBe(255);
+  });
+
+  it("covers the whole gradient instead of only its most frequent colours", () => {
+    // Every colour appears once, so "most frequent" would keep an arbitrary
+    // 255 of them; median cut spreads the palette over the range.
+    expect(meanError(gradient())).toBeLessThan(6);
+  });
+
+  it("dithers only reduced palettes and leaves transparency alone", () => {
+    const img = gradient();
+    img.data[3] = 0; // top-left pixel transparent
+    const plain = decodeGif(encodeGif([img], [100], { loop: null }));
+    const dithered = decodeGif(encodeGif([img], [100], { loop: null, dither: true }));
+    expect(dithered.frames[0]).not.toEqual(plain.frames[0]);
+    expect(dithered.frames[0][0]).toBe(dithered.transparent);
+    // Dithering trades per-pixel accuracy for smoother areas, so stay in bounds.
+    expect(meanError(img, true)).toBeLessThan(12);
+
+    // With few colours the palette is exact and dithering changes nothing.
+    const small = createImage(4, 4);
+    for (let i = 0; i < 16; i++) small.data.set([i * 10, 0, 0, 255], i * 4);
+    expect(encodeGif([small], [100], { loop: null, dither: true })).toEqual(
+      encodeGif([small], [100], { loop: null })
+    );
+  });
+});

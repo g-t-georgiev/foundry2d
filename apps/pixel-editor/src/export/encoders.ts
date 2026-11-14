@@ -1,3 +1,4 @@
+import { medianCut, nearestColor } from "./quantize";
 import type { RgbaImage } from "./raster";
 
 // ------------------------------------------------------------------ BMP
@@ -58,12 +59,15 @@ interface Palette {
   /** RGB triples; index 0 is reserved for transparency. */
   colors: number[];
   indexOf: (rgb: number) => number;
+  /** True when every colour of the image is in the palette (no reduction). */
+  exact: boolean;
 }
 
 /**
  * Builds one palette for all frames. Pixel art rarely exceeds 255 colours,
- * in which case colours are exact; otherwise the 255 most frequent colours
- * are kept and the rest map to their nearest neighbour.
+ * in which case colours are exact; otherwise a pixel-weighted median cut
+ * picks 255 colours spanning the image's colour range, and other colours
+ * map to their nearest palette entry.
  */
 function buildPalette(frames: RgbaImage[]): Palette {
   const counts = new Map<number, number>();
@@ -75,30 +79,71 @@ function buildPalette(frames: RgbaImage[]): Palette {
       counts.set(rgb, (counts.get(rgb) ?? 0) + 1);
     }
   }
-  const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([rgb]) => rgb);
-  const kept = sorted.slice(0, 255);
-  const exact = new Map(kept.map((rgb, i) => [rgb, i + 1]));
-  const nearest = new Map<number, number>();
-  const indexOf = (rgb: number) => {
-    const hit = exact.get(rgb) ?? nearest.get(rgb);
-    if (hit !== undefined) return hit;
-    let best = 1;
-    let bestDist = Infinity;
-    for (let i = 0; i < kept.length; i++) {
-      const c = kept[i];
-      const dr = ((c >> 16) & 255) - ((rgb >> 16) & 255);
-      const dg = ((c >> 8) & 255) - ((rgb >> 8) & 255);
-      const db = (c & 255) - (rgb & 255);
-      const dist = dr * dr + dg * dg + db * db;
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = i + 1;
-      }
+  const exact = counts.size <= 255;
+  const kept = medianCut(counts, 255);
+  const nearest = nearestColor(kept);
+  // Palette slot 0 is transparency, so colour i sits at index i + 1.
+  return { colors: [0, ...kept], indexOf: (rgb) => nearest(rgb) + 1, exact };
+}
+
+/**
+ * Maps a frame to palette indices. With `dither` (and a reduced palette),
+ * Floyd–Steinberg error diffusion spreads each pixel's rounding error to
+ * its right and lower neighbours, which smooths gradients. Transparent
+ * pixels neither receive nor pass on error.
+ */
+function indexFrame(frame: RgbaImage, palette: Palette, dither: boolean): Uint8Array {
+  const { width, height, data } = frame;
+  const indices = new Uint8Array(width * height);
+  if (!dither || palette.exact) {
+    for (let p = 0, i = 0; p < indices.length; p++, i += 4) {
+      indices[p] =
+        data[i + 3] < ALPHA_THRESHOLD
+          ? TRANSPARENT_INDEX
+          : palette.indexOf((data[i] << 16) | (data[i + 1] << 8) | data[i + 2]);
     }
-    nearest.set(rgb, best);
-    return best;
+    return indices;
+  }
+  // Working copy of RGB with accumulated error (floats).
+  const work = new Float32Array(width * height * 3);
+  for (let p = 0; p < width * height; p++) {
+    work[p * 3] = data[p * 4];
+    work[p * 3 + 1] = data[p * 4 + 1];
+    work[p * 3 + 2] = data[p * 4 + 2];
+  }
+  const opaque = (p: number) => data[p * 4 + 3] >= ALPHA_THRESHOLD;
+  const spread = (x: number, y: number, er: number, eg: number, eb: number, f: number) => {
+    if (x < 0 || x >= width || y >= height) return;
+    const q = y * width + x;
+    if (!opaque(q)) return;
+    work[q * 3] += er * f;
+    work[q * 3 + 1] += eg * f;
+    work[q * 3 + 2] += eb * f;
   };
-  return { colors: [0, ...kept], indexOf };
+  const clamp = (v: number) => (v < 0 ? 0 : v > 255 ? 255 : Math.round(v));
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const p = y * width + x;
+      if (!opaque(p)) {
+        indices[p] = TRANSPARENT_INDEX;
+        continue;
+      }
+      const r = clamp(work[p * 3]);
+      const g = clamp(work[p * 3 + 1]);
+      const b = clamp(work[p * 3 + 2]);
+      const index = palette.indexOf((r << 16) | (g << 8) | b);
+      indices[p] = index;
+      const c = palette.colors[index];
+      const er = r - ((c >> 16) & 255);
+      const eg = g - ((c >> 8) & 255);
+      const eb = b - (c & 255);
+      spread(x + 1, y, er, eg, eb, 7 / 16);
+      spread(x - 1, y + 1, er, eg, eb, 3 / 16);
+      spread(x, y + 1, er, eg, eb, 5 / 16);
+      spread(x + 1, y + 1, er, eg, eb, 1 / 16);
+    }
+  }
+  return indices;
 }
 
 class ByteWriter {
@@ -182,6 +227,12 @@ function lzwEncode(indices: Uint8Array, minCodeSize: number, out: ByteWriter): v
 export interface GifOptions {
   /** 0 = loop forever; otherwise the number of repeats. `null` = play once. */
   loop: number | null;
+  /**
+   * Floyd–Steinberg dithering when the image has more than 255 colours
+   * (ignored otherwise: those colours are exact). Off by default; pixel art
+   * usually looks better without it.
+   */
+  dither?: boolean;
 }
 
 /** Animated GIF89a with one global palette and 1-bit transparency. */
@@ -234,15 +285,7 @@ export function encodeGif(
     out.u16(height);
     out.byte(0); // no local table, not interlaced
 
-    const indices = new Uint8Array(width * height);
-    const d = frame.data;
-    for (let p = 0, i = 0; p < indices.length; p++, i += 4) {
-      indices[p] =
-        d[i + 3] < ALPHA_THRESHOLD
-          ? TRANSPARENT_INDEX
-          : palette.indexOf((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
-    }
-    lzwEncode(indices, minCodeSize, out);
+    lzwEncode(indexFrame(frame, palette, options.dither === true), minCodeSize, out);
   });
 
   out.byte(0x3b); // trailer

@@ -53,6 +53,8 @@ export interface GifExportOptions {
   source: ExportSource;
   /** Loop forever (otherwise play once). */
   loop: boolean;
+  /** Dither when the sprite has more than 255 colours. */
+  dither: boolean;
 }
 
 const MIME: Record<Exclude<ImageFormat, "bmp">, string> = {
@@ -265,7 +267,10 @@ export class ExportController {
       this.renderFrame(i, options.source, options.scale)
     );
     const delays = this.sprite.frames.map((_, i) => this.sprite.frameDuration(i));
-    const gif = encodeGif(frames, delays, { loop: options.loop ? 0 : null });
+    const gif = encodeGif(frames, delays, {
+      loop: options.loop ? 0 : null,
+      dither: options.dither,
+    });
     const fileName = `${safeName(this.getName())}.gif`;
     downloadBlob(new Blob([gif as Uint8Array<ArrayBuffer>], { type: "image/gif" }), fileName);
     return fileName;

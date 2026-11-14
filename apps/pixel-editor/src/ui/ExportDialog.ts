@@ -88,7 +88,7 @@ export default class ExportDialog {
   }
 
   gifOptions(): GifExportOptions {
-    return { ...this.common, loop: this.checked("#exLoop") };
+    return { ...this.common, loop: this.checked("#exLoop"), dither: this.checked("#exDither") };
   }
 
   private showTab(tab: Tab): void {
