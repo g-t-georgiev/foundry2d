@@ -17,7 +17,12 @@ import {
   type WorldLayout,
 } from "../model/types";
 import { defaultFor, isHexColor, newIid, validateFieldValue } from "../model/entities";
-import { AUTO_RULE_SIZES, type AutoRule, type AutoRuleSize } from "../model/autoRules";
+import {
+  AUTO_RULE_SIZES,
+  type AutoRule,
+  type AutoRuleGroup,
+  type AutoRuleSize,
+} from "../model/autoRules";
 
 export const PROJECT_FORMAT = "foundry2d.level";
 /**
@@ -313,6 +318,28 @@ function parseAutoRules(raw: unknown[], project: LevelProject): AutoRule[] {
         chance: Math.min(1, Math.max(0, num(entry.chance, 1))),
         flipX: entry.flipX === true,
         flipY: entry.flipY === true,
+        ...(entry.breakOnMatch === false ? { breakOnMatch: false } : {}),
+        ...(entry.outOfBounds === "fail" || isInt(entry.outOfBounds)
+          ? { outOfBounds: entry.outOfBounds }
+          : {}),
+        ...(isInt(entry.offsetX) && entry.offsetX !== 0 ? { offsetX: entry.offsetX } : {}),
+        ...(isInt(entry.offsetY) && entry.offsetY !== 0 ? { offsetY: entry.offsetY } : {}),
+        // Unknown groups are dropped with the groups (see parseAutoGroups).
+        ...(isInt(entry.groupUid) ? { groupUid: entry.groupUid } : {}),
+      },
+    ];
+  });
+}
+
+function parseAutoGroups(raw: unknown[], project: LevelProject): AutoRuleGroup[] {
+  return raw.flatMap((entry) => {
+    if (!isRecord(entry) || !isInt(entry.uid)) return [];
+    project.reserveUid(entry.uid);
+    return [
+      {
+        uid: entry.uid,
+        name: typeof entry.name === "string" && entry.name.trim() ? entry.name : "Group",
+        active: entry.active !== false,
       },
     ];
   });
@@ -408,6 +435,9 @@ export function deserializeProject(json: unknown): LevelProject {
         ...(isInt(raw.autoSourceUid) ? { autoSourceUid: raw.autoSourceUid } : {}),
         ...(Array.isArray(raw.autoRules)
           ? { autoRules: parseAutoRules(raw.autoRules, project) }
+          : {}),
+        ...(Array.isArray(raw.autoGroups) && raw.autoGroups.length
+          ? { autoGroups: parseAutoGroups(raw.autoGroups, project) }
           : {}),
         ...(isInt(raw.autoSeed) ? { autoSeed: raw.autoSeed >>> 0 } : {}),
       });

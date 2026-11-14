@@ -1,6 +1,7 @@
 import type { CellBuffer, GridLayer, Rect } from "@foundry2d/core";
 import type { LayerRenderer } from "@foundry2d/render";
-import type { LevelProject } from "../model/LevelProject";
+import type { Level, LevelProject } from "../model/LevelProject";
+import type { AutoStack } from "../model/autoRules";
 import { decodeTile, tileSourceRect } from "../model/tiles";
 
 /**
@@ -10,14 +11,16 @@ import { decodeTile, tileSourceRect } from "../model/tiles";
  */
 export function tileLayerRendererFor(
   project: LevelProject
-): (layer: GridLayer<CellBuffer>) => LayerRenderer | undefined {
-  return (layer) => {
+): (layer: GridLayer<CellBuffer>, level?: Level) => LayerRenderer | undefined {
+  return (layer, level) => {
     const def = project.getLayerDefForLayer(layer.id);
     if (def?.type !== "Tiles") return undefined;
     return (ctx, target, dest, visible) => {
       const tileset = project.getTileset(def.tilesetUid);
       const image = tileset ? project.getTilesetImage(tileset) : undefined;
-      drawTiles(ctx, target, dest, visible, (value, dx, dy, w, h) => {
+      // Auto-layer cells with stacked or offset tiles.
+      const stack = level?.autoStacks.get(layer.id);
+      drawTiles(ctx, target, dest, visible, stack, (value, dx, dy, w, h) => {
         const decoded = decodeTile(value);
         const src = decoded && tileset ? tileSourceRect(tileset, decoded.tileId) : null;
         if (!decoded || !src || !image) {
@@ -45,6 +48,7 @@ function drawTiles(
   layer: GridLayer<CellBuffer>,
   dest: Rect,
   visible: Rect,
+  stack: AutoStack | undefined,
   draw: (value: number, x: number, y: number, w: number, h: number) => void
 ): void {
   const cellW = dest.width / layer.width;
@@ -58,7 +62,17 @@ function drawTiles(
     const row = y * layer.width;
     for (let x = x0; x <= x1; x++) {
       const value = layer.data[row + x];
-      if (value !== 0) draw(value, dest.x + x * cellW, dest.y + y * cellH, cellW, cellH);
+      if (value === 0) continue;
+      const placements = stack?.get(row + x);
+      if (!placements) {
+        draw(value, dest.x + x * cellW, dest.y + y * cellH, cellW, cellH);
+        continue;
+      }
+      // Lowest priority first, so the first rule's tile ends up on top.
+      for (let i = placements.length - 1; i >= 0; i--) {
+        const p = placements[i];
+        draw(p.tile, dest.x + x * cellW + p.dx, dest.y + y * cellH + p.dy, cellW, cellH);
+      }
     }
   }
 }

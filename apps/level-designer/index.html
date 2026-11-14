@@ -490,7 +490,7 @@
       <div class="dialog-body rules-body">
         <div class="rules-list-column">
           <div class="column-header">
-            <span class="label">Rules (first match wins)</span>
+            <span class="label">Rules (top first; a stopping match ends the cell)</span>
             <span class="button-row">
               <button
                 class="btn btn-small"
@@ -498,6 +498,13 @@
                 title="New random choices for variants and chances"
               >
                 Reshuffle
+              </button>
+              <button
+                class="btn btn-small"
+                id="addRuleGroup"
+                title="Rules in a group can be switched on and off together"
+              >
+                + Group
               </button>
               <button class="btn btn-small" id="addRule">+ Rule</button>
             </span>

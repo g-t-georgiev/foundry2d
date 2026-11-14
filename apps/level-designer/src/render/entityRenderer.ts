@@ -148,6 +148,6 @@ export function levelLayerRendererFor(
     if (def?.type === "Entities") {
       return entityLayerRenderer(project, level, defUidOf(layer.id)!, options);
     }
-    return tiles(layer);
+    return tiles(layer, level);
   };
 }

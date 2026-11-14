@@ -86,6 +86,16 @@ export interface GameLevelFile {
   fields?: Record<string, GameFieldValue>;
   layers: Record<string, number[]>;
   /**
+   * Present when auto-layer rules stack several tiles in a cell or offset
+   * them: per tile layer, those cells (row-major index) with every tile in
+   * draw order, bottom first, and its offset in pixels. The layer array
+   * keeps the top tile of each cell.
+   */
+  tileStacks?: Record<
+    string,
+    { cell: number; tiles: { tile: number; dx: number; dy: number }[] }[]
+  >;
+  /**
    * Present when layers have their own grid size: their arrays are
    * `columns × rows` of `gridSize`-pixel cells instead of the level's.
    */
@@ -149,6 +159,14 @@ export function toGameFormat(project: LevelProject, level: Level): GameLevelFile
     const layer = level.doc.getLayer(layerIdFor(def.uid));
     if (layer) layers[def.identifier] = Array.from(layer.data);
   }
+  const tileStacks: NonNullable<GameLevelFile["tileStacks"]> = {};
+  for (const def of project.defs.layers) {
+    const stack = level.autoStacks.get(layerIdFor(def.uid));
+    if (def.type !== "Tiles" || !stack?.size) continue;
+    tileStacks[def.identifier] = [...stack]
+      .sort(([a], [b]) => a - b)
+      .map(([cell, placements]) => ({ cell, tiles: [...placements].reverse() }));
+  }
   const layerGrids: NonNullable<GameLevelFile["layerGrids"]> = {};
   for (const def of project.defs.layers) {
     const layer = level.doc.getLayer(layerIdFor(def.uid));
@@ -174,6 +192,7 @@ export function toGameFormat(project: LevelProject, level: Level): GameLevelFile
   return {
     ...(Object.keys(tileLayers).length ? { tileLayers } : {}),
     ...(Object.keys(layerGrids).length ? { layerGrids } : {}),
+    ...(Object.keys(tileStacks).length ? { tileStacks } : {}),
     ...(Object.keys(entities).length ? { entities } : {}),
     metadata: {
       name: project.name,

@@ -329,6 +329,14 @@ Issues, improvements and polish candidates collected along the way, including ev
     - **Canvas:** the layer stack draws each layer at its own cell size, clipped to the level. Scenes may map the pointer to cells themselves (`WorkspaceScene.worldToGrid`), so tools, the cursor, the grid lines and the status bar follow the active layer's grid.
     - **Level designer:** a layer definition's optional `gridSize` (px) is set in Project settings → Layers ("Grid size", empty for the project grid). Changing it resamples painted cells as one undo step. Auto-layers always use their source's grid. Entities snap to their layer's grid; Point fields stay in level cells. Changing the project grid keeps layers with their own grid at the same pixel size.
     - **Files:** the work file stores `gridSize` per layer definition and each level layer at its own size. Game JSON adds `layerGrids` (grid size, columns, rows) for those layers; importing into a project skips a layer whose grid differs there, with a warning.
+  - ✅ **Auto-layer gaps (30):**
+    - **Stacking:** a rule's "Stop here" (on by default) can be switched off, so later rules add tiles to the same cell. The first rule's tile is drawn on top.
+    - **Rule groups:** "+ Group" in the rules dialog. A group has a name and a switch that turns all its rules off together, and can be moved up and down. Rules outside groups are evaluated first, then each group in order. Deleting a group keeps its rules, ungrouped.
+    - **Past the level edge:** per rule, cells beyond the border read as the edge cell (the old behaviour, still the default), as empty, as a chosen value, or make the rule fail.
+    - **Tile offsets:** per rule, in pixels.
+    - **How it is stored:** the layer cell keeps the top tile, so exports and tools stay unchanged. Cells with several tiles or an offset also get an entry in a per-level "auto stack", which is derived from the rules on every regeneration and never saved. The renderers draw from it, and game JSON lists those cells under `tileStacks`.
+    - Fixed on the way: regeneration used the level's size in cells, which is wrong for auto-layers with their own grid (item 17); it now uses the layer's.
+    - **Still open: auto-layers fed by other auto-layers.** LDtk's auto-layers read an IntGrid layer, as here, so this would go beyond LDtk. It needs rules that match tiles rather than values. Left until there is a concrete use for it.
   - ⏭ **Packaged project format (6) moved to 8.7.** It is a third file format next to `.f2dsprite` and `.f2dlevel`, so the choice of replacing or adding to them belongs with the OS file association and installable app (34, 38). The Sprite Packer (Phase 9) will need the same machinery: reading ZIPs, including compressed ones from other tools, folder input and asset files. Today only files saved to disk embed tileset images; library and recovery copies already keep them in the asset store.
   - **8.4 is done** apart from item 6 (moved). Items 36–37 are decisions to take with a target engine.
 - **8.5 Features** (in progress): items 9 ✅, 23 ✅, 12 ✅, 13 (partly), 14 ✅, 15 ✅, then 17–20, 30 and 31, roughly in that order.
@@ -401,7 +409,7 @@ Issues, improvements and polish candidates collected along the way, including ev
 **Collected from earlier phases' "not done" notes**
 
 29. Phase 1 kept `locked` in core but never exposed it. Add a lock toggle to `<layers-panel>` for both apps. The level designer's generated auto-layers show as locked and can't be unlocked.
-30. Phase 7b auto-layer gaps (LDtk has them): several tiles stacked in one cell (rules that don't stop at the first match), rule groups that can be toggled together, per-rule out-of-bounds handling, tile offsets, and auto-layers fed by other auto-layers.
+30. Phase 7b auto-layer gaps (LDtk has them): several tiles stacked in one cell (rules that don't stop at the first match), rule groups that can be toggled together, per-rule out-of-bounds handling, tile offsets, and auto-layers fed by other auto-layers. ✅ Done in 8.5, except auto-layers fed by other auto-layers (still open, see the 8.5 status).
 31. The target architecture planned shared `@foundry2d/ui` components (tool bar, palette, panel section, property grid, modal, status bar). Both apps still build these in plain HTML. Extract them alongside items 2 and 3.
 
 **Work files versus export files** (requested 2026-11-14; to check during 8.4)
@@ -466,6 +474,10 @@ Foundry2D already has both, but the line between them isn't drawn deliberately y
     3. Should the start screen mark the project that was open last, with its saved changes?
 
     **Suggestion so far (not decided):** combine 1 and 3. Always start with a brand-new project. On the start screen, mark the project that was worked on last, meaning the one with the most recently saved changes, so it is one click away without being opened automatically. This needs a closer look at how the apps should behave as a whole before it is settled.
+
+46. **Guide grid per layer** (requested 2026-11-15, open). LDtk layer definitions have an optional "guide" grid, `guideGridWid` × `guideGridHei` in pixels, next to the layer's real `gridSize`. It only affects how the layer is shown in the editor (helper lines, for example a 16 × 16 room grid over an 8 px layer); cells, tools and exports keep using the real grid. Checked against the LDtk JSON field docs, which describe the fields but not how the editor draws them, so the drawing details are still to be confirmed.
+    - **Likely shape here:** two optional numbers on a layer definition ("Guide grid W × H", px) in Project settings → Layers, stored in the work file. When the active layer has them, the level view draws a second, lighter grid at that spacing (another `GridLinesPass` with a step getter, already supported since item 17). No effect on game exports.
+    - Small, but left for later, after item 30.
 
 **Delivery and engine formats** (requested 2026-11-14)
 

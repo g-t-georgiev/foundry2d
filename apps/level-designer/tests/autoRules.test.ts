@@ -7,6 +7,7 @@ import {
   generateAutoTiles,
   resizePattern,
   type AutoRule,
+  type AutoStack,
 } from "../src/model/autoRules";
 import { decodeTile } from "../src/model/tiles";
 import { deserializeProject, serializeProject } from "../src/io/projectFile";
@@ -289,5 +290,101 @@ describe("incremental auto-layer regeneration", () => {
     const perEdit = (performance.now() - started) / 100;
     // A full 256×256 pass takes far longer; a local update is well under a millisecond or two.
     expect(perEdit).toBeLessThan(5);
+  });
+});
+
+describe("auto-rule gaps (item 30)", () => {
+  const ground = [0, 0, 0, 0, 1, 0, 0, 0, 0];
+  const topEdge = [0, -ANY_VALUE, 0, 0, 1, 0, 0, 0, 0];
+
+  it("stacks tiles from rules that don't stop, first rule on top", () => {
+    const g = grid("#");
+    const stack: AutoStack = new Map();
+    const rules = [
+      rule(1, { pattern: ground, tileIds: [5], breakOnMatch: false }),
+      rule(2, { pattern: ground, tileIds: [6] }),
+      rule(3, { pattern: ground, tileIds: [7] }), // never reached: rule 2 stops
+    ];
+    const cells = generateAutoTiles(g.data, 1, 1, rules, 0, stack);
+    expect(show(cells, 1)).toEqual(["5"]);
+    expect(stack.get(0)!.map((p) => decodeTile(p.tile)?.tileId)).toEqual([5, 6]);
+  });
+
+  it("records offsets, and plain cells stay out of the stack", () => {
+    const g = grid("##");
+    const stack: AutoStack = new Map();
+    const rules = [rule(1, { pattern: ground, tileIds: [1], offsetX: 0, offsetY: -4 })];
+    generateAutoTiles(g.data, 2, 1, rules, 0, stack);
+    expect([...stack.keys()]).toEqual([0, 1]);
+    expect(stack.get(0)![0]).toMatchObject({ dx: 0, dy: -4 });
+    const plain: AutoStack = new Map();
+    generateAutoTiles(g.data, 2, 1, [rule(1, { pattern: ground, tileIds: [1] })], 0, plain);
+    expect(plain.size).toBe(0);
+  });
+
+  it("handles cells past the edge per rule", () => {
+    const g = grid("#");
+    const at = (outOfBounds: AutoRule["outOfBounds"]) =>
+      show(
+        generateAutoTiles(g.data, 1, 1, [rule(1, { pattern: topEdge, tileIds: [3], outOfBounds })]),
+        1
+      )[0];
+    expect(at("edge")).toBe("."); // above reads as the cell itself: ground
+    expect(at(0)).toBe("3"); // above reads as empty
+    expect(at("fail")).toBe("."); // the rule can't look past the edge
+  });
+
+  it("switches rule groups together and evaluates groups in order", () => {
+    const project = createProjectFromPreset("platformer");
+    const def = project.defs.layers.find((d) => project.isAutoLayer(d))!;
+    const level = project.levels[0];
+    const layer = () => level.doc.getLayer(layerIdFor(def.uid))!;
+    const before = Array.from(layer().data);
+    const group = project.addAutoGroup(def.uid, "Decor")!;
+    const decor = project.addAutoRule(def.uid)!;
+    project.updateAutoRule(def.uid, decor.uid, {
+      groupUid: group.uid,
+      pattern: [0, 0, 0, 0, ANY_VALUE, 0, 0, 0, 0],
+      tileIds: [0],
+    });
+    // Grouped rules come after the ungrouped ones, so the old rules still win.
+    expect(project.orderedAutoRules(def).at(-1)?.uid).toBe(decor.uid);
+    expect(Array.from(layer().data)).toEqual(before);
+
+    project.updateAutoGroup(def.uid, group.uid, { active: false });
+    expect(project.orderedAutoRules(def).at(-1)?.active).toBe(false);
+    project.removeAutoGroup(def.uid, group.uid);
+    expect(project.getAutoRule(def.uid, decor.uid)?.groupUid).toBeNull();
+  });
+
+  it("keeps stacks per level, saves the options and exports stacked cells", () => {
+    const project = createProjectFromPreset("platformer");
+    const def = project.defs.layers.find((d) => project.isAutoLayer(d))!;
+    const first = def.autoRules![0];
+    const last = def.autoRules!.at(-1)!;
+    const group = project.addAutoGroup(def.uid, "Base")!;
+    project.updateAutoRule(def.uid, first.uid, {
+      breakOnMatch: false,
+      offsetY: 2,
+      outOfBounds: "fail",
+    });
+    project.updateAutoRule(def.uid, last.uid, { groupUid: group.uid });
+    const level = project.levels[0];
+    const stack = level.autoStacks.get(layerIdFor(def.uid))!;
+    expect(stack.size).toBeGreaterThan(0);
+
+    const copy = deserializeProject(serializeProject(project));
+    const loaded = copy.getLayerDef(def.uid)!;
+    expect(loaded.autoGroups).toEqual([{ uid: group.uid, name: "Base", active: true }]);
+    expect(loaded.autoRules![0]).toMatchObject({
+      breakOnMatch: false,
+      offsetY: 2,
+      outOfBounds: "fail",
+    });
+    expect(loaded.autoRules!.at(-1)?.groupUid).toBe(group.uid);
+    expect(copy.levels[0].autoStacks.get(layerIdFor(def.uid))!.size).toBe(stack.size);
+
+    const file = toGameFormat(project, level);
+    expect(file.tileStacks?.[def.identifier]).toHaveLength(stack.size);
   });
 });

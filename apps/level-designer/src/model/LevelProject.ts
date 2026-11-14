@@ -11,8 +11,11 @@ import {
   autoRuleReach,
   createRule,
   generateAutoTilesInto,
+  orderedRules,
   resizePattern,
   type AutoRule,
+  type AutoRuleGroup,
+  type AutoStack,
 } from "./autoRules";
 import type { CellColorizer } from "@foundry2d/render";
 import type {
@@ -82,6 +85,11 @@ export interface DefinitionSnapshot {
 export class Level {
   /** Placed entities on every Entities layer, in draw order. */
   public entities: EntityInstance[] = [];
+  /**
+   * Auto-layer cells with stacked or offset tiles, by document layer id.
+   * Derived from the rules on every regeneration; never saved.
+   */
+  public readonly autoStacks = new Map<string, AutoStack>();
   /** Background colour (`#rrggbb`); `null` uses the project default. */
   public bgColor: string | null = null;
   /** Values of the project's level fields, by field uid (missing = default). */
@@ -412,6 +420,7 @@ export class LevelProject {
     };
     for (const e of copy.entities) remap(e.fields);
     remap(copy.fields);
+    this.regenerateAutoLayers(undefined, copy); // rebuilds the derived tile stacks
     return copy;
   }
 
@@ -676,13 +685,81 @@ export class LevelProject {
 
   /** Moves a rule up (earlier, higher priority) or down. */
   moveAutoRule(defUid: number, ruleUid: number, direction: "up" | "down"): void {
-    const rules = this.getLayerDef(defUid)?.autoRules;
+    const def = this.getLayerDef(defUid);
+    const rules = def?.autoRules;
     const from = rules?.findIndex((r) => r.uid === ruleUid) ?? -1;
+    if (!def || !rules || from === -1) return;
+    // Rules are listed by group, so the neighbour is the next rule of the same group.
+    const group = this.groupOf(def, rules[from]);
+    const step = direction === "up" ? -1 : 1;
+    let to = from + step;
+    while (to >= 0 && to < rules.length && this.groupOf(def, rules[to]) !== group) to += step;
+    if (to < 0 || to >= rules.length) return;
+    [rules[from], rules[to]] = [rules[to], rules[from]];
+    this.autoRulesChanged(def);
+  }
+
+  /** The group a rule is listed in (`null`: ungrouped or an unknown group). */
+  private groupOf(def: LayerDef, rule: AutoRule): number | null {
+    const uid = rule.groupUid ?? null;
+    return uid !== null && def.autoGroups?.some((g) => g.uid === uid) ? uid : null;
+  }
+
+  /** Adds a rule group at the end; new rules can then be put in it. */
+  addAutoGroup(defUid: number, name = "Group"): AutoRuleGroup | null {
+    const def = this.getLayerDef(defUid);
+    if (def?.type !== "Tiles") return null;
+    const groups = (def.autoGroups ??= []);
+    const group: AutoRuleGroup = {
+      uid: this.allocateUid(),
+      name: this.uniqueName(
+        groups.map((g) => g.name),
+        name
+      ),
+      active: true,
+    };
+    groups.push(group);
+    this.autoRulesChanged(def);
+    return group;
+  }
+
+  updateAutoGroup(
+    defUid: number,
+    groupUid: number,
+    patch: Partial<Omit<AutoRuleGroup, "uid">>
+  ): void {
+    const def = this.getLayerDef(defUid);
+    const group = def?.autoGroups?.find((g) => g.uid === groupUid);
+    if (!def || !group) return;
+    Object.assign(group, patch);
+    group.name = group.name.trim() || "Group";
+    this.autoRulesChanged(def);
+  }
+
+  /** Removes a group; its rules stay, ungrouped. */
+  removeAutoGroup(defUid: number, groupUid: number): void {
+    const def = this.getLayerDef(defUid);
+    if (!def?.autoGroups?.some((g) => g.uid === groupUid)) return;
+    def.autoGroups = def.autoGroups.filter((g) => g.uid !== groupUid);
+    for (const rule of def.autoRules ?? []) if (rule.groupUid === groupUid) rule.groupUid = null;
+    this.autoRulesChanged(def);
+  }
+
+  /** Moves a group up (earlier, higher priority) or down. */
+  moveAutoGroup(defUid: number, groupUid: number, direction: "up" | "down"): void {
+    const def = this.getLayerDef(defUid);
+    const groups = def?.autoGroups;
+    const from = groups?.findIndex((g) => g.uid === groupUid) ?? -1;
     const to = direction === "up" ? from - 1 : from + 1;
-    if (!rules || from === -1 || to < 0 || to >= rules.length) return;
-    const [rule] = rules.splice(from, 1);
-    rules.splice(to, 0, rule);
-    this.autoRulesChanged(this.getLayerDef(defUid)!);
+    if (!def || !groups || from === -1 || to < 0 || to >= groups.length) return;
+    const [group] = groups.splice(from, 1);
+    groups.splice(to, 0, group);
+    this.autoRulesChanged(def);
+  }
+
+  /** Rules in evaluation order (ungrouped first, then by group), groups applied. */
+  orderedAutoRules(def: LayerDef): AutoRule[] {
+    return orderedRules(def.autoRules ?? [], def.autoGroups);
   }
 
   /** New random choices for tile variants and chances. */
@@ -706,7 +783,14 @@ export class LevelProject {
         const source = target.doc.getLayer(layerIdFor(def.autoSourceUid!));
         const layer = target.doc.getLayer(layerIdFor(def.uid));
         if (!source || !layer) continue;
-        const rules = def.autoRules ?? [];
+        const rules = orderedRules(def.autoRules ?? [], def.autoGroups);
+        let stack = target.autoStacks.get(layer.id);
+        if (!stack) {
+          stack = new Map();
+          target.autoStacks.set(layer.id, stack);
+        }
+        // A full rebuild drops entries of cells that no longer exist (resizes).
+        if (!area) stack.clear();
         // A cell's tile depends on neighbours up to the rules' reach.
         const reach = autoRuleReach(rules);
         const region = area && {
@@ -715,14 +799,16 @@ export class LevelProject {
           width: area.width + reach * 2,
           height: area.height + reach * 2,
         };
+        // Auto-layers share their source's grid, so its size in cells.
         const changed = generateAutoTilesInto(
           layer.data,
           source.data,
-          target.width,
-          target.height,
+          source.width,
+          source.height,
           rules,
           def.autoSeed ?? 0,
-          region
+          region,
+          stack
         );
         if (!changed) continue;
         layer.version++;
@@ -1655,6 +1741,10 @@ const DEFINITION_EDITS: Partial<Record<keyof LevelProject, string>> = {
   setAutoSource: "Change auto-tiling",
   setLayerGridSize: "Change layer grid",
   addAutoRule: "Add rule",
+  addAutoGroup: "Add rule group",
+  updateAutoGroup: "Edit rule group",
+  removeAutoGroup: "Delete rule group",
+  moveAutoGroup: "Move rule group",
   updateAutoRule: "Edit rule",
   removeAutoRule: "Delete rule",
   duplicateAutoRule: "Duplicate rule",

@@ -1,4 +1,4 @@
-import type { AutoRule } from "./autoRules";
+import type { AutoRule, AutoRuleGroup } from "./autoRules";
 
 /** One value of an IntGrid layer (0 is always "empty" and never defined). */
 export interface IntGridValueDef {
@@ -48,6 +48,8 @@ export interface LayerDef {
    */
   autoSourceUid?: number | null;
   autoRules?: AutoRule[];
+  /** Rule groups, in priority order (rules outside any group come first). */
+  autoGroups?: AutoRuleGroup[];
   /** Varies random choices (tile variants, chance); "Reshuffle" changes it. */
   autoSeed?: number;
   /**

@@ -4,7 +4,8 @@ import { encodeTile } from "./tiles";
  * Auto-layer rules (LDtk's model, simplified): a Tiles layer can be
  * generated from an IntGrid "source" layer. Each rule is a small pattern of
  * neighbour conditions around a cell; the first active rule that matches a
- * cell places one of its tiles there.
+ * cell places one of its tiles there. A rule that doesn't "stop" lets later
+ * rules add tiles to the same cell (stacked, earlier rules on top).
  *
  * Pattern cell values:
  * - `0`: anything;
@@ -36,6 +37,66 @@ export interface AutoRule {
   /** Also try the pattern mirrored horizontally / vertically (tile flipped to match). */
   flipX: boolean;
   flipY: boolean;
+  /** Stop at this rule when it matches (default). Off: later rules add tiles on the same cell. */
+  breakOnMatch?: boolean;
+  /** Cells past the level edge (default `"edge"`). */
+  outOfBounds?: OutOfBounds;
+  /** Tile offset in pixels. */
+  offsetX?: number;
+  offsetY?: number;
+  /** Group the rule belongs to (`null`: ungrouped). */
+  groupUid?: number | null;
+}
+
+/**
+ * How a rule reads cells past the level edge: `"edge"` repeats the nearest
+ * edge cell, `"fail"` makes the rule not match there, a number reads as
+ * that value (0: empty).
+ */
+export type OutOfBounds = "edge" | "fail" | number;
+
+/** Rules that can be switched on and off together (LDtk's rule groups). */
+export interface AutoRuleGroup {
+  uid: number;
+  name: string;
+  active: boolean;
+}
+
+/** One tile placed by the rules in a cell, with its offset in pixels. */
+export interface AutoPlacement {
+  tile: number;
+  dx: number;
+  dy: number;
+}
+
+/**
+ * Cells that hold more than a single plain tile (several stacked tiles, or
+ * an offset), by cell index. Placements are in priority order: the first
+ * is drawn on top. Other cells only have their tile in the layer data.
+ */
+export type AutoStack = Map<number, AutoPlacement[]>;
+
+/** Effective options of a rule (fields added after the first version are optional). */
+export const ruleStops = (rule: AutoRule) => rule.breakOnMatch !== false;
+export const ruleOutOfBounds = (rule: AutoRule): OutOfBounds => rule.outOfBounds ?? "edge";
+
+/**
+ * Rules in evaluation order with their groups applied: ungrouped rules
+ * first, then each group's rules in group order. Rules of a switched-off
+ * group come back inactive.
+ */
+export function orderedRules(
+  rules: readonly AutoRule[],
+  groups: readonly AutoRuleGroup[] = []
+): AutoRule[] {
+  const known = new Set(groups.map((g) => g.uid));
+  const ungrouped = rules.filter((r) => r.groupUid == null || !known.has(r.groupUid));
+  return [
+    ...ungrouped,
+    ...groups.flatMap((g) =>
+      rules.filter((r) => r.groupUid === g.uid).map((r) => (g.active ? r : { ...r, active: false }))
+    ),
+  ];
 }
 
 /** A new rule: "every cell holding `value`", or an empty 3×3 pattern. */
@@ -94,12 +155,20 @@ export function generateAutoTiles(
   width: number,
   height: number,
   rules: readonly AutoRule[],
-  seed = 0
+  seed = 0,
+  stack?: AutoStack
 ): Int32Array {
   const out = new Int32Array(width * height);
-  generateAutoTilesInto(out, source, width, height, rules, seed);
+  generateAutoTilesInto(out, source, width, height, rules, seed, undefined, stack);
   return out;
 }
+
+const samePlacements = (a: AutoPlacement[] | undefined, b: AutoPlacement[] | undefined) =>
+  a === b ||
+  (!!a &&
+    !!b &&
+    a.length === b.length &&
+    a.every((p, i) => p.tile === b[i].tile && p.dx === b[i].dx && p.dy === b[i].dy));
 
 /**
  * Regenerates the cells of `target` inside `region` (default: everything)
@@ -118,7 +187,9 @@ export function generateAutoTilesInto(
     y: 0,
     width,
     height,
-  }
+  },
+  /** Receives cells with stacked or offset tiles (entries in the region are replaced). */
+  stack?: AutoStack
 ): boolean {
   const x0 = Math.max(0, region.x);
   const y0 = Math.max(0, region.y);
@@ -131,13 +202,29 @@ export function generateAutoTilesInto(
       changed = true;
     }
   };
+  const setStack = (index: number, placements: AutoPlacement[] | undefined) => {
+    if (!stack) return;
+    if (samePlacements(stack.get(index), placements)) return;
+    if (placements) stack.set(index, placements);
+    else stack.delete(index);
+    changed = true;
+  };
   const active = rules.filter((r) => r.active && r.tileIds.length > 0 && r.chance > 0);
   if (active.length === 0) {
-    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) write(y * width + x, 0);
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
+        write(y * width + x, 0);
+        setStack(y * width + x, undefined);
+      }
+    }
     return changed;
   }
 
-  const read = (x: number, y: number) => {
+  /** A source cell, or `null` when the rule fails there (out of bounds). */
+  const read = (x: number, y: number, outOfBounds: OutOfBounds): number | null => {
+    if (x >= 0 && y >= 0 && x < width && y < height) return source[y * width + x];
+    if (outOfBounds === "fail") return null;
+    if (typeof outOfBounds === "number") return outOfBounds;
     const cx = x < 0 ? 0 : x >= width ? width - 1 : x;
     const cy = y < 0 ? 0 : y >= height ? height - 1 : y;
     return source[cy * width + cx];
@@ -161,17 +248,25 @@ export function generateAutoTilesInto(
       }
       variants.push({ fx, fy, checks });
     }
-    return { rule, variants };
+    return {
+      rule,
+      variants,
+      stops: ruleStops(rule),
+      outOfBounds: ruleOutOfBounds(rule),
+      dx: Math.round(rule.offsetX ?? 0),
+      dy: Math.round(rule.offsetY ?? 0),
+    };
   });
 
   for (let y = y0; y < y1; y++) {
     for (let x = x0; x < x1; x++) {
-      let value = 0;
-      rules: for (const { rule, variants } of compiled) {
+      const placements: AutoPlacement[] = [];
+      rules: for (const { rule, variants, stops, outOfBounds, dx: ox, dy: oy } of compiled) {
         for (const { fx, fy, checks } of variants) {
           let ok = true;
           for (const [dx, dy, condition] of checks) {
-            if (!conditionMatches(condition, read(x + dx, y + dy))) {
+            const value = read(x + dx, y + dy, outOfBounds);
+            if (value === null || !conditionMatches(condition, value)) {
               ok = false;
               break;
             }
@@ -183,11 +278,15 @@ export function generateAutoTilesInto(
             if (roll >= rule.chance) continue rules;
           }
           const pick = hashCells(y, x, rule.uid, seed ^ 0x5bd1e995) % rule.tileIds.length;
-          value = encodeTile(rule.tileIds[pick], fx, fy);
-          break rules;
+          placements.push({ tile: encodeTile(rule.tileIds[pick], fx, fy), dx: ox, dy: oy });
+          if (stops) break rules;
+          continue rules;
         }
       }
-      write(y * width + x, value);
+      const index = y * width + x;
+      write(index, placements[0]?.tile ?? 0);
+      const plain = placements.length <= 1 && !placements.some((p) => p.dx || p.dy);
+      setStack(index, plain ? undefined : placements);
     }
   }
   return changed;
