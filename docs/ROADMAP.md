@@ -337,6 +337,11 @@ Issues, improvements and polish candidates collected along the way, including ev
     - **How it is stored:** the layer cell keeps the top tile, so exports and tools stay unchanged. Cells with several tiles or an offset also get an entry in a per-level "auto stack", which is derived from the rules on every regeneration and never saved. The renderers draw from it, and game JSON lists those cells under `tileStacks`.
     - Fixed on the way: regeneration used the level's size in cells, which is wrong for auto-layers with their own grid (item 17); it now uses the layer's.
     - **Still open: auto-layers fed by other auto-layers.** LDtk's auto-layers read an IntGrid layer, as here, so this would go beyond LDtk. It needs rules that match tiles rather than values. Left until there is a concrete use for it.
+  - ✅ **Shared UI components (31):**
+    - **Shared stylesheet:** `@foundry2d/ui/theme/components.css`, imported after `tokens.css` by both apps, holds buttons (`.btn`, `-primary`, `-danger`, `-icon`, `-small`), `.input`, `.tool-btn`, labelled fields (`.field`, `.field-pair`, `.checkbox-field`), panel sections and section titles, hints, the status bar and dialogs (`.dialog`, `-header`, `-body`, `-footer`, `.dialog-compact`). The level designer's rules moved there unchanged.
+    - **Pixel editor on the shared classes:** it styled bare `button` and `select` elements and had its own copies of the dialog, status bar and section label rules. Its markup now uses the shared classes, those copies are gone, and it looks like the level designer (blue primary button, the same inputs, buttons and status bar).
+    - **DOM helpers:** `el()` and `fieldRow()` in `@foundry2d/ui` replace six copies in the level designer.
+    - **Decided against wrapping these as web components.** Native `<dialog>`, buttons and inputs with shared classes cover the tool bar, panel sections, modals and status bar without the cost of custom elements. The existing components (`<layers-panel>`, `<split-button>`, `<project-browser>`, the colour picker) stay. A shared palette or property grid can follow once both apps need the same one; their palettes differ today (colours versus IntGrid values).
   - ⏭ **Packaged project format (6) moved to 8.7.** It is a third file format next to `.f2dsprite` and `.f2dlevel`, so the choice of replacing or adding to them belongs with the OS file association and installable app (34, 38). The Sprite Packer (Phase 9) will need the same machinery: reading ZIPs, including compressed ones from other tools, folder input and asset files. Today only files saved to disk embed tileset images; library and recovery copies already keep them in the asset store.
   - **8.4 is done** apart from item 6 (moved). Items 36–37 are decisions to take with a target engine.
 - **8.5 Features** (in progress): items 9 ✅, 23 ✅, 12 ✅, 13 (partly), 14 ✅, 15 ✅, then 17–20, 30 and 31, roughly in that order.
@@ -410,7 +415,7 @@ Issues, improvements and polish candidates collected along the way, including ev
 
 29. Phase 1 kept `locked` in core but never exposed it. Add a lock toggle to `<layers-panel>` for both apps. The level designer's generated auto-layers show as locked and can't be unlocked.
 30. Phase 7b auto-layer gaps (LDtk has them): several tiles stacked in one cell (rules that don't stop at the first match), rule groups that can be toggled together, per-rule out-of-bounds handling, tile offsets, and auto-layers fed by other auto-layers. ✅ Done in 8.5, except auto-layers fed by other auto-layers (still open, see the 8.5 status).
-31. The target architecture planned shared `@foundry2d/ui` components (tool bar, palette, panel section, property grid, modal, status bar). Both apps still build these in plain HTML. Extract them alongside items 2 and 3.
+31. The target architecture planned shared `@foundry2d/ui` components (tool bar, palette, panel section, property grid, modal, status bar). Both apps still build these in plain HTML. Extract them alongside items 2 and 3. ✅ Done in 8.5 as shared styles and DOM helpers (see the 8.5 status).
 
 **Work files versus export files** (requested 2026-11-14; to check during 8.4)
 

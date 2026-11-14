@@ -1,16 +1,7 @@
+import { el } from "@foundry2d/ui";
 import type { LevelProject } from "../model/LevelProject";
 import { fieldText } from "../model/entities";
 import type { FieldDef, FieldValue } from "../model/types";
-
-const el = <K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  props: Partial<HTMLElementTagNameMap[K]> = {},
-  ...children: (Node | string)[]
-): HTMLElementTagNameMap[K] => {
-  const node = Object.assign(document.createElement(tag), props);
-  node.append(...children);
-  return node;
-};
 
 /** A list of field definitions and how to change it (an entity type's, or the levels'). */
 export interface FieldDefsOwner {

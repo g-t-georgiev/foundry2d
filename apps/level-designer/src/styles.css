@@ -1,4 +1,5 @@
 @import "@foundry2d/ui/theme/tokens.css";
+@import "@foundry2d/ui/theme/components.css";
 
 body {
   display: grid;
@@ -10,100 +11,6 @@ h3,
 p,
 ul {
   margin: 0;
-}
-
-.icon {
-  width: 16px;
-  height: 16px;
-  fill: currentColor;
-  flex: none;
-}
-
-/* ------------------------------------------------------------------ controls */
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px;
-  font: inherit;
-  font-weight: 500;
-  color: var(--theme-text-main);
-  background: var(--theme-bg-card);
-  border: 1px solid var(--theme-border-color);
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.btn:hover:not(:disabled) {
-  background: var(--theme-bg-card-hover);
-}
-
-.btn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.btn:focus-visible,
-.input:focus-visible,
-.tool-btn:focus-visible,
-.palette-item:focus-visible {
-  outline: 2px solid var(--theme-color-accent);
-  outline-offset: 1px;
-}
-
-.btn-primary {
-  background: var(--theme-color-primary);
-  border-color: var(--theme-color-primary);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--theme-color-primary-hover);
-}
-
-.btn-danger:hover:not(:disabled) {
-  background: var(--theme-danger);
-  border-color: var(--theme-danger);
-}
-
-.btn-icon {
-  width: 30px;
-  padding: 0;
-}
-
-.btn-small {
-  height: 24px;
-  padding: 0 8px;
-  font-size: 12px;
-}
-
-.btn-full {
-  width: 100%;
-}
-
-.input {
-  width: 100%;
-  height: 28px;
-  padding: 0 8px;
-  font: inherit;
-  color: var(--theme-text-main);
-  background: var(--theme-bg-input);
-  border: 1px solid var(--theme-border-color);
-  border-radius: 4px;
-  user-select: text;
-}
-
-.label,
-.status-label {
-  color: var(--theme-text-muted);
-  font-size: 12px;
-}
-
-.hint {
-  color: var(--theme-text-muted);
-  font-size: 11px;
 }
 
 /* ------------------------------------------------------------------ toolbar */
@@ -154,12 +61,6 @@ ul {
   outline: none;
 }
 
-.divider {
-  width: 1px;
-  height: 20px;
-  background: var(--theme-border-color);
-}
-
 /* ------------------------------------------------------------------ layout */
 
 .main-layout {
@@ -184,82 +85,10 @@ ul {
   border-left: 1px solid var(--theme-border-color);
 }
 
-.panel-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border-bottom: 1px solid var(--theme-border-color);
-}
-
-.panel-section.flex-expand {
-  flex: 1;
-  min-height: 220px;
-  border-bottom: none;
-}
-
-.section-title {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--theme-text-muted);
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.field.inline {
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-}
-
-.field.inline .input {
-  width: 90px;
-}
-
-.property-row {
-  display: flex;
-  justify-content: space-between;
-}
-
-.property-row .value {
-  font-variant-numeric: tabular-nums;
-}
-
 .tools-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 4px;
-}
-
-.tool-btn {
-  display: grid;
-  place-items: center;
-  height: 36px;
-  color: var(--theme-text-main);
-  background: var(--theme-bg-card);
-  border: 1px solid var(--theme-border-color);
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.tool-btn:hover {
-  background: var(--theme-bg-card-hover);
-}
-
-.tool-btn.active {
-  background: var(--theme-bg-selected);
-  border-color: var(--theme-border-active);
-}
-
-.tool-btn .icon {
-  width: 18px;
-  height: 18px;
 }
 
 .resize summary {
@@ -403,87 +232,13 @@ layers-panel {
 
 /* ------------------------------------------------------------------ status bar */
 
-.statusbar {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  padding: 0 12px;
-  font-size: 12px;
-  background: var(--theme-bg-panel);
-  border-top: 1px solid var(--theme-border-color);
-}
-
-.statusbar-item {
-  display: flex;
-  gap: 6px;
-}
-
-.status-value {
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.statusbar > :not(.statusbar-message) {
-  flex: none;
-}
-
-.statusbar-message {
-  min-width: 0;
-  margin-left: auto;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--theme-color-accent);
-}
-
 /* ------------------------------------------------------------------ dialog */
-
-.dialog {
-  width: min(760px, 92vw);
-  max-height: 86vh;
-  padding: 0;
-  color: var(--theme-text-main);
-  background: var(--theme-bg-panel);
-  border: 1px solid var(--theme-border-color);
-  border-radius: 10px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
-}
-
-.dialog::backdrop {
-  background: rgba(0, 0, 0, 0.55);
-}
-
-.dialog-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--theme-border-color);
-}
-
-.dialog-header h2 {
-  font-size: 15px;
-}
-
-.dialog-body {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 16px;
-}
 
 .dialog-columns {
   display: grid;
   grid-template-columns: 220px 1fr;
   gap: 16px;
   min-height: 300px;
-}
-
-.column-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
 }
 
 .defs-list {
@@ -721,11 +476,6 @@ body {
 
 /* ------------------------------------------------------------------ tiles */
 
-.button-row {
-  display: inline-flex;
-  gap: 4px;
-}
-
 .dialog {
   overflow-y: auto;
 }
@@ -872,31 +622,9 @@ body {
   font-size: 10px;
 }
 
-.field-pair {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.field-pair .input {
-  min-width: 0;
-  flex: 1;
-}
-
 .point-value {
   flex: 1;
   font-variant-numeric: tabular-nums;
-}
-
-.checkbox-field {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.btn.active {
-  border-color: var(--theme-border-active);
-  background: var(--theme-bg-selected);
 }
 
 .fields-table {

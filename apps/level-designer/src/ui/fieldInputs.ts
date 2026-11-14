@@ -1,3 +1,4 @@
+import { el, fieldRow as labelledRow } from "@foundry2d/ui";
 import type { Level, LevelProject } from "../model/LevelProject";
 import {
   fieldText,
@@ -8,24 +9,6 @@ import {
   withEntry,
 } from "../model/entities";
 import type { EntityRef, FieldDef, FieldScalar, FieldValue } from "../model/types";
-
-const el = <K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  props: Partial<HTMLElementTagNameMap[K]> = {},
-  ...children: (Node | string)[]
-): HTMLElementTagNameMap[K] => {
-  const node = Object.assign(document.createElement(tag), props);
-  node.append(...children);
-  return node;
-};
-
-export const labelledRow = (label: string, ...controls: HTMLElement[]) =>
-  el(
-    "label",
-    { className: "field" },
-    el("span", { className: "label", textContent: label }),
-    ...(controls.length === 1 ? controls : [el("span", { className: "field-pair" }, ...controls)])
-  );
 
 /** Picking a value on the canvas (a cell for Point fields, an entity for EntityRef fields). */
 export interface CanvasPick {

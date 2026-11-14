@@ -1,4 +1,5 @@
 @import "@foundry2d/ui/theme/tokens.css";
+@import "@foundry2d/ui/theme/components.css";
 
 /* Short aliases used by this app's rules, mapped onto the shared tokens. */
 :root {
@@ -16,51 +17,6 @@
 body {
   display: grid;
   grid-template-rows: auto 1fr auto;
-}
-
-button,
-select {
-  font: inherit;
-  color: var(--text);
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 4px 10px;
-  cursor: pointer;
-}
-
-button:hover:not(:disabled),
-select:hover {
-  background: #363a41;
-}
-
-button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-button:focus-visible,
-select:focus-visible,
-input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-button.primary {
-  background: #1f7a3a;
-  border-color: #2a9a4b;
-}
-
-button.primary:hover:not(:disabled) {
-  background: #24904a;
-}
-
-.label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
 }
 
 /* ------------------------------------------------------------------ toolbar */
@@ -91,13 +47,6 @@ button.primary:hover:not(:disabled) {
   gap: 4px;
   padding-left: 8px;
   border-left: 1px solid var(--border);
-}
-
-.divider {
-  width: 1px;
-  align-self: stretch;
-  background: var(--border);
-  margin: 0 4px;
 }
 
 .toggle {
@@ -146,29 +95,6 @@ button.primary:hover:not(:disabled) {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 4px;
-}
-
-.tool {
-  display: grid;
-  place-items: center;
-  height: 40px;
-  padding: 0;
-}
-
-.tool svg {
-  width: 20px;
-  height: 20px;
-  fill: currentColor;
-}
-
-.tool.active,
-.size.active {
-  background: var(--accent-bg);
-  border-color: var(--accent);
-}
-
-.size {
-  padding: 4px 0;
 }
 
 .color-picker {
@@ -225,21 +151,6 @@ layers-panel {
 
 /* ------------------------------------------------------------------ status bar */
 
-.status-bar {
-  display: flex;
-  gap: 18px;
-  padding: 3px 10px;
-  font-size: 12px;
-  color: var(--muted);
-  background: var(--panel);
-  border-top: 1px solid var(--border);
-  font-variant-numeric: tabular-nums;
-}
-
-.status-bar .message {
-  margin-left: auto;
-}
-
 .sprite-name {
   width: 140px;
   padding: 4px 8px;
@@ -282,25 +193,12 @@ layers-panel {
   gap: 6px;
 }
 
-.timeline-rail button {
-  padding: 2px 8px;
-}
-
 .inline-field {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-size: 12px;
   color: var(--muted);
-}
-
-.inline-field input[type="number"] {
-  width: 64px;
-  padding: 2px 4px;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
 }
 
 .timeline .hint {
@@ -372,10 +270,6 @@ layers-panel {
   justify-content: space-between;
 }
 
-.icon-button {
-  padding: 2px 8px;
-}
-
 .preview-box {
   display: grid;
   place-items: center;
@@ -391,42 +285,6 @@ layers-panel {
 }
 
 /* ------------------------------------------------------------------ export dialog */
-
-.dialog {
-  width: min(520px, 94vw);
-  padding: 0;
-  color: var(--text);
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-}
-
-.dialog::backdrop {
-  background: rgba(0, 0, 0, 0.55);
-}
-
-.dialog-header,
-.dialog-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 14px;
-}
-
-.dialog-header {
-  border-bottom: 1px solid var(--border);
-}
-
-.dialog-header h2 {
-  margin: 0;
-  font-size: 15px;
-}
-
-.dialog-footer {
-  justify-content: flex-end;
-  border-top: 1px solid var(--border);
-}
 
 .tabs {
   display: flex;
@@ -476,15 +334,6 @@ layers-panel {
   grid-column: 1 / -1;
 }
 
-.dialog-body input[type="text"],
-.dialog-body input[type="number"] {
-  padding: 4px 6px;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-}
-
 .dialog-body .hint {
   grid-column: 1 / -1;
   margin: 0;
@@ -510,36 +359,47 @@ layers-panel {
   gap: 4px;
 }
 
-.palette-actions button,
-.palette-actions select {
-  padding: 2px 6px;
-  font-size: 12px;
-}
-
 .palette-actions select {
   grid-column: 1 / -1;
 }
 
-[data-mirror].active {
-  background: var(--accent-bg);
-  border-color: var(--accent);
+/* ------------------------------------------------------------------ shared components, local sizes */
+
+.toolbar .input {
+  width: auto;
 }
 
-/* Icon-only toolbar buttons (undo, redo). */
-.icon-button {
-  display: inline-grid;
-  place-items: center;
-  width: 30px;
-  padding: 0;
+.tool-grid .tool-btn {
+  height: 40px;
 }
 
-.icon-button svg {
-  width: 16px;
-  height: 16px;
+.tool-btn svg {
+  width: 20px;
+  height: 20px;
   fill: currentColor;
 }
 
-/* Icons fade more than text at the same opacity; keep them findable when disabled. */
-.icon-button:disabled {
-  opacity: 0.55;
+.size-grid .btn {
+  height: 32px;
+  padding: 0;
+}
+
+.inline-field .input {
+  width: 72px;
+  height: 24px;
+}
+
+.palette-actions .btn,
+.palette-actions .input {
+  height: 26px;
+  padding: 0 6px;
+  font-size: 12px;
+}
+
+/* Buttons built in code (frames, swatches) keep a plain look. */
+.frame,
+.swatch {
+  border: 1px solid var(--theme-border-color);
+  border-radius: 4px;
+  cursor: pointer;
 }

@@ -1,3 +1,4 @@
+import { el, fieldRow as field } from "@foundry2d/ui";
 import type { LevelProject } from "../model/LevelProject";
 import { tilesetGrid } from "../model/tiles";
 import type { LayerDef, TilesetDef } from "../model/types";
@@ -13,24 +14,6 @@ export interface SettingsDialogHooks {
   /** Opens the rules editor of an auto-layer. */
   editRules: (layerDefUid: number) => void;
 }
-
-const el = <K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  props: Partial<HTMLElementTagNameMap[K]> = {},
-  ...children: (Node | string)[]
-): HTMLElementTagNameMap[K] => {
-  const node = Object.assign(document.createElement(tag), props);
-  node.append(...children);
-  return node;
-};
-
-const field = (label: string, control: HTMLElement): HTMLLabelElement =>
-  el(
-    "label",
-    { className: "field" },
-    el("span", { className: "label", textContent: label }),
-    control
-  );
 
 /** Reads an image file into a PNG/whatever data URL plus its pixel size. */
 export async function readImageFile(

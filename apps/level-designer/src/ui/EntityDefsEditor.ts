@@ -1,3 +1,4 @@
+import { el, fieldRow as field } from "@foundry2d/ui";
 import type { LevelProject } from "../model/LevelProject";
 import { tilesetGrid } from "../model/tiles";
 import { fieldText } from "../model/entities";
@@ -15,24 +16,6 @@ import {
 export interface EntityDefsEditorHooks {
   confirm: (message: string) => boolean;
 }
-
-const el = <K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  props: Partial<HTMLElementTagNameMap[K]> = {},
-  ...children: (Node | string)[]
-): HTMLElementTagNameMap[K] => {
-  const node = Object.assign(document.createElement(tag), props);
-  node.append(...children);
-  return node;
-};
-
-const field = (label: string, ...controls: HTMLElement[]): HTMLLabelElement =>
-  el(
-    "label",
-    { className: "field" },
-    el("span", { className: "label", textContent: label }),
-    ...controls
-  );
 
 const PIVOTS: { label: string; x: number; y: number }[] = [
   { label: "Top left", x: 0, y: 0 },

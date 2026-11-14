@@ -1,3 +1,4 @@
+import { el } from "@foundry2d/ui";
 import type { LevelProject } from "../model/LevelProject";
 import {
   ANY_VALUE,
@@ -12,16 +13,6 @@ import {
 import { tileSourceRect, tilesetGrid, type TileSelection } from "../model/tiles";
 import type { LayerDef, TilesetDef } from "../model/types";
 import TilesetPickerView from "./TilesetPickerView";
-
-const el = <K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  props: Partial<HTMLElementTagNameMap[K]> = {},
-  ...children: (Node | string)[]
-): HTMLElementTagNameMap[K] => {
-  const node = Object.assign(document.createElement(tag), props);
-  node.append(...children);
-  return node;
-};
 
 /** Bounding rectangle (in tiles) of a set of tile ids, for the picker highlight. */
 function selectionOf(tileset: TilesetDef, tileIds: number[]): TileSelection | null {
