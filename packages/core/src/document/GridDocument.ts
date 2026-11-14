@@ -41,11 +41,18 @@ export interface AddLayerOptions {
   index?: number;
   /** Make the new layer active. Defaults to `true` when no layer is active yet. */
   activate?: boolean;
+  /** Cell size in document cells (see `GridLayer.scale`). Defaults to 1. */
+  scale?: number;
   data?: ArrayLike<number>;
 }
 
 /**
- * An ordered stack of equally sized `GridLayer`s.
+ * An ordered stack of `GridLayer`s covering the same area.
+ *
+ * Most layers have one cell per document cell. A layer with a `scale` other
+ * than 1 has bigger (or smaller) cells and so a different size in cells,
+ * always enough to cover the document (see `layerSize`); LDtk calls this a
+ * per-layer grid size.
  *
  * Index 0 is the bottom-most layer. All structural mutations emit events so
  * UI and renderers can stay in sync without polling.
@@ -75,17 +82,33 @@ export class GridDocument<Buffer extends CellBuffer = Uint32Array> {
     return this.options.emptyValue;
   }
 
+  /**
+   * Size in cells of a layer whose cells are `scale` document cells wide:
+   * enough cells to cover the document (the last row and column may stick
+   * out when the sizes don't divide).
+   */
+  public layerSize(scale = 1, width = this.width, height = this.height) {
+    // The epsilon keeps float noise (e.g. 3 / 1.5) from adding a cell.
+    return {
+      width: Math.max(1, Math.ceil(width / scale - 1e-9)),
+      height: Math.max(1, Math.ceil(height / scale - 1e-9)),
+    };
+  }
+
   /** Creates a detached layer matching this document's size and buffer type. */
   public createLayer(options: AddLayerOptions = {}): GridLayer<Buffer> {
     const counter = ++this.layerIdCounter;
     let id = options.id ?? `layer_${counter}`;
     while (this.getLayer(id)) id = `layer_${++this.layerIdCounter}`;
+    const scale = options.scale ?? 1;
+    const size = this.layerSize(scale);
 
     return new GridLayer<Buffer>({
       id,
       name: options.name ?? `Layer ${counter}`,
-      width: this.width,
-      height: this.height,
+      width: size.width,
+      height: size.height,
+      scale,
       emptyValue: this.options.emptyValue,
       bufferCtor: this.options.bufferCtor,
       visible: options.visible,
@@ -109,8 +132,9 @@ export class GridDocument<Buffer extends CellBuffer = Uint32Array> {
 
   /** Inserts an existing layer at `index` (clamped). */
   public insertLayer(layer: GridLayer<Buffer>, index: number, activate = true): void {
-    if (layer.width !== this.width || layer.height !== this.height) {
-      layer.resize(this.width, this.height);
+    const size = this.layerSize(layer.scale);
+    if (layer.width !== size.width || layer.height !== size.height) {
+      layer.resize(size.width, size.height);
     }
     const at = Math.max(0, Math.min(index, this.layers.length));
     this.layers.splice(at, 0, layer);
@@ -142,9 +166,39 @@ export class GridDocument<Buffer extends CellBuffer = Uint32Array> {
     this.width = newWidth;
     this.height = newHeight;
     for (const layer of this.layers) {
-      layer.resize(newWidth, newHeight, offsetX, offsetY);
+      const size = this.layerSize(layer.scale);
+      // Offsets are in document cells; scaled layers move by whole cells of their own.
+      layer.resize(
+        size.width,
+        size.height,
+        Math.round(offsetX / layer.scale),
+        Math.round(offsetY / layer.scale)
+      );
     }
     this.events.emit("resized", { width: newWidth, height: newHeight });
+  }
+
+  /**
+   * Gives a layer another cell size. `resample` keeps the picture in place
+   * at the new resolution (see `GridLayer.rescale`); otherwise cells keep
+   * their indices and the layer is only cropped or extended.
+   */
+  public setLayerScale(layerId: string, scale: number, resample = true): boolean {
+    const layer = this.getLayer(layerId);
+    if (!layer) return false;
+    const size = this.layerSize(scale);
+    if (layer.scale === scale && layer.width === size.width && layer.height === size.height) {
+      return false;
+    }
+    if (resample) {
+      layer.rescale(scale, size.width, size.height);
+    } else {
+      layer.resize(size.width, size.height);
+      layer.scale = scale;
+    }
+    this.events.emit("layer:updated", { layerId, property: "scale" });
+    this.notifyCellsChanged(layerId);
+    return true;
   }
 
   /**

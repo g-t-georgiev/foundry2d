@@ -255,17 +255,23 @@ export class WorldScene implements WorkspaceScene {
         cache = new LayerBitmapCache();
         this.caches.set(level.uid, cache);
       }
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(r.x, r.y, r.width, r.height);
+      ctx.clip();
       for (const layer of level.doc.layers) {
         if (!layer.visible || layer.opacity <= 0) continue;
         ctx.globalAlpha = layer.opacity;
+        const dest = project.layerRect(layer, r);
         const custom = this.layerRenderer(layer, level);
         if (custom) {
-          custom(ctx, layer, r, visible);
+          custom(ctx, layer, dest, visible);
           continue;
         }
         const bitmap = cache.get(layer, project.colorizerFor(layer.id), project.paletteVersion);
-        ctx.drawImage(bitmap, r.x, r.y, r.width, r.height);
+        ctx.drawImage(bitmap, dest.x, dest.y, dest.width, dest.height);
       }
+      ctx.restore();
       cache.prune(level.doc.layers.map((l) => l.id));
     }
     ctx.globalAlpha = 1;

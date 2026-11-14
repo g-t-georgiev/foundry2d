@@ -25,22 +25,28 @@ export function renderProjectThumbnail(project: LevelProject, maxSize = 160): st
     ctx.globalAlpha = 1;
     ctx.fillStyle = project.levelBackground(level);
     ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(rect.x, rect.y, rect.width, rect.height);
+    ctx.clip();
     for (const layer of level.doc.layers) {
       if (!layer.visible || layer.opacity <= 0) continue;
       ctx.globalAlpha = layer.opacity;
+      const dest = project.layerRect(layer, rect);
       const custom = renderers(layer, level);
       if (custom) {
-        custom(ctx, layer, rect, rect);
+        custom(ctx, layer, dest, rect);
         continue;
       }
       ctx.drawImage(
         cache.get(layer, project.colorizerFor(layer.id), project.paletteVersion),
-        rect.x,
-        rect.y,
-        rect.width,
-        rect.height
+        dest.x,
+        dest.y,
+        dest.width,
+        dest.height
       );
     }
+    ctx.restore();
     cache.clear();
   }
   return canvas.toDataURL("image/png");

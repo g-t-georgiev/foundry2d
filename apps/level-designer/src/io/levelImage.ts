@@ -58,19 +58,21 @@ export async function renderLevelCanvas(
   const layers = options.layerId
     ? level.doc.layers.filter((l) => l.id === options.layerId)
     : level.doc.layers.filter((l) => l.visible && l.opacity > 0);
+  // Layers with their own grid may stick out of the level; the canvas edge clips them.
   for (const layer of layers) {
     ctx.globalAlpha = options.layerId ? 1 : layer.opacity;
+    const dest = project.layerRect(layer, rect);
     const custom = renderers(layer, level);
     if (custom) {
-      custom(ctx, layer, rect, rect);
+      custom(ctx, layer, dest, rect);
       continue;
     }
     ctx.drawImage(
       cache.get(layer, project.colorizerFor(layer.id), project.paletteVersion),
-      0,
-      0,
-      width,
-      height
+      dest.x,
+      dest.y,
+      dest.width,
+      dest.height
     );
   }
   cache.clear();

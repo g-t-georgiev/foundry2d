@@ -86,6 +86,11 @@ export interface GameLevelFile {
   fields?: Record<string, GameFieldValue>;
   layers: Record<string, number[]>;
   /**
+   * Present when layers have their own grid size: their arrays are
+   * `columns × rows` of `gridSize`-pixel cells instead of the level's.
+   */
+  layerGrids?: Record<string, { gridSize: number; columns: number; rows: number }>;
+  /**
    * Present when the level has Tiles layers. Their cells hold
    * `tileId + 1` with flip flags in bits 29 (X) and 30 (Y); 0 is empty.
    */
@@ -144,6 +149,16 @@ export function toGameFormat(project: LevelProject, level: Level): GameLevelFile
     const layer = level.doc.getLayer(layerIdFor(def.uid));
     if (layer) layers[def.identifier] = Array.from(layer.data);
   }
+  const layerGrids: NonNullable<GameLevelFile["layerGrids"]> = {};
+  for (const def of project.defs.layers) {
+    const layer = level.doc.getLayer(layerIdFor(def.uid));
+    if (def.type === "Entities" || def.gridSize === undefined || !layer) continue;
+    layerGrids[def.identifier] = {
+      gridSize: def.gridSize,
+      columns: layer.width,
+      rows: layer.height,
+    };
+  }
   const tileLayers: NonNullable<GameLevelFile["tileLayers"]> = {};
   for (const def of project.defs.layers) {
     if (def.type !== "Tiles") continue;
@@ -158,6 +173,7 @@ export function toGameFormat(project: LevelProject, level: Level): GameLevelFile
   }
   return {
     ...(Object.keys(tileLayers).length ? { tileLayers } : {}),
+    ...(Object.keys(layerGrids).length ? { layerGrids } : {}),
     ...(Object.keys(entities).length ? { entities } : {}),
     metadata: {
       name: project.name,

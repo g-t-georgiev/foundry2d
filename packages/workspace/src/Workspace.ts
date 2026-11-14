@@ -246,6 +246,11 @@ export class Workspace {
 
   // ------------------------------------------------------------------ pointer
 
+  /** Grid cell under a world point, as the scene counts cells. */
+  private toGrid(world: Position): Position {
+    return this.scene?.worldToGrid?.(world) ?? this.camera.worldToGrid(world.x, world.y);
+  }
+
   /** Converts a DOM event to a scene event in all coordinate spaces. */
   toScenePointer(ev: MouseEvent, local: Position): ScenePointerEvent {
     const world = this.camera.localToWorld(local.x, local.y);
@@ -254,7 +259,7 @@ export class Workspace {
       button: ev.button,
       local,
       world,
-      grid: this.camera.worldToGrid(world.x, world.y),
+      grid: this.toGrid(world),
       shiftKey: ev.shiftKey,
       altKey: ev.altKey,
       ctrlKey: ev.ctrlKey,
@@ -274,7 +279,7 @@ export class Workspace {
       return;
     }
     const world = this.camera.localToWorld(local.x, local.y);
-    const grid = this.camera.worldToGrid(world.x, world.y);
+    const grid = this.toGrid(world);
     const inside =
       local.x >= this.camera.uiPadding &&
       local.y >= this.camera.uiPadding &&

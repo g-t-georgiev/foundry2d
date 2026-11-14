@@ -106,11 +106,12 @@ export class GridDocumentScene<Buffer extends CellBuffer = CellBuffer> implement
       getColorizer: options.getColorizer,
       getLayerRenderer: options.getLayerRenderer,
       getPaletteVersion: options.getPaletteVersion,
+      getClip: () => this.getBounds(),
     });
     this.gridPass = new GridLinesPass({
       getBounds: () =>
         this.isPreview || !(this.options.showGrid?.() ?? true) ? null : getBounds(),
-      step: this.cellSize,
+      step: () => this.activeCellSize(),
       majorEvery: options.majorGridEvery,
     });
 
@@ -147,6 +148,18 @@ export class GridDocumentScene<Buffer extends CellBuffer = CellBuffer> implement
 
   getPasses(): RenderPass[] {
     return this.passes;
+  }
+
+  /** World size of a cell of the active layer (its own grid, when it has one). */
+  activeCellSize(): Dimensions {
+    const scale = this.options.doc.getActiveLayer()?.scale ?? 1;
+    return { width: this.cellSize.width * scale, height: this.cellSize.height * scale };
+  }
+
+  /** Pointer cells are cells of the active layer, so tools work in its grid. */
+  worldToGrid(world: Position): Position {
+    const cell = this.activeCellSize();
+    return { x: Math.floor(world.x / cell.width), y: Math.floor(world.y / cell.height) };
   }
 
   getCursor(): string {
@@ -275,13 +288,16 @@ export class GridDocumentScene<Buffer extends CellBuffer = CellBuffer> implement
     const { doc, tools } = this.options;
     const tool = tools.activeTool;
     const { grid } = rc.pointer;
-    if (grid.x < 0 || grid.y < 0 || grid.x >= doc.width || grid.y >= doc.height) return null;
+    const layer = doc.getActiveLayer();
+    const cols = layer?.width ?? doc.width;
+    const rows = layer?.height ?? doc.height;
+    if (grid.x < 0 || grid.y < 0 || grid.x >= cols || grid.y >= rows) return null;
 
     const isBrush = tool === "pen" || tool === "eraser";
     const size = isBrush ? Math.max(1, this.options.getBrushSize?.() ?? 1) : 1;
     const half = Math.floor(size / 2);
     const origin: Position = { x: grid.x - half, y: grid.y - half };
-    const { width: cw, height: ch } = this.cellSize;
+    const { width: cw, height: ch } = this.activeCellSize();
 
     const editable = doc.getActiveLayer()?.isEditable ?? false;
     let fill: string | undefined;

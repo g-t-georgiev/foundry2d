@@ -3,6 +3,7 @@ import {
   GridDocument,
   unionRects,
   PixelUtils,
+  type Position,
   type Rect,
   type Unsubscribe,
 } from "@foundry2d/core";
@@ -54,6 +55,10 @@ interface LayerSnapshot {
   visible: boolean;
   opacity: number;
   locked: boolean;
+  /** Cell size in level cells, and the size in cells it gives (see `layerScale`). */
+  scale: number;
+  width: number;
+  height: number;
   /** Never mutated after capture, so snapshots can share it. */
   data: Int32Array;
 }
@@ -207,8 +212,60 @@ export class LevelProject {
     const next = Math.max(1, Math.round(size));
     if (next === this.gridSize) return;
     this.gridSize = next;
+    for (const def of this.defs.layers) {
+      if (def.gridSize === next) delete def.gridSize;
+    }
+    this.syncLayerScales(false);
     this.definitionVersion++;
     this.events.emit("settings:changed");
+  }
+
+  /**
+   * World rectangle of a level layer whose top-left corner is at `origin`.
+   * Layers with their own grid can be a little bigger than the level (their
+   * last cells stick out when the sizes don't divide); callers clip.
+   */
+  layerRect(layer: { width: number; height: number; scale: number }, origin: Position): Rect {
+    const cell = this.gridSize * layer.scale;
+    return { x: origin.x, y: origin.y, width: layer.width * cell, height: layer.height * cell };
+  }
+
+  /** Cell size in pixels of a layer (its own grid, else the project's). */
+  layerGridSize(def: LayerDef | undefined): number {
+    return def?.gridSize ?? this.gridSize;
+  }
+
+  /** Cell size of a layer in level cells (1 unless the layer has its own grid). */
+  layerScale(def: LayerDef | undefined): number {
+    return this.layerGridSize(def) / this.gridSize;
+  }
+
+  /**
+   * Gives a layer its own grid (`null`: the project grid). Existing cells are
+   * resampled to the new size; the layer's auto-layers follow it.
+   */
+  setLayerGridSize(uid: number, size: number | null): void {
+    const def = this.getLayerDef(uid);
+    if (!def || this.isAutoLayer(def)) return;
+    const next = size === null ? this.gridSize : Math.max(1, Math.round(size));
+    if (next === this.layerGridSize(def)) return;
+    const targets = [def, ...this.defs.layers.filter((d) => d.autoSourceUid === uid)];
+    for (const target of targets) {
+      if (next === this.gridSize) delete target.gridSize;
+      else target.gridSize = next;
+    }
+    this.syncLayerScales(true);
+    for (const target of targets) if (target !== def) this.regenerateAutoLayers(target.uid);
+    this.defsChanged();
+  }
+
+  /** Brings every level layer to its definition's scale. */
+  private syncLayerScales(resample: boolean): void {
+    for (const level of this.levels) {
+      for (const def of this.defs.layers) {
+        level.doc.setLayerScale(layerIdFor(def.uid), this.layerScale(def), resample);
+      }
+    }
   }
 
   setWorldLayout(layout: WorldLayout): void {
@@ -248,7 +305,12 @@ export class LevelProject {
       bufferCtor: Int32Array,
     });
     for (const def of this.defs.layers) {
-      doc.addLayer({ id: layerIdFor(def.uid), name: def.identifier, activate: false });
+      doc.addLayer({
+        id: layerIdFor(def.uid),
+        name: def.identifier,
+        scale: this.layerScale(def),
+        activate: false,
+      });
     }
     doc.setActiveLayer(doc.layers.at(-1)?.id ?? null);
     const uid = options.uid ?? this.allocateUid();
@@ -322,6 +384,7 @@ export class LevelProject {
         name: layer.name,
         visible: layer.visible,
         opacity: layer.opacity,
+        scale: layer.scale,
         data: layer.data,
         activate: false,
       });
@@ -475,7 +538,12 @@ export class LevelProject {
     };
     this.defs.layers.push(def);
     for (const level of this.levels) {
-      level.doc.addLayer({ id: layerIdFor(def.uid), name: def.identifier, activate: false });
+      level.doc.addLayer({
+        id: layerIdFor(def.uid),
+        name: def.identifier,
+        scale: this.layerScale(def),
+        activate: false,
+      });
     }
     this.defsChanged();
     return def;
@@ -492,7 +560,12 @@ export class LevelProject {
     };
     this.defs.layers.push(def);
     for (const level of this.levels) {
-      level.doc.addLayer({ id: layerIdFor(def.uid), name: def.identifier, activate: false });
+      level.doc.addLayer({
+        id: layerIdFor(def.uid),
+        name: def.identifier,
+        scale: this.layerScale(def),
+        activate: false,
+      });
     }
     this.defsChanged();
     return def;
@@ -508,7 +581,12 @@ export class LevelProject {
     };
     this.defs.layers.push(def);
     for (const level of this.levels) {
-      level.doc.addLayer({ id: layerIdFor(def.uid), name: def.identifier, activate: false });
+      level.doc.addLayer({
+        id: layerIdFor(def.uid),
+        name: def.identifier,
+        scale: this.layerScale(def),
+        activate: false,
+      });
     }
     this.defsChanged();
     return def;
@@ -704,6 +782,12 @@ export class LevelProject {
     const wasAuto = this.isAutoLayer(def);
     def.autoSourceUid = sourceUid;
     def.autoRules ??= [];
+    const source = this.autoSourceOf(def);
+    if (source && this.layerGridSize(source) !== this.layerGridSize(def)) {
+      if (source.gridSize === undefined) delete def.gridSize;
+      else def.gridSize = source.gridSize;
+      this.syncLayerScales(false);
+    }
     for (const level of this.levels) {
       // A layer that stops being generated becomes paintable again.
       const layer = level.doc.getLayer(layerIdFor(def.uid));
@@ -832,6 +916,7 @@ export class LevelProject {
         visible: original?.visible ?? true,
         opacity: original?.opacity ?? 1,
         locked: this.isAutoLayer(copy) || (original?.locked ?? false),
+        scale: this.layerScale(copy),
         data: original?.data,
         activate: false,
       });
@@ -1375,6 +1460,9 @@ export class LevelProject {
           visible: layer.visible,
           opacity: layer.opacity,
           locked: layer.locked,
+          scale: layer.scale,
+          width: layer.width,
+          height: layer.height,
           data,
         });
       }
@@ -1433,7 +1521,12 @@ export class LevelProject {
       layer.visible = s.visible;
       layer.opacity = s.opacity;
       layer.locked = s.locked;
-      if (!sameCells(layer.data, s.data)) {
+      if (layer.scale !== s.scale || layer.width !== s.width || layer.height !== s.height) {
+        layer.scale = s.scale;
+        layer.restore(s.width, s.height, new Int32Array(s.data));
+        doc.events.emit("layer:updated", { layerId: id, property: "scale" });
+        doc.notifyCellsChanged(id);
+      } else if (!sameCells(layer.data, s.data)) {
         layer.data.set(s.data);
         layer.version++;
         doc.notifyCellsChanged(id);
@@ -1560,6 +1653,7 @@ const DEFINITION_EDITS: Partial<Record<keyof LevelProject, string>> = {
   updateTileset: "Edit tileset",
   removeTileset: "Delete tileset",
   setAutoSource: "Change auto-tiling",
+  setLayerGridSize: "Change layer grid",
   addAutoRule: "Add rule",
   updateAutoRule: "Edit rule",
   removeAutoRule: "Delete rule",

@@ -182,8 +182,9 @@ export class EntityController implements ScenePointerDelegate {
       return true;
     }
     const copy = cloneInstance(selected, newIid());
-    copy.x += project.gridSize;
-    copy.y += project.gridSize;
+    const step = this.gridOf(selected.layerUid);
+    copy.x += step;
+    copy.y += step;
     const index = level.entities.findIndex((e) => e.iid === selected.iid) + 1;
     this.hooks.history.execute(new AddEntityCommand(project, level, copy, index));
     this.select(copy.iid);
@@ -195,7 +196,7 @@ export class EntityController implements ScenePointerDelegate {
     const selected = this.selected;
     if (!selected) return false;
     if (this.blocked()) return true;
-    const step = fine ? 1 : this.hooks.getProject().gridSize;
+    const step = fine ? 1 : this.gridOf(selected.layerUid);
     this.commitPosition(selected, selected.x + dx * step, selected.y + dy * step, "Move entity");
     return true;
   }
@@ -360,7 +361,7 @@ export class EntityController implements ScenePointerDelegate {
       }
       return;
     }
-    const { gridSize } = this.hooks.getProject();
+    const gridSize = this.gridOf(drag.instance.layerUid);
     const rawX = ev.world.x - drag.start.x;
     const rawY = ev.world.y - drag.start.y;
     const dx = ev.shiftKey ? Math.round(rawX) : Math.round(rawX / gridSize) * gridSize;
@@ -431,9 +432,9 @@ export class EntityController implements ScenePointerDelegate {
       ? { x: Math.round(ev.world.x), y: Math.round(ev.world.y) }
       : snapToCell(
           def,
-          Math.floor(ev.world.x / project.gridSize),
-          Math.floor(ev.world.y / project.gridSize),
-          project.gridSize
+          Math.floor(ev.world.x / this.gridOf()),
+          Math.floor(ev.world.y / this.gridOf()),
+          this.gridOf()
         );
 
     if (this.atLimit(def)) {
@@ -556,6 +557,13 @@ export class EntityController implements ScenePointerDelegate {
 
   get project(): LevelProject {
     return this.hooks.getProject();
+  }
+
+  /** Snapping step in pixels: the grid of an Entities layer (the active one by default). */
+  private gridOf(layerUid?: number): number {
+    const project = this.hooks.getProject();
+    const def = layerUid === undefined ? this.activeLayerDef() : project.getLayerDef(layerUid);
+    return project.layerGridSize(def);
   }
 
   get level(): Level {

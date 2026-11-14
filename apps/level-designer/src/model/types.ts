@@ -50,6 +50,11 @@ export interface LayerDef {
   autoRules?: AutoRule[];
   /** Varies random choices (tile variants, chance); "Reshuffle" changes it. */
   autoSeed?: number;
+  /**
+   * Cell size in pixels when it differs from the project grid (LDtk's
+   * per-layer grid). Auto-layers always use their source's grid.
+   */
+  gridSize?: number;
 }
 
 export interface ProjectDefs {

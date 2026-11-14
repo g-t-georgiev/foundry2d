@@ -315,7 +315,12 @@ export default class SettingsDialog {
             : def.type === "Entities"
               ? "Entities"
               : `Tiles · ${project.getTileset(def.tilesetUid)?.identifier ?? "no tileset"}`;
-        const li = el("li", { textContent: def.identifier }, el("small", { textContent: meta }));
+        const grid = def.gridSize === undefined ? "" : ` · ${def.gridSize}px grid`;
+        const li = el(
+          "li",
+          { textContent: def.identifier },
+          el("small", { textContent: meta + grid })
+        );
         li.dataset.uid = String(def.uid);
         li.setAttribute("role", "option");
         li.setAttribute("aria-selected", String(def.uid === this.selectedLayerUid));
@@ -353,6 +358,45 @@ export default class SettingsDialog {
     this.renderLevelsTab(project);
   }
 
+  /** The layer's own grid size (LDtk's per-layer grid); empty uses the project grid. */
+  private layerGridField(project: LevelProject, def: LayerDef): HTMLElement {
+    const source = project.autoSourceOf(def);
+    const input = el("input", {
+      className: "input input-small",
+      type: "number",
+      min: "1",
+      step: "1",
+      placeholder: String(project.gridSize),
+      value: def.gridSize === undefined ? "" : String(def.gridSize),
+      disabled: source !== undefined,
+    });
+    input.setAttribute("aria-label", "Layer grid size in pixels");
+    input.addEventListener("change", () => {
+      const text = input.value.trim();
+      const size = Number(text);
+      if (text !== "" && !(Number.isInteger(size) && size > 0)) {
+        input.value = def.gridSize === undefined ? "" : String(def.gridSize);
+        return;
+      }
+      project.setLayerGridSize(def.uid, text === "" ? null : size);
+      this.render();
+    });
+    const hint = source
+      ? `Follows its source layer "${source.identifier}".`
+      : def.type === "Entities"
+        ? "Entities snap to this grid. Empty: the project grid."
+        : "Empty: the project grid. Changing it resamples painted cells; Ctrl+Z undoes it.";
+    return field(
+      "Grid size (px)",
+      el(
+        "span",
+        { className: "button-row" },
+        input,
+        el("span", { className: "hint", textContent: hint })
+      )
+    );
+  }
+
   private renderLayerEditor(project: LevelProject, def: LayerDef): HTMLElement[] {
     const nameInput = el("input", { className: "input", value: def.identifier, spellcheck: false });
     nameInput.addEventListener("change", () => {
@@ -373,7 +417,10 @@ export default class SettingsDialog {
       this.render();
     });
 
-    const parts: HTMLElement[] = [field("Identifier (used as the export key)", nameInput)];
+    const parts: HTMLElement[] = [
+      field("Identifier (used as the export key)", nameInput),
+      this.layerGridField(project, def),
+    ];
 
     if (def.type === "Entities") {
       const placed = project.levels.reduce(

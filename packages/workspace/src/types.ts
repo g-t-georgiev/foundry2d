@@ -25,6 +25,11 @@ export interface ScenePointerEvent {
 export interface WorkspaceScene {
   /** World size of one grid cell; used for pointer → grid mapping. */
   readonly cellSize: Dimensions;
+  /**
+   * Pointer → grid mapping when cells are not all `cellSize` (e.g. the
+   * active layer has its own grid). Defaults to the camera's mapping.
+   */
+  worldToGrid?(world: Position): Position;
   /** Content bounds in world units for fit-to-view and pan clamping. `null` = unbounded. */
   getBounds(): Rect | null;
   /** Passes drawn for this scene (the workspace appends its own overlays such as rulers). */

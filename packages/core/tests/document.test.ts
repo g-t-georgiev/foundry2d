@@ -182,3 +182,39 @@ describe("serialization", () => {
     expect(copy.getLayer(b.id)?.get(0, 0)).toBe(2);
   });
 });
+
+describe("layers with their own cell size (scale)", () => {
+  const make = () =>
+    new GridDocument<Uint32Array>({ width: 6, height: 4, emptyValue: 0, bufferCtor: Uint32Array });
+
+  it("sizes scaled layers to cover the document", () => {
+    const doc = make();
+    const coarse = doc.addLayer({ name: "coarse", scale: 4 });
+    const fine = doc.addLayer({ name: "fine", scale: 0.5 });
+    expect([coarse.width, coarse.height]).toEqual([2, 1]);
+    expect([fine.width, fine.height]).toEqual([12, 8]);
+    expect(doc.layerSize(1.5)).toEqual({ width: 4, height: 3 });
+  });
+
+  it("resizes scaled layers with offsets in their own cells", () => {
+    const doc = make();
+    const coarse = doc.addLayer({ name: "coarse", scale: 2 });
+    coarse.set(0, 0, 7);
+    doc.resize(10, 4, 4, 0);
+    expect([coarse.width, coarse.height]).toEqual([5, 2]);
+    expect(coarse.get(2, 0)).toBe(7);
+  });
+
+  it("resamples when the scale changes, keeping the picture in place", () => {
+    const doc = make();
+    const layer = doc.addLayer("a");
+    layer.set(2, 1, 5);
+    layer.set(3, 1, 5);
+    expect(doc.setLayerScale(layer.id, 2)).toBe(true);
+    expect([layer.width, layer.height, layer.scale]).toEqual([3, 2, 2]);
+    expect(layer.get(1, 0)).toBe(5); // centre (3, 1) of coarse cell (1, 0)
+    doc.setLayerScale(layer.id, 1);
+    expect(layer.get(2, 0)).toBe(5);
+    expect(layer.get(3, 1)).toBe(5);
+  });
+});

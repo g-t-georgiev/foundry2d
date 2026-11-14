@@ -423,6 +423,9 @@ export function deserializeProject(json: unknown): LevelProject {
         `Layer "${raw.identifier}" has unsupported type ${String(raw.type)}.`
       );
     }
+    if (isInt(raw.gridSize) && raw.gridSize > 0 && raw.gridSize !== project.gridSize) {
+      project.defs.layers.at(-1)!.gridSize = raw.gridSize;
+    }
     project.reserveUid(raw.uid);
   }
 
@@ -450,6 +453,14 @@ export function deserializeProject(json: unknown): LevelProject {
     };
   }
 
+  // Auto-layers use their source's grid.
+  for (const def of project.defs.layers) {
+    const source = project.defs.layers.find((d) => d.uid === def.autoSourceUid);
+    if (!source) continue;
+    if (source.gridSize === undefined) delete def.gridSize;
+    else def.gridSize = source.gridSize;
+  }
+
   for (const raw of json.levels as Record<string, unknown>[]) {
     const width = raw.width as number;
     const height = raw.height as number;
@@ -471,7 +482,8 @@ export function deserializeProject(json: unknown): LevelProject {
       if (!layer) continue;
       if (Array.isArray(entry.data)) {
         try {
-          layer.data = decodeRLE(entry.data as number[], width * height, Int32Array);
+          // Layers with their own grid have their own size in cells.
+          layer.data = decodeRLE(entry.data as number[], layer.width * layer.height, Int32Array);
         } catch (error) {
           throw new ProjectFormatError(
             `Level "${level.identifier}" layer data is corrupt: ${(error as Error).message}`,

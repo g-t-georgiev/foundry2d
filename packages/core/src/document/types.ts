@@ -20,7 +20,11 @@ export type DocumentEventMap = {
   /** Layer list changed: added, removed, reordered. */
   "layers:changed": () => void;
   /** A layer property (name, visibility, opacity, lock) changed. */
-  "layer:updated": (payload: { layerId: string; property: EditableLayerProperties }) => void;
+  "layer:updated": (payload: {
+    layerId: string;
+    /** `scale`: the layer's cell size (and so its size in cells) changed. */
+    property: EditableLayerProperties | "scale";
+  }) => void;
   /** The active layer changed. */
   "layer:activated": (payload: { layerId: string | null }) => void;
   /** Cell data of a layer changed. */

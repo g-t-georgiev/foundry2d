@@ -10,6 +10,11 @@ export interface GridLayerOptions<Buffer extends CellBuffer> {
   visible?: boolean;
   locked?: boolean;
   opacity?: number;
+  /**
+   * Size of one cell of this layer in document cells (2 = cells twice as
+   * big). Defaults to 1. See `GridDocument.layerSize`.
+   */
+  scale?: number;
   /** Optional initial cell data; copied, must be `width * height` long. */
   data?: ArrayLike<number>;
 }
@@ -29,6 +34,8 @@ export class GridLayer<Buffer extends CellBuffer = CellBuffer> {
   public opacity: number;
   public visible: boolean;
   public locked: boolean;
+  /** Size of one cell in document cells (1 for most layers). */
+  public scale: number;
   public data: Buffer;
   /** Monotonic counter bumped on every content change. */
   public version = 0;
@@ -45,6 +52,8 @@ export class GridLayer<Buffer extends CellBuffer = CellBuffer> {
     this.visible = options.visible ?? true;
     this.locked = options.locked ?? false;
     this.opacity = options.opacity ?? 1;
+    this.scale = options.scale ?? 1;
+    if (!(this.scale > 0)) throw new RangeError(`Layer scale must be positive, got ${this.scale}`);
     this.data = this.allocate(this.width, this.height);
 
     if (options.data) {
@@ -128,6 +137,28 @@ export class GridLayer<Buffer extends CellBuffer = CellBuffer> {
     this.height = height;
     this.data = data;
     this.version++;
+  }
+
+  /**
+   * Changes the cell size to `scale` and the size to `width` × `height`,
+   * resampling the content: each new cell takes the value of the old cell
+   * under its centre, so the picture keeps its place at the new resolution.
+   */
+  rescale(scale: number, width: number, height: number): void {
+    if (!(scale > 0)) throw new RangeError(`Layer scale must be positive, got ${scale}`);
+    const old = { width: this.width, height: this.height, data: this.data, scale: this.scale };
+    const data = this.allocate(width, height);
+    for (let y = 0; y < height; y++) {
+      const oy = Math.floor(((y + 0.5) * scale) / old.scale);
+      if (oy >= old.height) continue;
+      for (let x = 0; x < width; x++) {
+        const ox = Math.floor(((x + 0.5) * scale) / old.scale);
+        if (ox >= old.width) continue;
+        data[y * width + x] = old.data[oy * old.width + ox];
+      }
+    }
+    this.scale = scale;
+    this.restore(width, height, data);
   }
 
   /** Returns a detached copy of the current buffer. */

@@ -131,7 +131,7 @@ _Done: defects fixed, open tool registry, history events/limit/composite, full l
 
 **Decisions:**
 
-- One grid size per project. Every layer in a level shares the level's grid, which keeps the "equal-size layers" document invariant. Per-layer grid sizes (LDtk allows them) can come with tile layers.
+- One grid size per project. Every layer in a level shares the level's grid, which keeps the "equal-size layers" document invariant. Per-layer grid sizes (LDtk allows them) can come with tile layers. (Done in 8.5: layers now carry a scale, see item 17.)
 - Definition edits are not undoable, like in LDtk. Edits that delete data (removing a value or a layer) ask for confirmation and clear the undo history.
 - `power_pellet` now gets its own color (`#ff8a65`). The old editor gave it the same color as `pellet`.
 
@@ -324,6 +324,11 @@ Issues, improvements and polish candidates collected along the way, including ev
     - **Opened on its own:** entity layers and types come back, with fields inferred from the exported values (Int or Float, Bool, Color, String, Point, EntityRef, and lists of these); types the Pac-Man seed knows keep its colour and shape. Level fields and the background colour come back too. Tile layers become Tiles layers without a tileset, because the file only names the image.
     - Imported entities keep their iids unless the project already uses them.
     - Separately, the Level panel now links to the level field definitions ("Add level fields…").
+  - ✅ **Per-layer grid sizes (17), the full LDtk model:**
+    - **Core:** a `GridLayer` has a `scale`: its cell size in document cells. `GridDocument.layerSize(scale)` gives the size in cells that covers the document (the last row and column stick out when the sizes don't divide). Resizes move scaled layers by whole cells of their own; `setLayerScale` resamples the picture (each new cell takes the old cell under its centre) or only crops. `ResizeCommand` keeps each layer's own size for undo.
+    - **Canvas:** the layer stack draws each layer at its own cell size, clipped to the level. Scenes may map the pointer to cells themselves (`WorkspaceScene.worldToGrid`), so tools, the cursor, the grid lines and the status bar follow the active layer's grid.
+    - **Level designer:** a layer definition's optional `gridSize` (px) is set in Project settings → Layers ("Grid size", empty for the project grid). Changing it resamples painted cells as one undo step. Auto-layers always use their source's grid. Entities snap to their layer's grid; Point fields stay in level cells. Changing the project grid keeps layers with their own grid at the same pixel size.
+    - **Files:** the work file stores `gridSize` per layer definition and each level layer at its own size. Game JSON adds `layerGrids` (grid size, columns, rows) for those layers; importing into a project skips a layer whose grid differs there, with a warning.
   - ⏭ **Packaged project format (6) moved to 8.7.** It is a third file format next to `.f2dsprite` and `.f2dlevel`, so the choice of replacing or adding to them belongs with the OS file association and installable app (34, 38). The Sprite Packer (Phase 9) will need the same machinery: reading ZIPs, including compressed ones from other tools, folder input and asset files. Today only files saved to disk embed tileset images; library and recovery copies already keep them in the asset store.
   - **8.4 is done** apart from item 6 (moved). Items 36–37 are decisions to take with a target engine.
 - **8.5 Features** (in progress): items 9 ✅, 23 ✅, 12 ✅, 13 (partly), 14 ✅, 15 ✅, then 17–20, 30 and 31, roughly in that order.
@@ -377,7 +382,7 @@ Issues, improvements and polish candidates collected along the way, including ev
 
 **Level designer**
 
-17. Per-layer grid sizes (LDtk allows them). Today one grid size covers every layer.
+17. Per-layer grid sizes (LDtk allows them). Today one grid size covers every layer. ✅ Done in 8.5.
 18. Level background colour and level custom fields (LDtk has both). This reuses the Phase 7 field editor. ✅ Done in 8.5 (see the 8.5 status).
 19. Entity reference fields (a door pointing at a switch) and array fields. Deferred from Phase 7 to keep its scope. ✅ Done in 8.5.
 20. Game JSON import cannot recreate entities (the file has no definitions). Map known identifiers when importing over an existing project. ✅ Done in 8.5.

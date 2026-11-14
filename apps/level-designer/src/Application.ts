@@ -420,6 +420,7 @@ export default class Application {
     const { doc } = level;
     const refreshLayerUi = () => {
       this.renderPalette();
+      this.renderProjectInfo();
       this.workspace.refreshCursor();
     };
     this.levelSession = {
@@ -1182,7 +1183,10 @@ export default class Application {
   private renderProjectInfo(): void {
     const name = $<HTMLInputElement>("#projectName");
     if (name.value !== this.project.name) name.value = this.project.name;
-    $("#statGrid").textContent = `${this.project.gridSize}×${this.project.gridSize} px`;
+    // The active layer's grid in the level view (layers can have their own).
+    const grid =
+      this.view === "level" ? this.project.layerGridSize(this.activeDef()) : this.project.gridSize;
+    $("#statGrid").textContent = `${grid}×${grid} px`;
   }
 
   private renderWorldSettings(): void {

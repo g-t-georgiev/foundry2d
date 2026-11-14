@@ -42,11 +42,28 @@ function checkGameFile(json: unknown): { file: GameLevelFile; columns: number; r
     throw new ProjectFormatError("Game file has no layers.");
   }
   for (const [key, data] of entries) {
-    if (!Array.isArray(data) || data.length !== columns * rows) {
-      throw new ProjectFormatError(`Layer "${key}" should have ${columns * rows} cells.`);
+    const grid = layerGrid(json, key);
+    const cells = grid ? grid.columns * grid.rows : columns * rows;
+    if (!Array.isArray(data) || data.length !== cells) {
+      throw new ProjectFormatError(`Layer "${key}" should have ${cells} cells.`);
     }
   }
   return { file: json, columns, rows };
+}
+
+/** A layer's own grid (when it differs from the level's), checked. */
+function layerGrid(
+  file: GameLevelFile,
+  key: string
+): { gridSize: number; columns: number; rows: number } | null {
+  const grids: unknown = file.layerGrids;
+  const grid = isRecord(grids) ? grids[key] : undefined;
+  if (!isRecord(grid)) return null;
+  const { gridSize, columns, rows } = grid;
+  const ok = [gridSize, columns, rows].every((v) => Number.isInteger(v) && (v as number) > 0);
+  return ok
+    ? { gridSize: gridSize as number, columns: columns as number, rows: rows as number }
+    : null;
 }
 
 /** Exported entities as plain records, by layer key. */
@@ -94,6 +111,7 @@ export function importGameLevel(
 
   // ---- Grid layers.
   const skippedLayers: string[] = [];
+  const mismatchedGrids: string[] = [];
   for (const [key, data] of Object.entries(file.layers)) {
     const def = project.defs.layers.find((d) => d.identifier === key && d.type !== "Entities");
     if (!def) {
@@ -101,7 +119,16 @@ export function importGameLevel(
       continue;
     }
     if (project.isAutoLayer(def)) continue; // regenerated below
+    const fileGrid = layerGrid(file, key)?.gridSize ?? tileSize;
+    if (Number.isInteger(fileGrid) && fileGrid !== project.layerGridSize(def)) {
+      mismatchedGrids.push(key);
+      continue;
+    }
     const layer = level.doc.getLayer(layerIdFor(def.uid))!;
+    if (data.length !== layer.data.length) {
+      mismatchedGrids.push(key);
+      continue;
+    }
     layer.data.set(data.map((v) => (Number.isInteger(v) ? v : 0)));
     layer.version++;
   }
@@ -185,6 +212,9 @@ export function importGameLevel(
   level.doc.setActiveLayer(level.doc.layers[0]?.id ?? null);
 
   if (skippedLayers.length) warnings.push(`No layer named ${list(skippedLayers)}; skipped.`);
+  if (mismatchedGrids.length) {
+    warnings.push(`Layer ${list(mismatchedGrids)} uses another grid size here; skipped.`);
+  }
   if (unknownTypes.size) warnings.push(`No entity type named ${list([...unknownTypes])}; skipped.`);
   if (skippedEntities) warnings.push(`${skippedEntities} entities could not be placed.`);
   if (unknownFields.size) warnings.push(`No field named ${list([...unknownFields])}; skipped.`);
@@ -251,8 +281,10 @@ export function fromGameFormat(json: unknown): LevelProject {
 
   const tileLayers = isRecord(file.tileLayers) ? file.tileLayers : {};
   for (const [key, data] of Object.entries(file.layers)) {
+    const grid = layerGrid(file, key);
+    const own = grid && grid.gridSize !== project.gridSize ? { gridSize: grid.gridSize } : {};
     if (key in tileLayers) {
-      project.addTilesLayer(key, null);
+      Object.assign(project.addTilesLayer(key, null), own);
       continue;
     }
     const known = seed.defs.layers.find((d) => d.identifier === key);
@@ -262,7 +294,7 @@ export function fromGameFormat(json: unknown): LevelProject {
       [...new Set(data.filter((v): v is number => Number.isInteger(v) && v > 0))]
         .sort((a, b) => a - b)
         .map((value) => ({ value, identifier: `value_${value}`, color: "#ff00ff" }));
-    project.addIntGridLayer(key, values);
+    Object.assign(project.addIntGridLayer(key, values), own);
   }
 
   // Entity layers and types, from the exported instances.

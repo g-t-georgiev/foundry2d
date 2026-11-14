@@ -4,8 +4,8 @@ import type { RenderContext, RenderPass } from "../types";
 export interface GridLinesPassOptions {
   /** World-space rectangle covered by the grid. */
   getBounds: () => Rect | null;
-  /** World size of one grid step. */
-  step: { width: number; height: number };
+  /** World size of one grid step (a function when it varies, e.g. per active layer). */
+  step: { width: number; height: number } | (() => { width: number; height: number });
   /** Every Nth line is drawn with the major color (0 disables). */
   majorEvery?: number;
   /** Hide the grid when a cell is smaller than this many CSS pixels on screen. */
@@ -28,15 +28,16 @@ export class GridLinesPass implements RenderPass {
     if (!bounds) return;
 
     const { ctx, camera, theme, devicePixelRatio: dpr } = rc;
-    const { step } = this.options;
+    const step = typeof this.options.step === "function" ? this.options.step() : this.options.step;
     const spacing = Math.min(step.width, step.height) * camera.zoom;
     if (spacing < (this.options.minScreenSpacing ?? 4)) return;
 
     const majorEvery = this.options.majorEvery ?? 0;
     const visible = camera.getVisibleWorldRect(rc.viewWidth, rc.viewHeight);
 
-    const cols = Math.round(bounds.width / step.width);
-    const rows = Math.round(bounds.height / step.height);
+    // Lines inside the bounds only: a coarse grid need not divide them evenly.
+    const cols = Math.floor(bounds.width / step.width + 1e-6);
+    const rows = Math.floor(bounds.height / step.height + 1e-6);
     const firstCol = Math.max(0, Math.floor((visible.x - bounds.x) / step.width));
     const lastCol = Math.min(cols, Math.ceil((visible.x + visible.width - bounds.x) / step.width));
     const firstRow = Math.max(0, Math.floor((visible.y - bounds.y) / step.height));
