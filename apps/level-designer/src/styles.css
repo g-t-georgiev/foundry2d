@@ -1,61 +1,8 @@
-/* Theme tokens ported from the original level editor. */
-:root {
-  --theme-bg-app: #0e0e11;
-  --theme-bg-panel: #18181c;
-  --theme-bg-card: #222228;
-  --theme-bg-card-hover: #2d2d35;
-  --theme-bg-input: #121215;
-  --theme-border-color: #2a2a32;
-  --theme-border-active: #3b82f6;
-  --theme-text-main: #f4f4f5;
-  --theme-text-muted: #a1a1aa;
-  --theme-color-primary: #2563eb;
-  --theme-color-primary-hover: #1d4ed8;
-  --theme-color-accent: #38bdf8;
-  --theme-danger: #e5484d;
-  --theme-toolbar-height: 48px;
-  --theme-statusbar-height: 28px;
-
-  /* Component tokens for <layers-panel>. */
-  --layers-bg: var(--theme-bg-panel);
-  --layers-row-bg: var(--theme-bg-card);
-  --layers-row-hover: var(--theme-bg-card-hover);
-  --layers-active-bg: #1e3a6e;
-  --layers-active-border: var(--theme-border-active);
-  --layers-border: var(--theme-border-color);
-  --layers-muted: var(--theme-text-muted);
-  --layers-accent: var(--theme-color-accent);
-  --layers-text: var(--theme-text-main);
-  color-scheme: dark;
-}
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  margin: 0;
-  height: 100%;
-}
+@import "@foundry2d/ui/theme/tokens.css";
 
 body {
   display: grid;
   grid-template-rows: var(--theme-toolbar-height) 1fr var(--theme-statusbar-height);
-  background: var(--theme-bg-app);
-  color: var(--theme-text-main);
-  font:
-    13px/1.35 -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    Roboto,
-    Helvetica,
-    Arial,
-    sans-serif;
-  overflow: hidden;
-  user-select: none;
 }
 
 h2,
@@ -306,7 +253,7 @@ ul {
 }
 
 .tool-btn.active {
-  background: #1e3a6e;
+  background: var(--theme-bg-selected);
   border-color: var(--theme-border-active);
 }
 
@@ -433,7 +380,7 @@ layers-panel {
 
 .palette-item[aria-selected="true"] {
   border-color: var(--theme-border-active);
-  background: #1e3a6e;
+  background: var(--theme-bg-selected);
 }
 
 .palette-swatch {
@@ -548,7 +495,7 @@ layers-panel {
 
 .defs-list li[aria-selected="true"] {
   border-color: var(--theme-border-active);
-  background: #1e3a6e;
+  background: var(--theme-bg-selected);
 }
 
 .defs-list li small {
@@ -711,7 +658,7 @@ body[data-view="world"] .main-layout {
 
 .levels-list li[aria-selected="true"] {
   border-color: var(--theme-border-active);
-  background: #1e3a6e;
+  background: var(--theme-bg-selected);
 }
 
 .levels-list .level-order,
@@ -871,7 +818,7 @@ body {
 
 .entity-item[aria-pressed="true"] {
   border-color: var(--theme-border-active);
-  background: #1e3a6e;
+  background: var(--theme-bg-selected);
 }
 
 .entity-item:focus-visible {
@@ -940,7 +887,7 @@ body {
 
 .btn.active {
   border-color: var(--theme-border-active);
-  background: #1e3a6e;
+  background: var(--theme-bg-selected);
 }
 
 .fields-table {
@@ -1039,7 +986,7 @@ body {
 
 .rule-item[aria-selected="true"] {
   border-color: var(--theme-border-active);
-  background: #1e3a6e;
+  background: var(--theme-bg-selected);
 }
 
 .rule-item.inactive > :not(input):not(.rule-actions) {
@@ -1130,7 +1077,7 @@ body {
 .brush-chip[aria-checked="true"] {
   border-color: var(--theme-border-active);
   border-left-color: var(--chip, var(--theme-text-muted));
-  background: #1e3a6e;
+  background: var(--theme-bg-selected);
 }
 
 .pattern-grid {

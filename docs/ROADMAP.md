@@ -275,7 +275,15 @@ Issues, improvements and polish candidates collected along the way, including ev
   - **Bugs it found and fixed:**
     - The level designer dropped World/Level switches requested during the 320 ms zoom animation (Enter right after switching to the world did nothing). Transitions are now queued.
     - `<body data-view>` was picked up as a view tab and given `aria-selected`.
-- **8.3 Architecture:** items 1–4, done under the smoke tests from 8.2.
+- **8.3 Architecture** ✅ (2026-11-15): items 1–4, done under the smoke tests from 8.2.
+  - **Shared file workflow (2):** `ProjectFiles` in `@foundry2d/workspace` covers New from a template, Open (file, recent, library), Save, Save as, delete from the library, the start screen and startup recovery, for both apps. `bindProjectBrowser()` in `@foundry2d/ui` wires `<project-browser>` to it, and the workspace stays free of UI imports. It has unit tests.
+  - **Split composition roots (1):**
+    - Pixel editor (833 → about 520 lines): `ClipboardController`, `PaletteController` and `keys.ts`.
+    - Level designer (1,345 → about 960 lines): `LevelOperations` (world edits), `keys.ts` and `ui/StatusBar.ts`.
+    - Still in the level designer's `Application`: palette and tile-picker glue and the view transitions. They are the next candidates, alongside the shared UI components (item 31).
+  - **Shared theme (3):** `@foundry2d/ui/theme/tokens.css` holds the design tokens, `<layers-panel>` tokens and base resets, and both apps `@import` it. The pixel editor's short names (`--bg`, `--panel`…) are aliases of the shared tokens, so it now uses the level designer's palette.
+  - **Store review (4):** every action is still used. The rule (the store holds UI state only; model data changes through commands) is now documented at the top of both stores.
+  - **Tooling:** the root Vite config excludes `e2e/` from Vitest, so VS Code's Testing tab no longer imports the Playwright specs (which failed with "Playwright Test did not expect test.beforeEach() to be called here"). The Playwright extension is recommended for running them from the editor.
 - **8.4 Files and storage:** items 6–9 and 32–37 (work files versus export files).
 - **8.5 Features:** items 12–15, 17–20, 23, 30 and 31.
 - **8.6 Quality:** items 16, 26–28.

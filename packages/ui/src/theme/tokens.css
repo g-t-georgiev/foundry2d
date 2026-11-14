@@ -1,0 +1,56 @@
+/*
+ * Foundry2D shared theme: design tokens, component tokens and base resets.
+ * Each app imports this first (`@import "@foundry2d/ui/theme/tokens.css";`)
+ * and keeps only its own layout and component rules.
+ */
+:root {
+  --theme-bg-app: #0e0e11;
+  --theme-bg-panel: #18181c;
+  --theme-bg-card: #222228;
+  --theme-bg-card-hover: #2d2d35;
+  --theme-bg-input: #121215;
+  --theme-bg-selected: #1e3a6e;
+  --theme-border-color: #2a2a32;
+  --theme-border-active: #3b82f6;
+  --theme-text-main: #f4f4f5;
+  --theme-text-muted: #a1a1aa;
+  --theme-color-primary: #2563eb;
+  --theme-color-primary-hover: #1d4ed8;
+  --theme-color-accent: #38bdf8;
+  --theme-danger: #e5484d;
+  --theme-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --theme-toolbar-height: 48px;
+  --theme-statusbar-height: 28px;
+
+  /* <layers-panel> */
+  --layers-bg: var(--theme-bg-panel);
+  --layers-row-bg: var(--theme-bg-card);
+  --layers-row-hover: var(--theme-bg-card-hover);
+  --layers-active-bg: var(--theme-bg-selected);
+  --layers-active-border: var(--theme-border-active);
+  --layers-border: var(--theme-border-color);
+  --layers-muted: var(--theme-text-muted);
+  --layers-accent: var(--theme-color-accent);
+  --layers-text: var(--theme-text-main);
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--theme-bg-app);
+  color: var(--theme-text-main);
+  font: 13px/1.35 var(--theme-font);
+  overflow: hidden;
+  user-select: none;
+}

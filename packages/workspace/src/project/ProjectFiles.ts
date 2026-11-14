@@ -1,0 +1,236 @@
+import type { ProjectMeta, RecentFileRecord } from "@foundry2d/core";
+import type { OpenedProject, ProjectSession } from "./ProjectSession";
+
+/** What the start screen shows (structurally the `<project-browser>` data). */
+export interface StartScreenData {
+  title: string;
+  templates: { id: string; label: string; description?: string }[];
+  library: ProjectMeta[];
+  recent: RecentFileRecord[];
+  warning?: string;
+  currentId?: string | null;
+}
+
+/** The start screen / Open dialog, e.g. `<project-browser>`. */
+export interface StartScreen {
+  show(data: StartScreenData): void;
+}
+
+export interface ProjectFilesOptions<Project> {
+  session: ProjectSession;
+  startScreen: StartScreen;
+  /** Words used in messages, e.g. `{ one: "sprite", title: "Sprites" }`. */
+  noun: { one: string; title: string };
+  /** Builds a project from file, library or recovery JSON. Throws on bad input. */
+  parse(opened: OpenedProject): Project;
+  /** Makes `project` the open project (replacing the current one). */
+  load(project: Project): void;
+  /** Start-screen templates and what "New" creates from them. */
+  templates(): StartScreenData["templates"];
+  createFromTemplate(id: string): { project: Project; message: string } | null;
+  /** Errors whose message is safe to show as is (format errors). */
+  isUserFacingError(error: unknown): boolean;
+  /** Status bar messages. */
+  notify(message: string, timeout?: number): void;
+  /** Confirmation prompts (default `window.confirm`). */
+  confirm?(message: string): boolean;
+  /** Extra clean-up after a library project is deleted (e.g. pruning assets). */
+  afterDelete?(id: string): Promise<void>;
+}
+
+/**
+ * The file workflow both apps share on top of `ProjectSession`: New from a
+ * template, Open (file, recent file, library), Save, Save as, the start
+ * screen, and restoring unsaved work at startup. Every action that would
+ * replace the open project asks first when it has unsaved changes.
+ *
+ * Its handler names match `bindProjectBrowser` in `@foundry2d/ui`, so the
+ * start screen's events can be bound to it directly.
+ */
+export class ProjectFiles<Project> {
+  constructor(private readonly options: ProjectFilesOptions<Project>) {}
+
+  private get session(): ProjectSession {
+    return this.options.session;
+  }
+
+  private confirm(message: string): boolean {
+    return (this.options.confirm ?? ((m) => window.confirm(m)))(message);
+  }
+
+  /** True when there is nothing to lose, or the user agreed to lose it. */
+  confirmDiscard(action: string): boolean {
+    return !this.session.state.dirty || this.confirm(`${action}? Unsaved changes will be lost.`);
+  }
+
+  private get openAction(): string {
+    return `Open another ${this.options.noun.one}`;
+  }
+
+  // ------------------------------------------------------------------ new / open
+
+  newFromTemplate(id: string): void {
+    const created = this.options.createFromTemplate(id);
+    if (!created || !this.confirmDiscard(`Start a new ${this.options.noun.one}`)) return;
+    this.options.load(created.project);
+    this.session.resetIdentity();
+    this.options.notify(created.message);
+  }
+
+  async openFile(): Promise<void> {
+    if (!this.confirmDiscard(this.openAction)) return;
+    await this.attempt(async () => {
+      const picked = await this.session.pickFile();
+      if (!picked) return;
+      this.options.load(this.options.parse(picked));
+      await this.session.adoptFile(picked.name, picked.handle);
+      this.options.notify(`Opened ${picked.handle?.name ?? picked.name}`);
+    });
+  }
+
+  async openRecent(id: string): Promise<void> {
+    if (!this.confirmDiscard(this.openAction)) return;
+    await this.attempt(async () => {
+      const opened = await this.session.openRecent(id);
+      if (!opened) {
+        this.options.notify("That file is no longer available.", 4000);
+        return;
+      }
+      this.options.load(this.options.parse(opened));
+      await this.session.adoptFile(opened.name, opened.handle);
+      this.options.notify(`Opened ${opened.handle.name}`);
+    });
+  }
+
+  async openLibrary(id: string): Promise<void> {
+    if (!this.confirmDiscard(this.openAction)) return;
+    await this.attempt(async () => {
+      const opened = await this.session.openFromLibrary(id);
+      if (!opened) {
+        this.options.notify(`That ${this.options.noun.one} is no longer in this browser.`, 4000);
+        return;
+      }
+      this.options.load(this.options.parse(opened));
+      this.session.adoptLibrary(id);
+      this.options.notify(`Opened ${opened.name}`);
+    });
+  }
+
+  /** Removes a project from the browser library (files on disk are untouched). */
+  async deleteLibrary(id: string): Promise<void> {
+    const projects = await this.session.listLibrary();
+    const name = projects.find((p) => p.id === id)?.name ?? `this ${this.options.noun.one}`;
+    if (!this.confirm(`Delete "${name}" from this browser? Files on disk are not affected.`)) {
+      return;
+    }
+    await this.session.deleteFromLibrary(id);
+    await this.options.afterDelete?.(id);
+    await this.showBrowser();
+  }
+
+  async removeRecent(id: string): Promise<void> {
+    await this.session.removeRecent(id);
+    await this.showBrowser();
+  }
+
+  // ------------------------------------------------------------------ save
+
+  /** Ctrl+S: saves to the browser library and, if bound, back to the file. */
+  async save(): Promise<void> {
+    try {
+      await this.session.save();
+      const { fileName } = this.session.state;
+      this.options.notify(
+        fileName ? `Saved to ${fileName} and the browser library` : "Saved in this browser"
+      );
+    } catch (error) {
+      this.reportSaveError(error);
+    }
+  }
+
+  /** Ctrl+Shift+S: writes a file (picker where supported, download otherwise). */
+  async saveAs(): Promise<void> {
+    try {
+      if (await this.session.saveAsFile()) {
+        this.options.notify(`Saved ${this.session.state.fileName ?? "a copy to Downloads"}`);
+      }
+    } catch (error) {
+      this.reportSaveError(error);
+    }
+  }
+
+  // ------------------------------------------------------------------ start screen
+
+  /** Opens the start screen / Open dialog. */
+  async showBrowser(): Promise<void> {
+    const [library, recent] = await Promise.all([
+      this.session.listLibrary(),
+      this.session.listRecent(),
+    ]);
+    const { noun } = this.options;
+    this.options.startScreen.show({
+      title: noun.title,
+      templates: this.options.templates(),
+      library,
+      recent,
+      currentId: this.session.state.libraryId,
+      warning:
+        this.session.storage.kind === "memory"
+          ? `Browser storage is unavailable (private mode?). ${noun.title} saved here are lost on reload; use Save as file.`
+          : undefined,
+    });
+  }
+
+  /**
+   * Restores unsaved work from the last session, or shows the start screen
+   * when there is saved work to pick from. Work started before storage
+   * answered is never replaced.
+   */
+  async startup(): Promise<void> {
+    const recovered = await this.session.loadRecovery();
+    if (recovered && !this.session.state.dirty) {
+      try {
+        this.options.load(this.options.parse(recovered));
+        await this.session.adoptRecovered(recovered.snapshot);
+        this.options.notify("Restored unsaved work from the last session");
+        return;
+      } catch (error) {
+        console.warn("Ignoring unreadable recovery snapshot", error);
+      }
+    }
+    const [library, recent] = await Promise.all([
+      this.session.listLibrary(),
+      this.session.listRecent(),
+    ]);
+    if ((library.length > 0 || recent.length > 0) && !this.session.state.dirty) {
+      await this.showBrowser();
+    }
+  }
+
+  // ------------------------------------------------------------------ errors
+
+  private async attempt(run: () => Promise<void>): Promise<void> {
+    try {
+      await run();
+    } catch (error) {
+      this.reportOpenError(error);
+    }
+  }
+
+  private reportOpenError(error: unknown): void {
+    const message = this.options.isUserFacingError(error)
+      ? (error as Error).message
+      : error instanceof SyntaxError
+        ? "File is not valid JSON."
+        : error instanceof Error
+          ? error.message
+          : `Could not open the ${this.options.noun.one}.`;
+    this.options.notify(message, 5000);
+    console.error(error);
+  }
+
+  private reportSaveError(error: unknown): void {
+    this.options.notify(`Save failed: ${(error as Error).message}`, 5000);
+    console.error(error);
+  }
+}

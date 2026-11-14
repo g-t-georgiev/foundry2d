@@ -12,18 +12,20 @@ import {
   type Storage,
   type Unsubscribe,
 } from "@foundry2d/core";
-import { GridDocumentScene, ProjectSession, Workspace, downloadBlob } from "@foundry2d/workspace";
-import { ProjectBrowserEvents, type LayersPanel, type ProjectBrowser } from "@foundry2d/ui";
+import {
+  GridDocumentScene,
+  ProjectFiles,
+  ProjectSession,
+  Workspace,
+  downloadBlob,
+} from "@foundry2d/workspace";
+import { bindProjectBrowser, type LayersPanel, type ProjectBrowser } from "@foundry2d/ui";
 import type { Level, LevelProject } from "./model/LevelProject";
 import { WORLD_LAYOUTS, type LayerDef, type WorldLayout } from "./model/types";
 import { createProjectFromPreset, presets, DEFAULT_PRESET_ID } from "./model/presets";
-import {
-  AddLevelCommand,
-  MoveLevelCommand,
-  RemoveLevelCommand,
-  RenameLevelCommand,
-  ReorderLevelCommand,
-} from "./model/commands";
+import { bindKeys } from "./keys";
+import { bindStatusBar } from "./ui/StatusBar";
+import { MoveLevelCommand } from "./model/commands";
 import { LevelActions, levelStore, type EditorView, type LevelTool } from "./state";
 import PaletteView from "./ui/PaletteView";
 import TilesetPickerView from "./ui/TilesetPickerView";
@@ -37,6 +39,7 @@ import LevelsListView from "./ui/LevelsListView";
 import SettingsDialog from "./ui/SettingsDialog";
 import AutoRulesDialog from "./ui/AutoRulesDialog";
 import { WorldScene } from "./world/WorldScene";
+import { LevelOperations } from "./world/LevelOperations";
 import {
   PROJECT_EXTENSION,
   ProjectFormatError,
@@ -98,11 +101,12 @@ export default class Application {
   readonly entities: EntityController;
   private readonly entityPanel: EntityPanel;
   readonly session: ProjectSession;
-  private readonly browser: ProjectBrowser;
   /** True while a project is being loaded, so load-time events don't mark it dirty. */
   private loading = false;
   private readonly layersPanel: LayersPanel;
   private altHeld = false;
+  readonly files: ProjectFiles<LevelProject>;
+  readonly levelOps: LevelOperations;
   /**
    * The running view transition. World/level switches are chained on it, so
    * a request made mid-animation (e.g. Enter right after Escape) runs next
@@ -117,6 +121,14 @@ export default class Application {
     this.tools.registerTool(new StampTool<Int32Array>(() => this.currentPattern(), "stamp"));
 
     this.project = createProjectFromPreset(DEFAULT_PRESET_ID);
+    this.levelOps = new LevelOperations({
+      getProject: () => this.project,
+      getOpenLevel: () => this.level,
+      getSelectedLevel: () => this.selectedLevel(),
+      select: (uid, reveal) => this.selectLevel(uid, reveal),
+      history: this.history,
+      notify: (message, timeout) => this.showMessage(message, timeout),
+    });
     this.level = this.project.levels[0];
 
     this.workspace = new Workspace($("#viewport"), {
@@ -141,11 +153,11 @@ export default class Application {
     this.levelsList = new LevelsListView($("#levelsList"), $("#levelsRail"), {
       select: (uid) => this.selectLevel(uid, true),
       open: (uid) => void this.enterLevel(uid),
-      add: () => this.addLevel(),
-      duplicate: (uid) => this.duplicateLevel(uid),
-      remove: (uid) => this.removeLevel(uid),
-      move: (uid, direction) => this.reorderLevel(uid, direction),
-      rename: (uid, identifier) => this.renameLevel(uid, identifier),
+      add: () => this.levelOps.add(),
+      duplicate: (uid) => this.levelOps.duplicate(uid),
+      remove: (uid) => this.levelOps.remove(uid),
+      move: (uid, direction) => this.levelOps.reorder(uid, direction),
+      rename: (uid, identifier) => this.levelOps.rename(uid, identifier),
     });
     this.settings = new SettingsDialog($<HTMLDialogElement>("#settingsDialog"), {
       confirm: (message) => window.confirm(message),
@@ -178,7 +190,30 @@ export default class Application {
       },
     });
     this.session.installUnloadGuard();
-    this.browser = $<ProjectBrowser>("#projectBrowser");
+    const browser = $<ProjectBrowser>("#projectBrowser");
+    this.files = new ProjectFiles<LevelProject>({
+      session: this.session,
+      startScreen: browser,
+      noun: { one: "project", title: "Level projects" },
+      // Files may be native projects or game exports; library and recovery
+      // copies are always native.
+      parse: ({ json }) => {
+        if (isProjectFile(json)) return deserializeProject(json);
+        if (isGameFormat(json)) return fromGameFormat(json);
+        throw new ProjectFormatError("Unrecognized file: expected a level project or game JSON.");
+      },
+      load: (project) => this.loadProject(project),
+      templates: () =>
+        presets.map((p) => ({ id: p.id, label: p.label, description: p.description })),
+      createFromTemplate: (id) => {
+        const label = presets.find((p) => p.id === id)?.label ?? id;
+        return { project: createProjectFromPreset(id), message: `New project from "${label}"` };
+      },
+      isUserFacingError: (error) => error instanceof ProjectFormatError,
+      notify: (message, timeout) => this.showMessage(message, timeout),
+      afterDelete: () => this.pruneAssets(),
+    });
+    bindProjectBrowser(browser, this.files);
 
     this.tilePicker = new TilesetPickerView($("#tilesetCanvasHost"), (tileset, selection) => {
       levelStore.dispatch(LevelActions.SelectTiles, { tilesetUid: tileset.uid, ...selection });
@@ -205,20 +240,19 @@ export default class Application {
 
     this.bindStore();
     this.bindDom();
-    this.bindKeys();
-    this.bindStatus();
+    bindKeys(this.workspace.keymap, this);
+    bindStatusBar(this);
     this.history.onChange((state) => {
       $<HTMLButtonElement>('[data-command="undo"]').disabled = !state.canUndo;
       $<HTMLButtonElement>('[data-command="redo"]').disabled = !state.canRedo;
       this.markDirty();
     });
 
-    this.bindBrowser();
     this.loadProject(this.project);
     // Only refresh the title here: resetIdentity() would discard the recovery
     // snapshot that startup() is about to restore.
     this.session.refresh();
-    void this.startup();
+    void this.files.startup();
   }
 
   get view(): EditorView {
@@ -366,7 +400,7 @@ export default class Application {
       getSelectedUid: () => levelStore.getState().selectedLevelUid,
       select: (uid) => this.selectLevel(uid, false),
       open: (uid) => void this.enterLevel(uid),
-      createAt: (x, y) => this.addLevel(x, y),
+      createAt: (x, y) => this.levelOps.add(x, y),
       commitMove: (uid, from, to) =>
         this.history.record(new MoveLevelCommand(this.project, uid, from, to)),
     });
@@ -469,197 +503,18 @@ export default class Application {
     );
   }
 
-  // ------------------------------------------------------------------ world edits
-
-  /** Adds a level the size of the selected one, at `x, y` or the next free spot. */
-  addLevel(x?: number, y?: number): void {
-    const template = this.selectedLevel() ?? this.level;
-    const position =
-      x !== undefined && y !== undefined
-        ? this.project.snapPosition(x, y)
-        : this.project.nextFreePosition();
-    const level = this.project.createLevel("level_0", template.width, template.height, {
-      worldX: position.x,
-      worldY: position.y,
-    });
-    // Start on the same layer the user was working on.
-    level.doc.setActiveLayer(template.doc.activeLayerId);
-    // createLevel already inserted it; record the step for undo/redo.
-    this.history.record(
-      new AddLevelCommand(this.project, level, this.project.indexOfLevel(level.uid))
-    );
-    this.selectLevel(level.uid, x === undefined);
-    this.showMessage(`Added ${level.identifier}`);
-  }
-
-  duplicateLevel(uid: number): void {
-    const source = this.project.getLevel(uid);
-    if (!source) return;
-    const rect = source.worldRect(this.project.gridSize);
-    const position = this.project.snapPosition(
-      rect.x + rect.width + this.project.gridSize * 2,
-      rect.y
-    );
-    const copy = this.project.cloneLevel(uid, position.x, position.y);
-    if (!copy) return;
-    this.history.execute(
-      new AddLevelCommand(this.project, copy, this.project.indexOfLevel(uid) + 1)
-    );
-    this.selectLevel(copy.uid, true);
-    this.showMessage(`Duplicated ${source.identifier}`);
-  }
-
-  removeLevel(uid: number): void {
-    const level = this.project.getLevel(uid);
-    if (!level) return;
-    if (this.project.levels.length <= 1) {
-      this.showMessage("A project needs at least one level.", 3000);
-      return;
-    }
-    const index = this.project.indexOfLevel(uid);
-    const command = new RemoveLevelCommand(this.project, level);
-    command.execute();
-    if (!command.succeeded) return;
-    this.history.record(command);
-    const next = this.project.levels[Math.min(index, this.project.levels.length - 1)];
-    this.selectLevel(next?.uid ?? null, false);
-    this.showMessage(`Deleted ${level.identifier} (Ctrl+Z to undo)`, 3500);
-  }
-
-  reorderLevel(uid: number, direction: "up" | "down"): void {
-    const from = this.project.indexOfLevel(uid);
-    const to = direction === "up" ? from - 1 : from + 1;
-    if (from === -1 || to < 0 || to >= this.project.levels.length) return;
-    this.history.execute(new ReorderLevelCommand(this.project, from, to));
-  }
-
-  renameLevel(uid: number, identifier: string): void {
-    const level = this.project.getLevel(uid);
-    if (!level || !identifier.trim() || identifier.trim() === level.identifier) return;
-    this.history.execute(new RenameLevelCommand(this.project, level, identifier));
-  }
-
-  private selectedLevel(): Level | undefined {
+  selectedLevel(): Level | undefined {
     const uid = levelStore.getState().selectedLevelUid;
     return uid === null ? undefined : this.project.getLevel(uid);
   }
 
   // ------------------------------------------------------------------ files
 
-  private markDirty(): void {
-    if (!this.loading) this.session.markDirty();
-  }
-
-  /** Asks before throwing away unsaved work. */
-  private confirmDiscard(action: string): boolean {
-    return !this.session.state.dirty || confirm(`${action}? Unsaved changes will be lost.`);
-  }
-
-  newProject(presetId: string = DEFAULT_PRESET_ID): void {
-    const label = presets.find((p) => p.id === presetId)?.label ?? presetId;
-    if (!this.confirmDiscard(`Start a new "${label}" project`)) return;
-    this.loadProject(createProjectFromPreset(presetId));
-    this.session.resetIdentity();
-    this.showMessage(`New project from "${label}"`);
-  }
-
-  /** Builds a project from a native project file or a game export. */
-  private parseProjectJson(json: unknown): LevelProject {
-    if (isProjectFile(json)) return deserializeProject(json);
-    if (isGameFormat(json)) return fromGameFormat(json);
-    throw new ProjectFormatError("Unrecognized file: expected a level project or game JSON.");
-  }
-
-  private reportOpenError(error: unknown): void {
-    const message =
-      error instanceof ProjectFormatError
-        ? error.message
-        : error instanceof SyntaxError
-          ? "File is not valid JSON."
-          : error instanceof Error
-            ? error.message
-            : "Could not open the project.";
-    this.showMessage(message, 5000);
-    console.error(error);
-  }
-
-  async openFile(): Promise<void> {
-    if (!this.confirmDiscard("Open another project")) return;
-    try {
-      const picked = await this.session.pickFile();
-      if (!picked) return;
-      this.loadProject(this.parseProjectJson(picked.json));
-      await this.session.adoptFile(picked.name, picked.handle);
-      this.showMessage(`Opened ${picked.handle?.name ?? picked.name}`);
-    } catch (error) {
-      this.reportOpenError(error);
-    }
-  }
-
-  async openRecent(id: string): Promise<void> {
-    if (!this.confirmDiscard("Open another project")) return;
-    try {
-      const opened = await this.session.openRecent(id);
-      if (!opened) {
-        this.showMessage("That file is no longer available.", 4000);
-        return;
-      }
-      this.loadProject(this.parseProjectJson(opened.json));
-      await this.session.adoptFile(opened.name, opened.handle);
-      this.showMessage(`Opened ${opened.handle.name}`);
-    } catch (error) {
-      this.reportOpenError(error);
-    }
-  }
-
-  async openFromLibrary(id: string): Promise<void> {
-    if (!this.confirmDiscard("Open another project")) return;
-    try {
-      const opened = await this.session.openFromLibrary(id);
-      if (!opened) {
-        this.showMessage("That project is no longer in this browser.", 4000);
-        return;
-      }
-      this.loadProject(deserializeProject(opened.json));
-      this.session.adoptLibrary(id);
-      this.showMessage(`Opened ${opened.name}`);
-    } catch (error) {
-      this.reportOpenError(error);
-    }
-  }
-
-  /** Ctrl+S: saves to the browser library and, if bound, back to the file. */
-  async save(): Promise<void> {
-    try {
-      await this.session.save();
-      const { fileName } = this.session.state;
-      this.showMessage(
-        fileName ? `Saved to ${fileName} and the browser library` : "Saved in this browser"
-      );
-    } catch (error) {
-      this.showMessage(`Save failed: ${(error as Error).message}`, 5000);
-      console.error(error);
-    }
-  }
-
-  /** Ctrl+Shift+S: writes a file (picker where supported, download otherwise). */
-  async saveAs(): Promise<void> {
-    try {
-      if (await this.session.saveAsFile()) {
-        this.showMessage(`Saved ${this.session.state.fileName ?? "a copy to Downloads"}`);
-      }
-    } catch (error) {
-      this.showMessage(`Save failed: ${(error as Error).message}`, 5000);
-      console.error(error);
-    }
-  }
-
-  /** Removes a library project and any tileset images nothing else uses. */
-  private async deleteFromLibrary(id: string): Promise<void> {
-    const projects = await this.session.listLibrary();
-    const name = projects.find((p) => p.id === id)?.name ?? "this project";
-    if (!confirm(`Delete "${name}" from this browser? Files on disk are not affected.`)) return;
-    await this.session.deleteFromLibrary(id);
+  /**
+   * Deletes tileset images in the asset store that no library project and no
+   * unsaved work refers to any more.
+   */
+  private async pruneAssets(): Promise<void> {
     const storage = this.session.storage;
     const keep = new Set<string>();
     for (const meta of await storage.projects.list()) {
@@ -670,80 +525,17 @@ export default class Application {
     if (this.session.state.dirty) await this.session.flushRecovery();
     const recovered = await this.session.loadRecovery();
     if (recovered) {
-      for (const hash of collectAssetRefs(
-        await externalizeAssets(recovered.json, storage.assets)
-      )) {
-        keep.add(hash);
-      }
+      const stored = await externalizeAssets(recovered.json, storage.assets);
+      for (const hash of collectAssetRefs(stored)) keep.add(hash);
     }
     await storage.assets.prune(keep);
-    await this.showBrowser();
   }
 
-  /** Opens the start screen / Open dialog. */
-  async showBrowser(): Promise<void> {
-    const [library, recent] = await Promise.all([
-      this.session.listLibrary(),
-      this.session.listRecent(),
-    ]);
-    this.browser.show({
-      title: "Level projects",
-      templates: presets.map((p) => ({ id: p.id, label: p.label, description: p.description })),
-      library,
-      recent,
-      currentId: this.session.state.libraryId,
-      warning:
-        this.session.storage.kind === "memory"
-          ? "Browser storage is unavailable (private mode?). Projects saved here are lost on reload; use Save as file."
-          : undefined,
-    });
+  private markDirty(): void {
+    if (!this.loading) this.session.markDirty();
   }
 
-  private bindBrowser(): void {
-    const browser = this.browser;
-    browser.addEventListener(ProjectBrowserEvents.New, (ev) =>
-      this.newProject(ev.detail.templateId)
-    );
-    browser.addEventListener(ProjectBrowserEvents.OpenFile, () => void this.openFile());
-    browser.addEventListener(
-      ProjectBrowserEvents.OpenRecent,
-      (ev) => void this.openRecent(ev.detail.id)
-    );
-    browser.addEventListener(
-      ProjectBrowserEvents.OpenLibrary,
-      (ev) => void this.openFromLibrary(ev.detail.id)
-    );
-    browser.addEventListener(
-      ProjectBrowserEvents.DeleteLibrary,
-      (ev) => void this.deleteFromLibrary(ev.detail.id)
-    );
-    browser.addEventListener(ProjectBrowserEvents.RemoveRecent, (ev) => {
-      void this.session.removeRecent(ev.detail.id).then(() => this.showBrowser());
-    });
-  }
-
-  /** Restores unsaved work, or shows the start screen when there is saved work to pick from. */
-  private async startup(): Promise<void> {
-    const recovered = await this.session.loadRecovery();
-    if (recovered && !this.session.state.dirty) {
-      try {
-        this.loadProject(deserializeProject(recovered.json));
-        await this.session.adoptRecovered(recovered.snapshot);
-        this.showMessage("Restored unsaved work from the last session");
-        return;
-      } catch (error) {
-        console.warn("Ignoring unreadable recovery snapshot", error);
-      }
-    }
-    const [library, recent] = await Promise.all([
-      this.session.listLibrary(),
-      this.session.listRecent(),
-    ]);
-    if ((library.length > 0 || recent.length > 0) && !this.session.state.dirty) {
-      await this.showBrowser();
-    }
-  }
-
+  /** Asks before throwing away unsaved work. */
   /** Exports the level being edited (or the one selected in the world). */
   exportGame(): void {
     const level = (this.view === "world" ? this.selectedLevel() : undefined) ?? this.level;
@@ -806,6 +598,20 @@ export default class Application {
   }
 
   // ------------------------------------------------------------------ values
+
+  /** Alt held in the level view: pick values until released. */
+  beginTemporaryEyedropper(): void {
+    if (this.view !== "level") return;
+    this.altHeld = true;
+    levelStore.dispatch(LevelActions.SetTool, "eyedropper");
+  }
+
+  endTemporaryEyedropper(): void {
+    if (!this.altHeld) return;
+    this.altHeld = false;
+    const { currentTool, previousTool } = levelStore.getState();
+    if (currentTool === "eyedropper") levelStore.dispatch(LevelActions.SetTool, previousTool);
+  }
 
   activeDef(): LayerDef | undefined {
     return this.project.getLayerDefForLayer(this.level.doc.activeLayerId ?? "");
@@ -980,7 +786,7 @@ export default class Application {
 
     const levelName = $<HTMLInputElement>("#levelName");
     levelName.addEventListener("change", () => {
-      this.renameLevel(this.level.uid, levelName.value);
+      this.levelOps.rename(this.level.uid, levelName.value);
       levelName.value = this.level.identifier;
     });
 
@@ -1019,13 +825,13 @@ export default class Application {
     switch (command) {
       case "new":
       case "open":
-        void this.showBrowser();
+        void this.files.showBrowser();
         break;
       case "save":
-        void this.save();
+        void this.files.save();
         break;
       case "save-as":
-        void this.saveAs();
+        void this.files.saveAs();
         break;
       case "export":
         this.exportGame();
@@ -1051,199 +857,6 @@ export default class Application {
         break;
       }
     }
-  }
-
-  private bindKeys(): void {
-    const { keymap } = this.workspace;
-    const inLevel = (fn: () => void) => () => {
-      if (this.view === "level") fn();
-      else return false;
-    };
-    const inWorld = (fn: () => void) => () => {
-      if (this.view === "world") fn();
-      else return false;
-    };
-    const tool = (name: LevelTool) =>
-      inLevel(() => void levelStore.dispatch(LevelActions.SetTool, name));
-
-    keymap.bind("mod+z", () => void this.history.undo(), { repeat: true });
-    keymap.bind("mod+shift+z", () => void this.history.redo(), { repeat: true });
-    keymap.bind("mod+y", () => void this.history.redo(), { repeat: true });
-    keymap.bind("mod+s", () => void this.save());
-    keymap.bind("mod+shift+s", () => void this.saveAs());
-    keymap.bind("mod+o", () => void this.showBrowser());
-    keymap.bind("mod+e", () => this.exportGame());
-    keymap.bind(
-      "mod+shift+c",
-      inLevel(() => void this.copyActiveLayer())
-    );
-    keymap.bind("b", tool("pen"));
-    keymap.bind("e", tool("eraser"));
-    keymap.bind("r", tool("rect"));
-    keymap.bind("g", tool("bucket"));
-    keymap.bind("i", tool("eyedropper"));
-    keymap.bind("f", () => void this.workspace.fitToView(200));
-    keymap.bind("#", () => {
-      levelStore.dispatch(LevelActions.ToggleGrid, {
-        enabled: !levelStore.getState().grid.enabled,
-      });
-    });
-    keymap.bind("+", () => this.workspace.zoomBy(1.25), { repeat: true });
-    keymap.bind("=", () => this.workspace.zoomBy(1.25), { repeat: true });
-    keymap.bind("-", () => this.workspace.zoomBy(0.8), { repeat: true });
-    const toggleFlip = (axis: "x" | "y") =>
-      inLevel(() => {
-        if (this.activeDef()?.type !== "Tiles") return;
-        const flip = { ...levelStore.getState().tileFlip };
-        flip[axis] = !flip[axis];
-        levelStore.dispatch(LevelActions.SetTileFlip, flip);
-      });
-    keymap.bind("x", toggleFlip("x"));
-    keymap.bind("y", toggleFlip("y"));
-    for (let i = 1; i <= 9; i++) {
-      keymap.bind(
-        String(i),
-        inLevel(() => {
-          if (this.entities.isActive) {
-            const def = this.project.defs.entities[i - 1];
-            if (def) this.entities.setPlaceDef(def.uid);
-            return;
-          }
-          const entry = this.activeDef()?.intGridValues[i - 1];
-          if (entry) this.selectValue(entry.value);
-        })
-      );
-    }
-
-    // Entities (only while an Entities layer is active in the level view).
-    const onEntities = (fn: () => boolean) => () =>
-      this.view === "level" && this.entities.isActive ? fn() : false;
-    keymap.bind(
-      "delete",
-      onEntities(() => this.entities.deleteSelected())
-    );
-    keymap.bind(
-      "backspace",
-      onEntities(() => this.entities.deleteSelected())
-    );
-    keymap.bind(
-      "mod+d",
-      onEntities(() => this.entities.duplicateSelected())
-    );
-    const arrows: [string, number, number][] = [
-      ["arrowleft", -1, 0],
-      ["arrowright", 1, 0],
-      ["arrowup", 0, -1],
-      ["arrowdown", 0, 1],
-    ];
-    for (const [key, dx, dy] of arrows) {
-      keymap.bind(
-        key,
-        onEntities(() => this.entities.nudge(dx, dy, false)),
-        { repeat: true }
-      );
-      keymap.bind(
-        `shift+${key}`,
-        onEntities(() => this.entities.nudge(dx, dy, true)),
-        { repeat: true }
-      );
-    }
-
-    // View navigation. Escape first cancels entity picking or selection.
-    keymap.bind(
-      "escape",
-      onEntities(() => this.entities.escape())
-    );
-    keymap.bind(
-      "escape",
-      inLevel(() => void this.showWorld())
-    );
-    keymap.bind(
-      "enter",
-      inWorld(() => {
-        const uid = this.selectedLevel()?.uid;
-        if (uid !== undefined) void this.enterLevel(uid);
-      })
-    );
-    keymap.bind(
-      "delete",
-      inWorld(() => {
-        const uid = this.selectedLevel()?.uid;
-        if (uid !== undefined) this.removeLevel(uid);
-      })
-    );
-    keymap.bind(
-      "mod+d",
-      inWorld(() => {
-        const uid = this.selectedLevel()?.uid;
-        if (uid !== undefined) this.duplicateLevel(uid);
-      })
-    );
-
-    keymap.hold(
-      "alt",
-      () => {
-        if (this.view !== "level") return;
-        this.altHeld = true;
-        levelStore.dispatch(LevelActions.SetTool, "eyedropper");
-      },
-      () => {
-        if (!this.altHeld) return;
-        this.altHeld = false;
-        const { currentTool, previousTool } = levelStore.getState();
-        if (currentTool === "eyedropper") levelStore.dispatch(LevelActions.SetTool, previousTool);
-      }
-    );
-  }
-
-  private bindStatus(): void {
-    const cell = $("#statCell");
-    const value = $("#statValue");
-    this.workspace.events.on("pointer:move", ({ grid, world, inside }) => {
-      if (this.view === "world") {
-        const level = inside ? this.project.levelAt(world.x, world.y) : undefined;
-        cell.textContent = inside ? `${Math.floor(world.x)}, ${Math.floor(world.y)} px` : "—";
-        value.textContent = level ? level.identifier : "—";
-        return;
-      }
-      const { doc } = this.level;
-      const onLevel =
-        inside && grid.x >= 0 && grid.y >= 0 && grid.x < doc.width && grid.y < doc.height;
-      if (!onLevel) {
-        cell.textContent = "—";
-        value.textContent = "—";
-        return;
-      }
-      cell.textContent = `${grid.x}, ${grid.y}`;
-      if (this.entities.isActive) {
-        const hit = this.entities.hitTest(world);
-        const def = hit ? this.project.getEntityDef(hit.defUid) : undefined;
-        value.textContent = def && hit ? `${def.identifier} @ ${hit.x}, ${hit.y} px` : "—";
-        return;
-      }
-      const layer = doc.getActiveLayer();
-      const v = layer?.get(grid.x, grid.y) ?? 0;
-      const def = layer ? this.project.getLayerDefForLayer(layer.id) : undefined;
-      if (def?.type === "Tiles") {
-        const tile = decodeTile(v);
-        const auto = this.project.isAutoLayer(def) ? " (auto)" : "";
-        value.textContent = tile
-          ? `tile #${tile.tileId}${tile.flipX ? " ↔" : ""}${tile.flipY ? " ↕" : ""}${auto}`
-          : `empty${auto}`;
-        return;
-      }
-      value.textContent =
-        v === 0
-          ? "empty"
-          : `${def?.intGridValues.find((e) => e.value === v)?.identifier ?? "?"} (${v})`;
-    });
-    const zoom = (z: number) => {
-      const text = `${Math.round(z * 100)}%`;
-      $("#statZoom").textContent = text;
-      $("#zoomHud").textContent = text;
-    };
-    this.workspace.events.on("camera:changed", ({ zoom: z }) => zoom(z));
-    zoom(this.workspace.zoom);
   }
 
   // ------------------------------------------------------------------ rendering

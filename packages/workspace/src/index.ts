@@ -5,3 +5,4 @@ export * from "./Workspace";
 export * from "./scenes/GridDocumentScene";
 export * from "./project/files";
 export * from "./project/ProjectSession";
+export * from "./project/ProjectFiles";

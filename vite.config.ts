@@ -1,7 +1,13 @@
 // vp migrate: merged .oxlintrc.json (566ca81181da8a008007d08389915c64).
-import { defineConfig } from "vite-plus";
+import { configDefaults, defineConfig } from "vite-plus";
 
 export default defineConfig({
+  test: {
+    // e2e/*.spec.ts are Playwright tests (`vp run test:e2e`). Vitest's default
+    // include pattern matches them too, and Playwright's `test()` throws when
+    // Vitest imports it (seen in the VS Code Testing tab), so keep them out.
+    exclude: [...configDefaults.exclude, "e2e/**"],
+  },
   staged: {
     "*": "vp check --fix",
   },

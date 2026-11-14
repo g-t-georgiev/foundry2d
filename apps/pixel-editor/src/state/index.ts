@@ -1,3 +1,14 @@
+/**
+ * UI state store (Ajv-validated actions, Immer updates).
+ *
+ * Rule for both apps: the store holds UI state only — the current tool,
+ * colours or values, toggles, selections in panels, the active view. Model
+ * data (cells, layers, frames, levels, entities, definitions) lives in the
+ * model objects and changes through commands, so undo/redo and saving have
+ * one source of truth. Mirrors of model facts (like the document size shown
+ * in a size picker) are allowed when the model stays authoritative and the
+ * app keeps them in sync.
+ */
 import type { ApplicationState, ApplicationStateActionsMap } from "./types";
 import { Store } from "@foundry2d/store";
 import { PixelUtils } from "@foundry2d/core";

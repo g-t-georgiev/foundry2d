@@ -9,3 +9,4 @@ declare global {
 
 export type { ProjectBrowser };
 export * from "./types";
+export * from "./bind";
