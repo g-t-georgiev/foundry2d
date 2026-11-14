@@ -4,6 +4,7 @@ Two apps on one engine:
 
 - **Pixel Editor** (`apps/pixel-editor`): Piskel-like sprite editor. One document, one canvas workspace.
 - **Level Designer** (`apps/level-designer`): LDtk-like editor. A project holds a **world** of **levels**. You edit each level's layers (IntGrid, Tiles, Entities). First target: authoring the Pac-Man maps.
+- **Sprite Packer** (`apps/sprite-packer`, planned in Phase 9): TexturePacker-like spritesheet builder, the third app in the suite.
 
 The reference repos (`2d-pixel-art-editor`, `level-editor`) are sources of behaviour and UI only. We port ideas and code from them; nothing depends on them.
 
@@ -275,9 +276,10 @@ Issues, improvements and polish candidates collected along the way, including ev
     - The level designer dropped World/Level switches requested during the 320 ms zoom animation (Enter right after switching to the world did nothing). Transitions are now queued.
     - `<body data-view>` was picked up as a view tab and given `aria-selected`.
 - **8.3 Architecture:** items 1–4, done under the smoke tests from 8.2.
-- **8.4 Files and storage:** items 6–9.
+- **8.4 Files and storage:** items 6–9 and 32–37 (work files versus export files).
 - **8.5 Features:** items 12–15, 17–20, 23, 30 and 31.
 - **8.6 Quality:** items 16, 26–28.
+- **8.7 Engine formats and distribution:** items 38–40. Item 40 is shared with Phase 9, so it can move there if the packer starts first.
 
 **Architecture**
 
@@ -328,14 +330,90 @@ Issues, improvements and polish candidates collected along the way, including ev
 30. Phase 7b auto-layer gaps (LDtk has them): several tiles stacked in one cell (rules that don't stop at the first match), rule groups that can be toggled together, per-rule out-of-bounds handling, tile offsets, and auto-layers fed by other auto-layers.
 31. The target architecture planned shared `@foundry2d/ui` components (tool bar, palette, panel section, property grid, modal, status bar). Both apps still build these in plain HTML. Extract them alongside items 2 and 3.
 
-### Phase 9: Documentation, manual and onboarding
+**Work files versus export files** (requested 2026-11-14; to check during 8.4)
+
+Tools like Photoshop, Piskel, Tiled and LDtk keep two kinds of output apart:
+
+- a **work file** that stores everything needed to pick up where you left off;
+- **exports**, which are the product: only the data a game or engine needs.
+
+Foundry2D already has both, but the line between them isn't drawn deliberately yet.
+
+32. **Define the work file as the full editing state.** Today it stores the document only.
+    - Add view and editor state: camera (zoom and position, per level in the level designer), active layer, frame, tool and colours, grid and onion-skin toggles, the open view (world or level), panel sizes, and the last export settings and target.
+    - Keep this state in a separate `editor` block, so the document data stays clean and tools that read the file can ignore it.
+    - Restoring it on open makes a work file reopen exactly as it was left.
+33. **Branded work-file extensions** that the OS can associate with the apps, for example `.f2dsprite` and `.f2dlevel`.
+    - Today the names end in `.json` (`.f2d.json`, `.f2dlevel.json`), so the OS treats them as plain JSON.
+    - The content can stay JSON, as Piskel's and LDtk's files do; the extension is what links the file to the app.
+    - Give each format a registered-style MIME type (e.g. `application/vnd.foundry2d.sprite+json`) for the save picker.
+    - Keep opening the old `.json` names.
+34. **OS file association for a web app.** Add a web app manifest to each app. Once a user installs the app (Chromium desktop), its `file_handlers` entry associates the branded extensions with it, and the `launchQueue` API then opens files double-clicked in the OS.
+    - Without installing, the apps keep working through Open and drag-and-drop.
+    - This is also the natural point to add an app icon and offline support (service worker), so check scope then.
+35. **Level designer exports** in their own export dialog (Ctrl+E), mirroring the pixel editor's.
+    - Game JSON per level or for the whole world, with only game data: no editor colours, uids or view state. Review what today's export still carries.
+    - CSV per IntGrid or Tiles layer (row per line, like Tiled's CSV layer format), optionally as a ZIP with one file per layer.
+    - PNG renders of levels or layers, and entities as JSON (or CSV for simple tables).
+    - The dialog remembers its settings in the work file (item 32), so re-exporting is one click.
+36. **Pixel editor export formats.** Images, spritesheets and TexturePacker JSON exist. Check which data formats engines actually read, so we add those rather than guess.
+    - CSV frame lists (name, x, y, w, h, duration) are rare for spritesheets. Cheap to add, but probably low value.
+    - The commonly used ones are Starling/Sparrow XML (Phaser, Starling and others), Aseprite-style JSON with tags, and Godot `SpriteFrames` (`.tres`).
+    - Decide with a target engine in mind.
+37. **"Native format versus plain JSON" (the LDtk note).** As I understand LDtk's advice:
+    - Its native `.ldtk` file is still JSON, but it is the editor's complete, versioned project: definitions with uids, editor-only settings and layout. The editor migrates it when its format changes.
+    - A plain JSON export is a one-way snapshot for games. It can drop editor data and isn't guaranteed to reopen losslessly or to be upgraded.
+    - "Better support" therefore means round-tripping and future upgrades, not a different encoding.
+    - Apply the same contract here: work files carry a format version with migrations (both formats already have versions); exports are documented and stable for games, but are not meant to be reopened for editing.
+    - Also consider LDtk's option to store each level in its own file, which keeps version-control diffs small for big worlds.
+
+**Delivery and engine formats** (requested 2026-11-14)
+
+38. **Offline support (installable web app).** Each app gets a web app manifest, icons and a service worker that caches the app shell, so it installs from the browser and works offline. Items 33–34 (branded files, file association) build on the same manifest.
+    - Storage already works offline (IndexedDB, File System Access).
+    - The service worker needs an update flow ("new version available, reload"), so a cached old version never silently edits newer files.
+39. **Standalone desktop and mobile apps.** Decide between packaging the existing web apps and keeping them installable web apps only.
+    - **Desktop:** Tauri (small, uses the system web view) or Electron (one Chromium everywhere, bigger). Either gives real file associations, native menus, recent files and plain file-system access without browser pickers.
+    - **Mobile:** Capacitor around the same build, or installable web apps first. Touch input needs its own pass: pinch zoom, a long press for the secondary action, and larger hit targets.
+    - Choose after item 38, because the installable web app may already cover most needs.
+40. **Spritesheet formats for several game engines**, as one shared module (e.g. `@foundry2d/formats`). The pixel editor's exporter and the Sprite Packer (Phase 9) both use it, so a format is written once.
+    - Candidates: TexturePacker JSON Hash and Array (done), Phaser (JSON plus multi-atlas), Starling/Sparrow XML, Aseprite JSON with tags, Godot `SpriteFrames` and `AtlasTexture`, Unity sprite metadata, LibGDX `.atlas`, Cocos2d `.plist`, and CSS sprites.
+    - Each format gets a fixture test with a known-good file, checked against the engine's importer where practical.
+    - Supersedes the format question in item 36: pick the first few by target engine, then grow the list.
+
+### Phase 9: Sprite Packer app (TexturePacker-style)
+
+A third app in the monorepo that turns many images into optimised spritesheets plus engine data. The pixel editor keeps its own spritesheet export for its sprites, and the packer is for whole asset folders.
+
+- **Prototype to learn from:** `spritesheet-generator` (a separate repository in the GitHub folder; reference only, nothing depends on it). It is about 1,100 lines of plain JavaScript with:
+  - image upload;
+  - horizontal, vertical and grid layouts, with margin and edge extrusion;
+  - frame data as JSON;
+  - saving through the file picker or a download;
+  - a theme switcher.
+
+  It has no real packing, trimming, rotation, multiple sheets or engine formats. Its layout code becomes the packer's simple layouts; the rest is new.
+
+- **Inputs:** drag-and-drop images or folders (File System Access for live folders that re-pack on change), pixel-editor sprites and their frames, and existing atlases to unpack. Names come from file paths, with animation sequences detected from numeric suffixes.
+- **Packing:**
+  - **Algorithms:** MaxRects (best-fit heuristics), shelf and grid, with optional 90° rotation.
+  - **Per-sprite clean-up:** trimming of transparent edges (keeping the original size and offset), extrusion, padding, and power-of-two or square sizes with a maximum sheet size.
+  - **Several sheets:** overflow into multiple sheets (multi-atlas), aliasing of identical images so they are stored once, and pivots per sprite.
+- **Outputs:**
+  - **Images:** PNG (and WebP), with optional premultiplied alpha and scale variants (e.g. @1x and @2x).
+  - **Data:** every engine format through the shared module (item 40).
+  - **Project file:** a branded work file (`.f2dpack`) that stores sources, settings and per-sprite overrides, following items 32–37.
+- **UI:** the shared shell from Phase 8 (workspace canvas, panels, project browser). A sheet preview with zoom, a sprite list with search and overrides, an animation preview, and packing statistics (fill rate, sheet count).
+- **Reuse:** `@foundry2d/workspace` for the preview canvas, the export controller's PNG and ZIP encoders, `compositeRgba` for sprite input, and storage and `ProjectSession` for the library and recovery.
+
+### Phase 10: Documentation, manual and onboarding
 
 1. **Markdown sources** in `docs/`, the single source of truth:
    - `README.md` at the root: what foundry2d is, screenshots, quick start (`vp install`, `vp dev`), and the repository layout.
    - **Architecture:** packages and their boundaries, the document, command and history model, the render pipeline, workspace and scenes, storage, and the project file formats.
    - **Technologies:** Vite+ (`vp`), TypeScript, Vitest, Ajv and Immer, Canvas 2D, Web Components, IndexedDB and the File System Access API.
    - **API reference** for `@foundry2d/core`, `render`, `workspace`, `store` and `ui`, generated from TSDoc comments (TypeDoc with its Markdown plugin) and kept in sync by a `vp run docs` task.
-   - **User manuals** for the pixel editor and the level designer: every tool, panel and dialog with what it does and why, workflows (draw a sprite and export a spritesheet; build a Pac-Man maze; import a sprite as a tileset; place entities), file formats for game developers, and hotkey tables.
+   - **User manuals** for the pixel editor, the level designer and the sprite packer: every tool, panel and dialog with what it does and why, workflows (draw a sprite and export a spritesheet; build a Pac-Man maze; import a sprite as a tileset; place entities), file formats for game developers, and hotkey tables.
    - Hotkey tables are generated from the apps' keymaps, so the docs can't drift from the code.
 2. **Manual site** (`apps/docs`, built with Vite+ from the same Markdown):
    - Left: a chapter and article tree, collapsible and clickable, with search.
