@@ -1281,8 +1281,9 @@ body {
   margin-top: 8px;
 }
 
-.level-fields:empty {
-  display: none;
+.level-fields .level-fields-link {
+  order: 1;
+  align-self: flex-start;
 }
 
 .levels-settings {

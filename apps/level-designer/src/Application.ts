@@ -1208,7 +1208,14 @@ export default class Application {
       level.bgColor === null
         ? "This level uses the project's default background"
         : "Use the project's default background";
+    const editFields = Object.assign(document.createElement("button"), {
+      className: "btn btn-small level-fields-link",
+      textContent: project.defs.levelFields.length ? "Edit level fields…" : "Add level fields…",
+      title: "Level fields are defined in Project settings → Levels",
+    });
+    editFields.addEventListener("click", () => this.settings.open(project, null, "levels"));
     $("#levelFields").replaceChildren(
+      editFields,
       ...project.defs.levelFields.map((field) =>
         fieldInput({
           project,
