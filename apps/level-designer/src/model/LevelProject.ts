@@ -26,6 +26,30 @@ export const EMPTY_CELL = 0;
 
 export type LevelDocument = GridDocument<Int32Array>;
 
+/** One layer of a level in a definition snapshot. */
+interface LayerSnapshot {
+  name: string;
+  visible: boolean;
+  opacity: number;
+  locked: boolean;
+  /** Never mutated after capture, so snapshots can share it. */
+  data: Int32Array;
+}
+
+interface LevelDefinitionSnapshot {
+  order: string[];
+  layers: Map<string, LayerSnapshot>;
+  activeLayerId: string | null;
+  entities: EntityInstance[];
+}
+
+/** Everything a definition edit can change (see `LevelProject.snapshotDefinitions`). */
+export interface DefinitionSnapshot {
+  defs: ProjectDefs;
+  gridSize: number;
+  levels: Map<number, LevelDefinitionSnapshot>;
+}
+
 export class Level {
   /** Placed entities on every Entities layer, in draw order. */
   public entities: EntityInstance[] = [];
@@ -66,6 +90,8 @@ export type ProjectEventMap = {
   "levels:changed": () => void;
   /** Project-wide settings (name, grid size) changed. */
   "settings:changed": () => void;
+  /** Definitions were put back by undo or redo (dialogs showing them should refresh). */
+  "defs:restored": () => void;
   /** Entity instances of a level were added, removed, moved or edited. */
   "entities:changed": (levelUid: number) => void;
 };
@@ -144,6 +170,7 @@ export class LevelProject {
     const next = Math.max(1, Math.round(size));
     if (next === this.gridSize) return;
     this.gridSize = next;
+    this.definitionVersion++;
     this.events.emit("settings:changed");
   }
 
@@ -1103,6 +1130,129 @@ export class LevelProject {
     this.events.emit("entities:changed", level.uid);
   }
 
+  // ------------------------------------------------------------------ definition history
+
+  /**
+   * Receives every definition edit as `(label, before, after)` snapshots so
+   * the app can record it as an undo step. Unset (tests, loading), edits
+   * simply apply.
+   */
+  definitionRecorder:
+    | ((label: string, before: DefinitionSnapshot, after: DefinitionSnapshot) => void)
+    | null = null;
+  private recordDepth = 0;
+  /** Bumped by every definition change; tells real edits from no-ops. */
+  private definitionVersion = 0;
+
+  /**
+   * Runs a definition edit; with a recorder installed, snapshots before and
+   * after so it can be undone. Nested edits belong to the outermost one.
+   */
+  recordDefinitionEdit<T>(label: string, run: () => T): T {
+    if (!this.definitionRecorder || this.recordDepth > 0) return run();
+    const before = this.snapshotDefinitions();
+    const version = this.definitionVersion;
+    this.recordDepth++;
+    let result: T;
+    try {
+      result = run();
+    } finally {
+      this.recordDepth--;
+    }
+    if (this.definitionVersion !== version) {
+      this.definitionRecorder(label, before, this.snapshotDefinitions(before));
+    }
+    return result;
+  }
+
+  /**
+   * Definitions, grid size and every level's layers (order, properties,
+   * cells) and entities. With `share`, layer data equal to the shared
+   * snapshot's reuses its copy, so unchanged layers cost nothing.
+   */
+  snapshotDefinitions(share?: DefinitionSnapshot): DefinitionSnapshot {
+    const levels = new Map<number, LevelDefinitionSnapshot>();
+    for (const level of this.levels) {
+      const previous = share?.levels.get(level.uid);
+      const layers = new Map<string, LayerSnapshot>();
+      for (const layer of level.doc.layers) {
+        const old = previous?.layers.get(layer.id);
+        const data = old && sameCells(old.data, layer.data) ? old.data : new Int32Array(layer.data);
+        layers.set(layer.id, {
+          name: layer.name,
+          visible: layer.visible,
+          opacity: layer.opacity,
+          locked: layer.locked,
+          data,
+        });
+      }
+      levels.set(level.uid, {
+        order: level.doc.layers.map((l) => l.id),
+        layers,
+        activeLayerId: level.doc.activeLayerId,
+        entities: structuredClone(level.entities),
+      });
+    }
+    return { defs: structuredClone(this.defs), gridSize: this.gridSize, levels };
+  }
+
+  /**
+   * Puts definitions and level layers back to a snapshot, in place: levels
+   * and documents stay the same objects and layers keep their ids, so undo
+   * steps recorded before (cell edits, entity edits, world edits) stay valid.
+   */
+  restoreDefinitions(snapshot: DefinitionSnapshot): void {
+    const defs = structuredClone(snapshot.defs);
+    this.defs.layers.splice(0, Infinity, ...defs.layers);
+    this.defs.tilesets.splice(0, Infinity, ...defs.tilesets);
+    this.defs.entities.splice(0, Infinity, ...defs.entities);
+    this.defs.enums.splice(0, Infinity, ...defs.enums);
+    for (const level of this.levels) {
+      const saved = snapshot.levels.get(level.uid);
+      if (saved) this.restoreLevelLayers(level, saved);
+    }
+    if (snapshot.gridSize !== this.gridSize) {
+      this.gridSize = snapshot.gridSize;
+      this.events.emit("settings:changed");
+    }
+    this.defsChanged();
+    this.events.emit("defs:restored");
+  }
+
+  private restoreLevelLayers(level: Level, saved: LevelDefinitionSnapshot): void {
+    const { doc } = level;
+    // Add missing layers first, so removing never empties the document.
+    for (const id of saved.order) {
+      const s = saved.layers.get(id)!;
+      const layer = doc.getLayer(id);
+      if (!layer) {
+        doc.addLayer({ id, ...s, data: s.data, activate: false });
+        continue;
+      }
+      layer.name = s.name;
+      layer.visible = s.visible;
+      layer.opacity = s.opacity;
+      layer.locked = s.locked;
+      if (!sameCells(layer.data, s.data)) {
+        layer.data.set(s.data);
+        layer.version++;
+        doc.notifyCellsChanged(id);
+      }
+    }
+    // Collected first: removing changes the list being iterated.
+    const extra = doc.layers.filter((l) => !saved.order.includes(l.id));
+    for (const layer of extra) doc.removeLayer(layer.id);
+    saved.order.forEach((id, index) => {
+      const from = doc.layers.findIndex((l) => l.id === id);
+      if (from !== -1 && from !== index) doc.moveLayer(from, index);
+    });
+    if (saved.activeLayerId && doc.getLayer(saved.activeLayerId)) {
+      doc.setActiveLayer(saved.activeLayerId);
+    }
+    level.entities = structuredClone(saved.entities);
+    this.events.emit("entities:changed", level.uid);
+  }
+
   // ------------------------------------------------------------------ rendering
 
   /** Value → packed color for a document layer, cached per definition. */
@@ -1172,6 +1322,7 @@ export class LevelProject {
   }
 
   private defsChanged(): void {
+    this.definitionVersion++;
     this.colorizers.clear();
     this.paletteVersion++;
     this.events.emit("defs:changed");
@@ -1182,4 +1333,58 @@ function sameCells(a: ArrayLike<number>, b: ArrayLike<number>): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
+}
+
+/**
+ * Definition edits and their undo labels. Each is wrapped so that, with a
+ * `definitionRecorder` installed, it becomes one undo step (see
+ * `recordDefinitionEdit`); edits made inside another edit join that step.
+ */
+const DEFINITION_EDITS: Partial<Record<keyof LevelProject, string>> = {
+  setGridSize: "Change grid size",
+  addIntGridLayer: "Add layer",
+  addTilesLayer: "Add layer",
+  addEntitiesLayer: "Add layer",
+  duplicateLayerDef: "Duplicate layer",
+  removeLayerDef: "Delete layer",
+  moveLayerDef: "Move layer",
+  placeLayerDefAbove: "Move layer",
+  renameLayerDef: "Rename layer",
+  setLayerTileset: "Change layer tileset",
+  addIntGridValue: "Add value",
+  updateIntGridValue: "Edit value",
+  removeIntGridValue: "Remove value",
+  addTileset: "Add tileset",
+  updateTileset: "Edit tileset",
+  removeTileset: "Delete tileset",
+  setAutoSource: "Change auto-tiling",
+  addAutoRule: "Add rule",
+  updateAutoRule: "Edit rule",
+  removeAutoRule: "Delete rule",
+  duplicateAutoRule: "Duplicate rule",
+  moveAutoRule: "Move rule",
+  reshuffleAutoLayer: "Reshuffle auto-layer",
+  addEntityDef: "Add entity",
+  updateEntityDef: "Edit entity",
+  removeEntityDef: "Delete entity",
+  addField: "Add field",
+  updateField: "Edit field",
+  removeField: "Remove field",
+  addEnum: "Add enum",
+  renameEnum: "Rename enum",
+  removeEnum: "Delete enum",
+  addEnumValue: "Add enum value",
+  updateEnumValue: "Edit enum value",
+  removeEnumValue: "Remove enum value",
+};
+
+for (const [name, label] of Object.entries(DEFINITION_EDITS)) {
+  const proto = LevelProject.prototype as unknown as Record<
+    string,
+    (...args: unknown[]) => unknown
+  >;
+  const original = proto[name];
+  proto[name] = function (this: LevelProject, ...args: unknown[]) {
+    return this.recordDefinitionEdit(label, () => original.apply(this, args));
+  };
 }

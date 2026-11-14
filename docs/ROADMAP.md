@@ -284,7 +284,7 @@ Issues, improvements and polish candidates collected along the way, including ev
   - **Shared theme (3):** `@foundry2d/ui/theme/tokens.css` holds the design tokens, `<layers-panel>` tokens and base resets, and both apps `@import` it. The pixel editor's short names (`--bg`, `--panel`…) are aliases of the shared tokens, so it now uses the level designer's palette.
   - **Store review (4):** every action is still used. The rule (the store holds UI state only; model data changes through commands) is now documented at the top of both stores.
   - **Tooling:** the root Vite config excludes `e2e/` from Vitest, so VS Code's Testing tab no longer imports the Playwright specs (which failed with "Playwright Test did not expect test.beforeEach() to be called here"). The Playwright extension is recommended for running them from the editor.
-- **8.4 Files and storage** (in progress): items 6–9 and 32–37 (work files versus export files).
+- **8.4 Files and storage** ✅ (2026-11-15; item 6 moved to 8.7): items 6–9 and 32–37 (work files versus export files).
   - ✅ **Work files keep the editing state (32):** an `editor` block next to the document data, written on save and in recovery snapshots and restored on open. Tool changes alone don't mark a file as changed, as in other editors; the state is captured whenever the file is next saved.
     - Pixel editor: camera, frame, tool, colour, pen size, grid, onion skin and mirror.
     - Level designer: view, open level, camera, tool, grid, selected values, tile flips and tile selections.
@@ -295,18 +295,25 @@ Issues, improvements and polish candidates collected along the way, including ev
     - Export (CSV): one file per layer, zipped when there are several, like Tiled's CSV layers. Entities get a header row and a column per field.
     - Copy layer as array.
 
-    The chosen format is remembered per browser. The ZIP writer moved to `@foundry2d/core`. PNG renders of levels and layers are still to do.
+    The chosen format is remembered per browser. The ZIP writer moved to `@foundry2d/core`.
+
+  - ✅ **PNG export (35):** "Export (PNG)" renders the level's visible layers and "Export layer (PNG)" renders the active layer. Both are at native size (a cell is grid-size pixels) on a transparent background, with tiles, value colours and entity shapes but no editor labels. The export waits for tileset images to load.
 
   - ✅ **Re-import tilesets (7):** a Re-import… button in the tileset editor replaces the image with an updated PNG or `.f2dsprite`. The tileset keeps its id, tile size and every placed tile, and a changed image size is flagged. Re-reading the original file automatically would need stored file handles, which aren't worth it yet.
   - ✅ **Library extras (8):**
     - **Save as** is a split button: "Save as file…" (the default, also Ctrl+Shift+S) or "Save a copy in this browser…", which asks for a name and continues with the copy.
     - Library cards on the start screen have a duplicate button.
     - The start screen shows storage use ("2.1 MB used of 1.2 GB").
-  - ⏭ **Undo for definition edits (9) moved to 8.5.** Definition edits can delete data in every level, while the undo history holds references to those levels' layers. Restoring a project snapshot in place would break older undo steps, which is why these edits clear the history today. The safe design is an inverse command per definition operation (add, remove, rename, reorder, values, fields, enums). That's a feature-sized piece of work.
-  - Still open in 8.4: the packaged project format with images (6; it needs a ZIP reader next to the writer) and PNG level renders (35). Item 34 (OS file association) goes with the manifest in 8.7, and items 36–37 are decisions to take with a target engine.
-- **8.5 Features:** items 9, 12–15, 17–20, 23, 30 and 31.
+  - ✅ **Undo for definition edits (9)**, first item of 8.5. This went simpler than first expected. Undo steps refer to levels by object and to layers by document plus layer id. A `DefinitionEditCommand` can therefore restore before/after snapshots _in place_: same `Level` and document objects, with layers recreated under their old ids. All earlier undo steps stay valid.
+    - **Recording:** every definition-editing method of `LevelProject` is wrapped once (a central list with undo labels), so all edits are recorded, whether from Project settings, the layers panel or the rules editor. Nested edits join the outer step, and no-ops record nothing.
+    - **Cost:** layer data the edit didn't change is shared between snapshots.
+    - **Merging:** repeats of the same "Edit …" step within a moment merge (dragging a colour picker is one step). Deletes and adds never merge.
+    - **Visible changes:** these edits no longer clear the history, their confirmations say "Ctrl+Z undoes it", and open dialogs refresh after undo or redo.
+  - ⏭ **Packaged project format (6) moved to 8.7.** It is a third file format next to `.f2dsprite` and `.f2dlevel`, so the choice of replacing or adding to them belongs with the OS file association and installable app (34, 38). The Sprite Packer (Phase 9) will need the same machinery: reading ZIPs, including compressed ones from other tools, folder input and asset files. Today only files saved to disk embed tileset images; library and recovery copies already keep them in the asset store.
+  - **8.4 is done** apart from item 6 (moved). Items 36–37 are decisions to take with a target engine.
+- **8.5 Features** (in progress): items 9 ✅, then 23, 12–13, 14–15, 17–20, 30 and 31, roughly in that order.
 - **8.6 Quality:** items 16, 26–28.
-- **8.7 Engine formats and distribution:** items 38–40. Item 40 is shared with Phase 9, so it can move there if the packer starts first.
+- **8.7 Engine formats and distribution:** items 38–40, plus item 34 (OS file association) and item 6 (packaged project format). Item 40 is shared with Phase 9, so it can move there if the packer starts first.
 
 **Architecture**
 

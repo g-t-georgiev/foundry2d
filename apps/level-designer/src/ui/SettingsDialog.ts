@@ -5,8 +5,6 @@ import { isPixelSpriteFile, sheetToDataUrl, spriteToSheet } from "../io/spriteIm
 import EntityDefsEditor from "./EntityDefsEditor";
 
 export interface SettingsDialogHooks {
-  /** Called after edits that make existing undo steps unsafe (removing data). */
-  onDestructiveChange: () => void;
   confirm: (message: string) => boolean;
   /** Reports problems such as an unreadable image. */
   notify: (message: string) => void;
@@ -188,6 +186,11 @@ export default class SettingsDialog {
     if (!this.dialog.open) this.dialog.showModal();
   }
 
+  /** Redraws when open (after undo or redo changed the definitions). */
+  refresh(): void {
+    if (this.dialog.open) this.render();
+  }
+
   close(): void {
     if (this.dialog.open) this.dialog.close();
   }
@@ -334,10 +337,9 @@ export default class SettingsDialog {
       disabled: project.defs.layers.length <= 1,
     });
     deleteLayer.addEventListener("click", () => {
-      const message = `Delete layer "${def.identifier}" and its data in every level? This can't be undone.`;
+      const message = `Delete layer "${def.identifier}" and its data in every level? Ctrl+Z undoes it.`;
       if (!this.hooks.confirm(message)) return;
       project.removeLayerDef(def.uid);
-      this.hooks.onDestructiveChange();
       this.render();
     });
 
@@ -392,14 +394,13 @@ export default class SettingsDialog {
           !project.isAutoLayer(def) &&
           painted &&
           !this.hooks.confirm(
-            `Generate "${def.identifier}" from rules? Its painted tiles are replaced in every level. This can't be undone.`
+            `Generate "${def.identifier}" from rules? Its painted tiles are replaced in every level. Ctrl+Z undoes it.`
           )
         ) {
           this.render();
           return;
         }
         project.setAutoSource(def.uid, sourceUid);
-        if (sourceUid !== null) this.hooks.onDestructiveChange();
         this.render();
       });
       parts.push(field("Auto-tiling: generate from IntGrid layer", auto));
@@ -453,10 +454,9 @@ export default class SettingsDialog {
       });
       remove.setAttribute("aria-label", remove.title);
       remove.addEventListener("click", () => {
-        const message = `Remove "${entry.identifier}"? Cells using it are cleared in every level. This can't be undone.`;
+        const message = `Remove "${entry.identifier}"? Cells using it are cleared in every level. Ctrl+Z undoes it.`;
         if (!this.hooks.confirm(message)) return;
         project.removeIntGridValue(def.uid, entry.value);
-        this.hooks.onDestructiveChange();
         this.render();
       });
 

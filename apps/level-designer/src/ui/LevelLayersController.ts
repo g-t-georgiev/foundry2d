@@ -7,8 +7,6 @@ export interface LevelLayersHooks {
   /** Asks which kind of layer to add (`null` = cancelled). */
   chooseLayerType(): Promise<LayerType | null>;
   confirm(message: string): boolean;
-  /** After edits that remove data (deleting a layer): undo history is no longer safe. */
-  onDestructiveChange(): void;
   notify(message: string, timeout?: number): void;
 }
 
@@ -93,10 +91,9 @@ export default class LevelLayersController {
     const extra = dependents.length
       ? ` Auto-layers generated from it (${dependents.map((d) => d.identifier).join(", ")}) keep their tiles and become hand-painted.`
       : "";
-    const message = `Delete layer "${def.identifier}" and its data in every level?${extra} This can't be undone.`;
+    const message = `Delete layer "${def.identifier}" and its data in every level?${extra} Ctrl+Z undoes it.`;
     if (!this.hooks.confirm(message)) return;
     project.removeLayerDef(uid);
-    this.hooks.onDestructiveChange();
   }
 
   destroy(): void {

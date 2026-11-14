@@ -139,6 +139,13 @@ test("adds and deletes layers from the layers panel", async ({ page }) => {
   await panel.getByRole("button", { name: "Delete layer" }).click();
   await expect(panel.locator(".row")).toHaveCount(3);
   await expect(panel.locator(".row .name")).toHaveText(["entities", "collectibles", "collision"]);
+
+  // Layer edits are undo steps now: deleting the collision layer is undone with Ctrl+Z.
+  await panel.locator(".row").filter({ hasText: "collision" }).locator(".name").click();
+  await panel.getByRole("button", { name: "Delete layer" }).click();
+  await expect(panel.locator(".row")).toHaveCount(2);
+  await page.keyboard.press("Control+z");
+  await expect(panel.locator(".row .name")).toHaveText(["entities", "collectibles", "collision"]);
 });
 
 test("reopens with the same view, tool and zoom (work file editor state)", async ({ page }) => {
@@ -212,4 +219,38 @@ test("re-imports a tileset image and keeps the placed tiles", async ({ page }) =
   await expect(page.locator("#statMessage")).toContainText("Re-imported");
   await expect(dialog).toContainText("sheet-v2.png");
   expect(await cell(page, "def_2", 0, 18)).toBe(tilesBefore);
+});
+
+/** Width and height from a PNG file's IHDR chunk. */
+const pngSize = (bytes: Buffer) => ({
+  width: bytes.readUInt32BE(16),
+  height: bytes.readUInt32BE(20),
+});
+
+test("exports a level and a single layer as PNG at native size", async ({ page }) => {
+  await page.locator('[data-command="open"]').click();
+  await page
+    .locator("project-browser")
+    .getByRole("button", { name: /Platformer/ })
+    .click();
+  await expect.poll(() => app(page)).toBe("platformer");
+
+  const exportButton = page.locator("#exportButton");
+  const pick = async (name: RegExp) => {
+    await exportButton.getByRole("button", { name: "More options" }).click();
+    const download = page.waitForEvent("download");
+    await exportButton.getByRole("menuitemradio", { name }).click();
+    const file = await download;
+    const path = await file.path();
+    const { readFile } = await import("node:fs/promises");
+    return { name: file.suggestedFilename(), bytes: await readFile(path) };
+  };
+
+  const level = await pick(/^Export \(PNG\)/);
+  expect(level.name).toBe("platformer.png");
+  expect(pngSize(level.bytes)).toEqual({ width: 640, height: 352 });
+
+  const layer = await pick(/Export layer \(PNG\)/);
+  expect(layer.name).toBe("platformer-terrain.png");
+  expect(pngSize(layer.bytes)).toEqual({ width: 640, height: 352 });
 });

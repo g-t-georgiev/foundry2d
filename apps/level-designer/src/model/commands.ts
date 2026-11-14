@@ -1,5 +1,5 @@
 import type { ICommand } from "@foundry2d/core";
-import type { Level, LevelProject } from "./LevelProject";
+import type { DefinitionSnapshot, Level, LevelProject } from "./LevelProject";
 
 /**
  * Undoable world edits. Commands hold the `Level` objects themselves, so
@@ -107,5 +107,27 @@ export class RenameLevelCommand implements ICommand {
 
   undo(): void {
     this.project.renameLevel(this.level.uid, this.previous);
+  }
+}
+
+/**
+ * A definition edit (layers, values, tilesets, entities, enums, rules, grid
+ * size) as one undo step: restores the snapshot taken before or after it.
+ * `after` is replaced when rapid repeats of the same edit are merged.
+ */
+export class DefinitionEditCommand implements ICommand {
+  constructor(
+    private readonly project: LevelProject,
+    readonly label: string,
+    private readonly before: DefinitionSnapshot,
+    public after: DefinitionSnapshot
+  ) {}
+
+  execute(): void {
+    this.project.restoreDefinitions(this.after);
+  }
+
+  undo(): void {
+    this.project.restoreDefinitions(this.before);
   }
 }

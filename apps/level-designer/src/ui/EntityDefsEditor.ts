@@ -15,8 +15,6 @@ import {
 
 export interface EntityDefsEditorHooks {
   confirm: (message: string) => boolean;
-  /** Called after edits that remove data, so the undo history can be cleared. */
-  onDestructiveChange: () => void;
 }
 
 const el = <K extends keyof HTMLElementTagNameMap>(
@@ -299,11 +297,10 @@ export default class EntityDefsEditor {
     });
     remove.addEventListener("click", () => {
       const message = instances
-        ? `Delete "${def.identifier}" and its ${instances} placed instance(s) in every level? This can't be undone.`
+        ? `Delete "${def.identifier}" and its ${instances} placed instance(s) in every level? Ctrl+Z undoes it.`
         : `Delete "${def.identifier}"?`;
       if (!this.hooks.confirm(message)) return;
       project.removeEntityDef(def.uid);
-      if (instances) this.hooks.onDestructiveChange();
       this.render();
     });
 
@@ -377,14 +374,11 @@ export default class EntityDefsEditor {
       remove.setAttribute("aria-label", remove.title);
       remove.addEventListener("click", () => {
         if (
-          !this.hooks.confirm(
-            `Remove field "${f.identifier}" and its values? This can't be undone.`
-          )
+          !this.hooks.confirm(`Remove field "${f.identifier}" and its values? Ctrl+Z undoes it.`)
         ) {
           return;
         }
         project.removeField(def.uid, f.uid);
-        this.hooks.onDestructiveChange();
         this.render();
       });
 
@@ -491,7 +485,6 @@ export default class EntityDefsEditor {
           return;
         }
         project.removeEnumValue(def.uid, value.id);
-        this.hooks.onDestructiveChange();
         this.render();
       });
       table.append(el("div", { className: "value-row enum-row" }, id, color, remove));
@@ -513,7 +506,6 @@ export default class EntityDefsEditor {
         return;
       }
       project.removeEnum(def.uid);
-      this.hooks.onDestructiveChange();
       this.render();
     });
 

@@ -34,12 +34,12 @@ import {
   type ProjectBrowser,
   type SplitButton,
 } from "@foundry2d/ui";
-import type { Level, LevelProject } from "./model/LevelProject";
+import type { DefinitionSnapshot, Level, LevelProject } from "./model/LevelProject";
 import { WORLD_LAYOUTS, type LayerDef, type WorldLayout } from "./model/types";
 import { createProjectFromPreset, presets, DEFAULT_PRESET_ID } from "./model/presets";
 import { bindKeys } from "./keys";
 import { bindStatusBar } from "./ui/StatusBar";
-import { MoveLevelCommand } from "./model/commands";
+import { DefinitionEditCommand, MoveLevelCommand } from "./model/commands";
 import { LevelActions, levelStore, type EditorView, type LevelTool } from "./state";
 import PaletteView from "./ui/PaletteView";
 import TilesetPickerView from "./ui/TilesetPickerView";
@@ -74,6 +74,7 @@ import {
 } from "./io/gameFormat";
 import { collectAssetRefs, externalizeAssets, internalizeAssets } from "./io/assets";
 import { renderProjectThumbnail } from "./io/thumbnail";
+import { renderLevelPng } from "./io/levelImage";
 
 const $ = <T extends Element = HTMLElement>(selector: string) =>
   document.querySelector<T>(selector)!;
@@ -131,6 +132,14 @@ export default class Application {
   private loading = false;
   private readonly layersPanel: LayersPanel;
   private altHeld = false;
+  /** Bumped on every history change; tells whether the last definition edit is still on top. */
+  private historyVersion = 0;
+  /** The last recorded definition edit, for merging rapid repeats (colour drags). */
+  private lastDefinitionEdit: {
+    command: DefinitionEditCommand;
+    at: number;
+    historyVersion: number;
+  } | null = null;
   readonly files: ProjectFiles<LevelWork>;
   readonly levelOps: LevelOperations;
   /**
@@ -189,7 +198,6 @@ export default class Application {
     });
     this.settings = new SettingsDialog($<HTMLDialogElement>("#settingsDialog"), {
       confirm: (message) => window.confirm(message),
-      onDestructiveChange: () => this.history.clear(),
       notify: (message) => this.showMessage(message, 5000),
       editRules: (uid) => this.rulesDialog.open(this.project, uid),
     });
@@ -283,6 +291,7 @@ export default class Application {
     this.bindDom();
     bindKeys(this.workspace.keymap, this);
     bindStatusBar(this);
+    this.history.onChange(() => this.historyVersion++);
     this.history.onChange((state) => {
       $<HTMLButtonElement>('[data-command="undo"]').disabled = !state.canUndo;
       $<HTMLButtonElement>('[data-command="redo"]').disabled = !state.canRedo;
@@ -317,6 +326,10 @@ export default class Application {
 
     this.project = project;
     this.history.clear();
+    this.lastDefinitionEdit = null;
+    // Definition edits become undo steps in the same history as cell edits.
+    project.definitionRecorder = (label, before, after) =>
+      this.recordDefinitionEdit(project, label, before, after);
     this.worldScene = this.createWorldScene();
 
     const persist = () => this.markDirty();
@@ -332,6 +345,10 @@ export default class Application {
         this.workspace.refreshCursor();
         this.levelScene.invalidate();
         persist();
+      }),
+      project.events.on("defs:restored", () => {
+        this.settings.refresh();
+        this.rulesDialog.refresh();
       }),
       project.events.on("settings:changed", () => {
         this.session.refresh();
@@ -398,7 +415,6 @@ export default class Application {
       layers: new LevelLayersController(this.layersPanel, this.project, level, this.history, {
         chooseLayerType: () => this.addLayerMenu.choose(),
         confirm: (message) => window.confirm(message),
-        onDestructiveChange: () => this.history.clear(),
         notify: (message, timeout) => this.showMessage(message, timeout),
       }),
       unsubscribe: [
@@ -630,6 +646,37 @@ export default class Application {
   // ------------------------------------------------------------------ files
 
   /**
+   * Records a definition edit. Repeats of the same "Edit …" step within a
+   * moment (a colour picker being dragged) merge into one undo step.
+   */
+  private recordDefinitionEdit(
+    project: LevelProject,
+    label: string,
+    before: DefinitionSnapshot,
+    after: DefinitionSnapshot
+  ): void {
+    const now = performance.now();
+    const last = this.lastDefinitionEdit;
+    // Only continuous edits merge (a colour picker being dragged records many
+    // "Edit value" steps); two quick deletes must stay two undo steps.
+    if (
+      last &&
+      label.startsWith("Edit ") &&
+      last.command.label === label &&
+      now - last.at < 800 &&
+      last.historyVersion === this.historyVersion
+    ) {
+      last.command.after = after;
+      last.at = now;
+      this.markDirty();
+      return;
+    }
+    const command = new DefinitionEditCommand(project, label, before, after);
+    this.history.record(command);
+    this.lastDefinitionEdit = { command, at: now, historyVersion: this.historyVersion };
+  }
+
+  /**
    * Deletes tileset images in the asset store that no library project and no
    * unsaved work refers to any more.
    */
@@ -657,8 +704,30 @@ export default class Application {
   /** Runs an export action: "json", "csv" or "copy-array" (the split button's options). */
   runExport(action: string): void {
     if (action === "csv") this.exportCsv();
+    else if (action === "png") void this.exportPng(false);
+    else if (action === "png-layer") void this.exportPng(true);
     else if (action === "copy-array") void this.copyActiveLayer();
     else this.exportJson();
+  }
+
+  /** PNG of the level's visible layers, or of the active layer only. */
+  async exportPng(activeLayerOnly: boolean): Promise<void> {
+    const level = this.exportLevel();
+    const layer = activeLayerOnly ? level.doc.getActiveLayer() : null;
+    if (activeLayerOnly && !layer) return;
+    try {
+      const blob = await renderLevelPng(this.project, level, { layerId: layer?.id });
+      const suffix = layer ? `-${layer.name}` : "";
+      downloadBlob(blob, `${this.exportBaseName(level)}${suffix}.png`);
+      this.showMessage(
+        layer
+          ? `Exported layer "${layer.name}" of ${level.identifier} as PNG`
+          : `Exported ${level.identifier} as PNG`
+      );
+    } catch (error) {
+      this.showMessage(`PNG export failed: ${(error as Error).message}`, 5000);
+      console.error(error);
+    }
   }
 
   /** The level being edited, or the one selected in the world view. */
