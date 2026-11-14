@@ -204,3 +204,57 @@ test.describe("system clipboard", () => {
     await expect.poll(() => pixel(page, 0, 0)).toBe(0);
   });
 });
+
+test("the magic wand selects connected colour; Delete clears only that", async ({ page }) => {
+  // A 2×1 block at (1,1)-(2,1) and a lone pixel of the same colour at (5,5).
+  await drag(page, await at(page, 1, 1), await at(page, 2, 1));
+  const lone = await at(page, 5, 5);
+  await page.mouse.click(lone.x, lone.y);
+
+  await page.keyboard.press("w");
+  const block = await at(page, 1, 1);
+  await page.mouse.click(block.x, block.y);
+  await page.keyboard.press("Delete");
+  await expect.poll(() => pixel(page, 1, 1)).toBe(0);
+  expect(await pixel(page, 2, 1)).toBe(0);
+  expect(await pixel(page, 5, 5)).not.toBe(0); // not connected: untouched
+
+  // Shift+click: the colour everywhere on the layer.
+  await page.keyboard.press("Control+z");
+  await page.keyboard.down("Shift");
+  await page.mouse.click(block.x, block.y);
+  await page.keyboard.up("Shift");
+  const rect = await page.evaluate(
+    () => (window.foundry as unknown as { selection: { rect: unknown } }).selection.rect
+  );
+  expect(rect).toEqual({ x: 1, y: 1, width: 5, height: 5 });
+});
+
+test("the lasso selects a freehand shape; cut and paste keep its shape", async ({ page }) => {
+  // Fill a 6×6 square, then lasso a triangle inside it.
+  await page.keyboard.press("r");
+  await page.keyboard.down("Shift"); // filled rectangle
+  await drag(page, await at(page, 0, 0), await at(page, 5, 5));
+  await page.keyboard.up("Shift");
+  await expect.poll(() => pixel(page, 5, 5)).not.toBe(0);
+
+  await page.keyboard.press("q");
+  const corner = await at(page, 0, 0);
+  await page.mouse.move(corner.x, corner.y);
+  await page.mouse.down();
+  for (const [x, y] of [
+    [4, 0],
+    [0, 4],
+    [0, 0],
+  ] as const) {
+    const p = await at(page, x, y);
+    await page.mouse.move(p.x, p.y, { steps: 6 });
+  }
+  await page.mouse.up();
+
+  await page.keyboard.press("Control+x");
+  // Inside the triangle cleared, outside it kept.
+  await expect.poll(() => pixel(page, 1, 1)).toBe(0);
+  expect(await pixel(page, 5, 5)).not.toBe(0);
+  expect(await pixel(page, 4, 4)).not.toBe(0);
+});

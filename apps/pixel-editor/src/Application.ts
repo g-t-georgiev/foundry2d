@@ -1,7 +1,9 @@
 import {
   EllipseTool,
   HistoryManager,
+  LassoTool,
   LineTool,
+  MagicWandTool,
   PixelUtils,
   RectangleTool,
   SelectTool,
@@ -131,6 +133,8 @@ export default class Application implements ApplicationContext {
     this.tools.registerTool(new LineTool<Uint32Array>("line"));
     this.tools.registerTool(new RectangleTool<Uint32Array>("rect", false));
     this.tools.registerTool(new EllipseTool<Uint32Array>("ellipse", false));
+    this.tools.registerTool(new LassoTool<Uint32Array>(this.selection, "lasso"));
+    this.tools.registerTool(new MagicWandTool<Uint32Array>(this.selection, "wand"));
     this.tools.registerTool(
       new SelectTool<Uint32Array>(this.selection, "select", {
         onBlocked: (layer) =>

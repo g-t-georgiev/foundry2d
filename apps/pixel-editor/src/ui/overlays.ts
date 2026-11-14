@@ -15,6 +15,10 @@ export class SelectionPass implements RenderPass {
   render(rc: RenderContext): void {
     const r = this.selection.rect;
     if (!r) return;
+    if (this.selection.mask) {
+      this.renderMask(rc, r, this.selection.mask);
+      return;
+    }
     const { ctx, camera } = rc;
     const tl = camera.worldToLocal(r.x, r.y);
     const br = camera.worldToLocal(r.x + r.width, r.y + r.height);
@@ -29,6 +33,49 @@ export class SelectionPass implements RenderPass {
     ctx.lineDashOffset = 4;
     ctx.strokeStyle = "#fff";
     ctx.strokeRect(x, y, w, h);
+    ctx.setLineDash([]);
+    ctx.lineDashOffset = 0;
+  }
+
+  /**
+   * Outline of a non-rectangular selection: every side of a selected cell
+   * whose neighbour isn't selected becomes a segment.
+   */
+  private renderMask(
+    rc: RenderContext,
+    r: { x: number; y: number; width: number; height: number },
+    mask: Uint8Array
+  ): void {
+    const { ctx, camera } = rc;
+    const at = (x: number, y: number) => {
+      const p = camera.worldToLocal(r.x + x, r.y + y);
+      return { x: Math.round(p.x) + 0.5, y: Math.round(p.y) + 0.5 };
+    };
+    const selected = (x: number, y: number) =>
+      x >= 0 && y >= 0 && x < r.width && y < r.height && mask[y * r.width + x] === 1;
+    const path = new Path2D();
+    const segment = (x0: number, y0: number, x1: number, y1: number) => {
+      const a = at(x0, y0);
+      const b = at(x1, y1);
+      path.moveTo(a.x, a.y);
+      path.lineTo(b.x, b.y);
+    };
+    for (let y = 0; y < r.height; y++) {
+      for (let x = 0; x < r.width; x++) {
+        if (!selected(x, y)) continue;
+        if (!selected(x, y - 1)) segment(x, y, x + 1, y);
+        if (!selected(x, y + 1)) segment(x, y + 1, x + 1, y + 1);
+        if (!selected(x - 1, y)) segment(x, y, x, y + 1);
+        if (!selected(x + 1, y)) segment(x + 1, y, x + 1, y + 1);
+      }
+    }
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = "#000";
+    ctx.stroke(path);
+    ctx.lineDashOffset = 4;
+    ctx.strokeStyle = "#fff";
+    ctx.stroke(path);
     ctx.setLineDash([]);
     ctx.lineDashOffset = 0;
   }

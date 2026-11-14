@@ -192,3 +192,86 @@ describe("region transforms", () => {
     expect(t).toEqual(r);
   });
 });
+
+describe("non-rectangular selections", () => {
+  const maskRows = (shape: {
+    rect: { width: number; height: number };
+    mask: Uint8Array | null;
+  }) => {
+    const rows: string[] = [];
+    for (let y = 0; y < shape.rect.height; y++) {
+      let row = "";
+      for (let x = 0; x < shape.rect.width; x++) {
+        row += !shape.mask || shape.mask[y * shape.rect.width + x] ? "#" : ".";
+      }
+      rows.push(row);
+    }
+    return rows;
+  };
+
+  it("lasso polygons select the traced outline and its interior", async () => {
+    const { polygonShape } = await import("../src");
+    const shape = polygonShape(
+      [
+        { x: 0, y: 0 },
+        { x: 4, y: 0 },
+        { x: 0, y: 4 },
+      ],
+      { width: 8, height: 8 }
+    )!;
+    expect(shape.rect).toEqual({ x: 0, y: 0, width: 5, height: 5 });
+    expect(maskRows(shape)).toEqual(["#####", "####.", "###..", "##...", "#...."]);
+  });
+
+  it("the magic wand selects connected same-colour cells, or the colour everywhere", async () => {
+    const { colorShape } = await import("../src");
+    const { layer } = setup(5, 3);
+    // 1 1 0 1 1
+    // 0 1 0 0 1
+    // 0 0 0 1 1
+    for (const [x, y] of [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [3, 0],
+      [4, 0],
+      [4, 1],
+      [3, 2],
+      [4, 2],
+    ]) {
+      layer.set(x, y, 1);
+    }
+    const left = colorShape(layer, 0, 0, true)!;
+    expect(left.rect).toEqual({ x: 0, y: 0, width: 2, height: 2 });
+    expect(maskRows(left)).toEqual(["##", ".#"]);
+    const all = colorShape(layer, 0, 0, false)!;
+    expect(all.rect).toEqual({ x: 0, y: 0, width: 5, height: 3 });
+    expect(maskRows(all)).toEqual(["##.##", ".#..#", "...##"]);
+  });
+
+  it("moves only the selected cells and undo restores the masked selection", () => {
+    const { layer, history, selection, tools, drag, row } = setup(6, 2);
+    layer.set(0, 0, 1);
+    layer.set(1, 0, 2); // inside the rect but not selected
+    tools.setTool("select");
+    const mask = new Uint8Array([1, 0]);
+    selection.set({ x: 0, y: 0, width: 2, height: 1 }, mask);
+    expect(selection.contains(1, 0)).toBe(false);
+
+    drag([0, 0], [3, 0]); // move right by 3
+    expect(row(0)).toEqual([0, 2, 0, 1, 0, 0]);
+    expect(selection.rect).toEqual({ x: 3, y: 0, width: 2, height: 1 });
+    expect(Array.from(selection.mask!)).toEqual([1, 0]);
+
+    history.undo();
+    expect(row(0)).toEqual([1, 2, 0, 0, 0, 0]);
+    expect(selection.rect).toEqual({ x: 0, y: 0, width: 2, height: 1 });
+    expect(Array.from(selection.mask!)).toEqual([1, 0]);
+  });
+
+  it("a full mask is the same as a plain rectangle", () => {
+    const { selection } = setup();
+    selection.set({ x: 0, y: 0, width: 2, height: 1 }, new Uint8Array([1, 1]));
+    expect(selection.mask).toBeNull();
+  });
+});

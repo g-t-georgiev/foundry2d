@@ -8,3 +8,4 @@ export * from "./ShapeTool";
 export * from "./StampTool";
 export * from "./SelectTool";
 export * from "./ToolManager";
+export * from "./SelectionTools";

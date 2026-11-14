@@ -2,7 +2,18 @@ import type { ToolType } from "@foundry2d/core";
 
 export const setToolSchema = {
   type: "string",
-  enum: ["pen", "eraser", "bucket", "eyedropper", "line", "rect", "ellipse", "select"],
+  enum: [
+    "pen",
+    "eraser",
+    "bucket",
+    "eyedropper",
+    "line",
+    "rect",
+    "ellipse",
+    "select",
+    "lasso",
+    "wand",
+  ],
 } as const satisfies { type: string; enum: ToolType[] };
 
 export const setColorSchema = {

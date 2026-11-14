@@ -5,8 +5,10 @@ import { defineConfig, devices } from "@playwright/test";
  * Browser end-to-end smoke tests for both apps (`vp run test:e2e`).
  * Paths are relative to this file (`e2e/`); web servers start from here too.
  *
- * Each app runs its own dev server on a dedicated port, so tests never reuse
- * a server you started yourself. Every test gets a fresh browser context,
+ * Each app runs its own dev server on a dedicated port (4170, 4171), never
+ * the ports you develop on. Locally an already running test server is
+ * reused (e.g. one kept alive by the VS Code Playwright extension); on CI a
+ * fresh one is always started. Every test gets a fresh browser context,
  * which also means empty IndexedDB storage.
  */
 const PIXEL_PORT = 4170;
@@ -42,13 +44,13 @@ export default defineConfig({
     {
       command: `pnpm --dir ../apps/pixel-editor exec vp dev --port ${PIXEL_PORT} --strictPort`,
       url: `http://localhost:${PIXEL_PORT}`,
-      reuseExistingServer: false,
+      reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },
     {
       command: `pnpm --dir ../apps/level-designer exec vp dev --port ${LEVEL_PORT} --strictPort`,
       url: `http://localhost:${LEVEL_PORT}`,
-      reuseExistingServer: false,
+      reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },
   ],

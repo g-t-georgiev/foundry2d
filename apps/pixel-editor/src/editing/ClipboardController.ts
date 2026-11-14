@@ -77,7 +77,7 @@ export class ClipboardController {
     const layer = this.doc.getActiveLayer();
     if (!layer) return false;
     const rect = this.targetRect();
-    const region = readRegion(layer, rect);
+    const region = readRegion(layer, rect, this.hooks.selection.mask);
     this.clipboard = region;
     this.systemHasLastCopy = false;
     this.hooks.notify(`Copied ${rect.width}×${rect.height} px`, 1500);
@@ -94,7 +94,7 @@ export class ClipboardController {
     const layer = this.doc.getActiveLayer();
     if (!layer || !this.copy()) return;
     if (!this.doc.getPolicy(layer.id).canDraw) return;
-    const changes = clearRegionChanges(layer, this.targetRect());
+    const changes = clearRegionChanges(layer, this.targetRect(), this.hooks.selection.mask);
     if (changes.length) {
       this.hooks.history.execute(new DrawCommand(this.doc, layer.id, changes, "Cut"));
     }
@@ -155,7 +155,7 @@ export class ClipboardController {
       new CompositeCommand(
         [
           new DrawCommand(this.doc, layer.id, pasteRegionChanges(layer, region, at), "Paste"),
-          new SetSelectionCommand(selection, selection.rect, target),
+          new SetSelectionCommand(selection, selection.shape, target),
         ],
         "Paste"
       )
@@ -176,7 +176,17 @@ export class ClipboardController {
       return;
     }
     const rect = this.targetRect();
-    const out = transformRegion(readRegion(layer, rect), kind);
+    // Non-rectangular selections: transform the mask along with the pixels.
+    const mask = selection.mask;
+    const out = transformRegion(readRegion(layer, rect, mask), kind);
+    const outMask = mask
+      ? Uint8Array.from(
+          transformRegion(
+            { width: rect.width, height: rect.height, values: Array.from(mask) },
+            kind
+          ).values
+        )
+      : null;
     // Centre the turned block on the old one, then keep it on the canvas.
     const clamp = (v: number, size: number, max: number) =>
       Math.max(0, Math.min(v, Math.max(0, max - size)));
@@ -198,18 +208,25 @@ export class ClipboardController {
       else byIndex.set(index, { x, y, oldValue: layer.get(x, y), newValue: value });
     };
     for (let y = rect.y; y < rect.y + rect.height; y++) {
-      for (let x = rect.x; x < rect.x + rect.width; x++) put(x, y, layer.emptyValue);
+      for (let x = rect.x; x < rect.x + rect.width; x++) {
+        if (!mask || mask[(y - rect.y) * rect.width + (x - rect.x)]) put(x, y, layer.emptyValue);
+      }
     }
     for (let y = 0; y < out.height; y++) {
       for (let x = 0; x < out.width; x++) {
-        put(target.x + x, target.y + y, out.values[y * out.width + x]);
+        const i = y * out.width + x;
+        if (!outMask || outMask[i]) put(target.x + x, target.y + y, out.values[i]);
       }
     }
     const changes = [...byIndex.values()].filter((c) => c.oldValue !== c.newValue);
     const label =
       kind === "flipX" ? "Flip horizontally" : kind === "flipY" ? "Flip vertically" : "Rotate";
     const steps: ICommand[] = [new DrawCommand(this.doc, layer.id, changes, label)];
-    if (selection.rect) steps.push(new SetSelectionCommand(selection, selection.rect, target));
+    if (selection.rect) {
+      steps.push(
+        new SetSelectionCommand(selection, selection.shape, { rect: target, mask: outMask })
+      );
+    }
     if (changes.length === 0 && !selection.rect) return;
     history.execute(new CompositeCommand(steps, label));
   }
@@ -223,7 +240,7 @@ export class ClipboardController {
     }
     const rect = this.hooks.selection.rect;
     if (rect) {
-      const changes = clearRegionChanges(layer, rect);
+      const changes = clearRegionChanges(layer, rect, this.hooks.selection.mask);
       if (changes.length) {
         this.hooks.history.execute(new DrawCommand(this.doc, layer.id, changes, "Clear selection"));
       }

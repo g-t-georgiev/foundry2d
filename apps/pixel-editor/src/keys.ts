@@ -55,6 +55,8 @@ export function bindKeys(keymap: Keymap, app: Application): void {
   keymap.bind("r", setTool("rect"));
   keymap.bind("c", setTool("ellipse"));
   keymap.bind("m", setTool("select"));
+  keymap.bind("q", setTool("lasso"));
+  keymap.bind("w", setTool("wand"));
   keymap.bind("[", penSize(-1), { repeat: true });
   keymap.bind("]", penSize(1), { repeat: true });
   keymap.hold(

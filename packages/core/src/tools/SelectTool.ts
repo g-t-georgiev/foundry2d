@@ -14,55 +14,105 @@ export interface Region {
   values: number[];
 }
 
-/** A rectangular selection, shared by the select tool, clipboard actions and overlays. */
+/**
+ * A selection's shape: its bounding rectangle and, for non-rectangular
+ * selections (lasso, magic wand), a mask with one byte per cell of the
+ * rectangle (row-major, 1 = selected). `mask: null` means the whole
+ * rectangle.
+ */
+export interface SelectionShape {
+  rect: Rect;
+  mask: Uint8Array | null;
+}
+
+const sameRect = (a: Rect, b: Rect) =>
+  a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+
+const sameMask = (a: Uint8Array | null, b: Uint8Array | null) => {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+};
+
+/**
+ * The current selection, shared by the selection tools, clipboard actions
+ * and overlays. Rectangular selections have no mask; lasso and magic-wand
+ * selections carry one (see `SelectionShape`).
+ */
 export class Selection {
   readonly events = new EventEmitter<{ changed: (rect: Rect | null) => void }>();
   private _rect: Rect | null = null;
+  private _mask: Uint8Array | null = null;
 
   get rect(): Rect | null {
     return this._rect;
   }
 
-  set(rect: Rect | null): void {
+  /** Per-cell mask of the bounding rect, or `null` for a plain rectangle. */
+  get mask(): Uint8Array | null {
+    return this._mask;
+  }
+
+  /** A copy of the current shape (for undo), or `null` when nothing is selected. */
+  get shape(): SelectionShape | null {
+    return this._rect ? { rect: { ...this._rect }, mask: this._mask?.slice() ?? null } : null;
+  }
+
+  /** Selects a rectangle, optionally with a mask of the same size. */
+  set(rect: Rect | null, mask: Uint8Array | null = null): void {
     const next = rect && rect.width > 0 && rect.height > 0 ? { ...rect } : null;
+    const nextMask = next && mask && !mask.every((v) => v === 1) ? mask.slice() : null;
     const prev = this._rect;
     if (
-      prev === next ||
-      (prev &&
-        next &&
-        prev.x === next.x &&
-        prev.y === next.y &&
-        prev.width === next.width &&
-        prev.height === next.height)
+      (prev === next || (prev && next && sameRect(prev, next))) &&
+      sameMask(this._mask, nextMask)
     ) {
       return;
     }
     this._rect = next;
+    this._mask = nextMask;
     this.events.emit("changed", next);
+  }
+
+  setShape(shape: SelectionShape | null): void {
+    this.set(shape?.rect ?? null, shape?.mask ?? null);
   }
 
   contains(x: number, y: number): boolean {
     const r = this._rect;
-    return !!r && x >= r.x && y >= r.y && x < r.x + r.width && y < r.y + r.height;
+    if (!r || x < r.x || y < r.y || x >= r.x + r.width || y >= r.y + r.height) return false;
+    return !this._mask || this._mask[(y - r.y) * r.width + (x - r.x)] === 1;
   }
 }
+
+/** Normalises the `from`/`to` of a selection change (a rect means no mask). */
+const toShape = (value: Rect | SelectionShape | null): SelectionShape | null =>
+  value === null ? null : "rect" in value ? value : { rect: value, mask: null };
 
 /** Undoable selection change (paired with pixel edits in move/paste commands). */
 export class SetSelectionCommand implements ICommand {
   readonly label = "Select";
 
+  private readonly from: SelectionShape | null;
+  private readonly to: SelectionShape | null;
+
+  /** `from` and `to` are rectangles or full shapes (pass `selection.shape` to keep masks). */
   constructor(
     private readonly selection: Selection,
-    private readonly from: Rect | null,
-    private readonly to: Rect | null
-  ) {}
+    from: Rect | SelectionShape | null,
+    to: Rect | SelectionShape | null
+  ) {
+    this.from = toShape(from);
+    this.to = toShape(to);
+  }
 
   execute(): void {
-    this.selection.set(this.to);
+    this.selection.setShape(this.to);
   }
 
   undo(): void {
-    this.selection.set(this.from);
+    this.selection.setShape(this.from);
   }
 }
 
@@ -79,21 +129,36 @@ export function rectBetween(
   return x1 < x0 || y1 < y0 ? null : { x: x0, y: y0, width: x1 - x0 + 1, height: y1 - y0 + 1 };
 }
 
-/** Copies the cells under `rect` (cells outside the layer read as empty). */
-export function readRegion(layer: GridLayer<CellBuffer>, rect: Rect): Region {
+/**
+ * Copies the cells under `rect` (cells outside the layer read as empty).
+ * With a `mask`, unselected cells read as empty too.
+ */
+export function readRegion(
+  layer: GridLayer<CellBuffer>,
+  rect: Rect,
+  mask: Uint8Array | null = null
+): Region {
   const values: number[] = [];
   for (let y = 0; y < rect.height; y++) {
-    for (let x = 0; x < rect.width; x++) values.push(layer.get(rect.x + x, rect.y + y));
+    for (let x = 0; x < rect.width; x++) {
+      const selected = !mask || mask[y * rect.width + x] === 1;
+      values.push(selected ? layer.get(rect.x + x, rect.y + y) : layer.emptyValue);
+    }
   }
   return { width: rect.width, height: rect.height, values };
 }
 
-/** Changes that clear `rect` to the layer's empty value. */
-export function clearRegionChanges(layer: GridLayer<CellBuffer>, rect: Rect): CellChange<number>[] {
+/** Changes that clear `rect` (only its selected cells, with a `mask`) to the empty value. */
+export function clearRegionChanges(
+  layer: GridLayer<CellBuffer>,
+  rect: Rect,
+  mask: Uint8Array | null = null
+): CellChange<number>[] {
   const changes: CellChange<number>[] = [];
   for (let y = rect.y; y < rect.y + rect.height; y++) {
     for (let x = rect.x; x < rect.x + rect.width; x++) {
       if (!layer.isWithinBounds(x, y)) continue;
+      if (mask && mask[(y - rect.y) * rect.width + (x - rect.x)] !== 1) continue;
       const oldValue = layer.get(x, y);
       if (oldValue !== layer.emptyValue)
         changes.push({ x, y, oldValue, newValue: layer.emptyValue });
@@ -138,7 +203,9 @@ export class SelectTool<Buffer extends CellBuffer = CellBuffer> extends Tool<Buf
   private source: Rect | null = null;
   private block: Region | null = null;
   private applied: CellChange<number>[] = [];
-  private startSelection: Rect | null = null;
+  private startSelection: SelectionShape | null = null;
+  /** The mask carried along while moving a non-rectangular selection. */
+  private moveMask: Uint8Array | null = null;
 
   constructor(
     private readonly selection: Selection,
@@ -154,7 +221,7 @@ export class SelectTool<Buffer extends CellBuffer = CellBuffer> extends Tool<Buf
   onMouseDown(coords: Position, ctx: ToolContext<Buffer>): void {
     this.anchor = coords;
     this.dragged = false;
-    this.startSelection = this.selection.rect;
+    this.startSelection = this.selection.shape;
     const rect = this.selection.rect;
     const inside = !!rect && this.selection.contains(coords.x, coords.y);
     if (inside && !ctx.layer.isEditable) {
@@ -166,7 +233,8 @@ export class SelectTool<Buffer extends CellBuffer = CellBuffer> extends Tool<Buf
     if (rect && inside) {
       this.mode = "move";
       this.source = rect;
-      this.block = readRegion(ctx.layer, rect);
+      this.moveMask = this.selection.mask?.slice() ?? null;
+      this.block = readRegion(ctx.layer, rect, this.moveMask);
       this.applied = [];
     } else {
       this.mode = "select";
@@ -194,7 +262,7 @@ export class SelectTool<Buffer extends CellBuffer = CellBuffer> extends Tool<Buf
           new CompositeCommand(
             [
               new DrawCommand<Buffer>(ctx.doc, ctx.layer.id, this.applied, "Move pixels"),
-              new SetSelectionCommand(this.selection, this.startSelection, this.selection.rect),
+              new SetSelectionCommand(this.selection, this.startSelection, this.selection.shape),
             ],
             "Move selection"
           )
@@ -209,7 +277,7 @@ export class SelectTool<Buffer extends CellBuffer = CellBuffer> extends Tool<Buf
       ctx.layer.applyChanges(this.applied, "backward");
       ctx.doc.notifyCellsChanged(ctx.layer.id);
     }
-    this.selection.set(this.startSelection);
+    this.selection.setShape(this.startSelection);
     this.reset();
   }
 
@@ -238,11 +306,11 @@ export class SelectTool<Buffer extends CellBuffer = CellBuffer> extends Tool<Buf
         layer.set(change.x, change.y, change.newValue);
       }
     };
-    apply(clearRegionChanges(layer, source));
+    apply(clearRegionChanges(layer, source, this.moveMask));
     apply(pasteRegionChanges(layer, block, { x: source.x + dx, y: source.y + dy }));
     this.applied = [...byIndex.values()].filter((c) => c.oldValue !== c.newValue);
     ctx.doc.notifyCellsChanged(layer.id);
-    this.selection.set({ ...source, x: source.x + dx, y: source.y + dy });
+    this.selection.set({ ...source, x: source.x + dx, y: source.y + dy }, this.moveMask);
   }
 }
 
