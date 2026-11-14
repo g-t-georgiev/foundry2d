@@ -1,6 +1,7 @@
 import type { LevelProject } from "../model/LevelProject";
 import { tilesetGrid } from "../model/tiles";
 import { fieldText } from "../model/entities";
+import TilesetPickerView from "./TilesetPickerView";
 import {
   ENTITY_SHAPES,
   FIELD_TYPES,
@@ -57,6 +58,10 @@ export default class EntityDefsEditor {
   private project: LevelProject | null = null;
   private selectedEntityUid: number | null = null;
   private selectedEnumUid: number | null = null;
+  /** Shared picker for "tile" shaped entities (kept across re-renders). */
+  private readonly tilePickerHost = el("div", { className: "tileset-host entity-tile-picker" });
+  private readonly tilePicker: TilesetPickerView;
+  private tilePick: { entityUid: number; tilesetUid: number } | null = null;
 
   constructor(
     private readonly root: {
@@ -69,6 +74,16 @@ export default class EntityDefsEditor {
     },
     private readonly hooks: EntityDefsEditorHooks
   ) {
+    this.tilePicker = new TilesetPickerView(this.tilePickerHost, (tileset, selection) => {
+      const pick = this.tilePick;
+      if (!this.project || !pick || pick.tilesetUid !== tileset.uid) return;
+      // A drag picks a rectangle; entities use its top-left tile.
+      const tileId = selection.y * tilesetGrid(tileset).columns + selection.x;
+      const def = this.project.getEntityDef(pick.entityUid);
+      if (def?.tile?.tileId === tileId) return;
+      this.project.updateEntityDef(pick.entityUid, { tile: { tilesetUid: tileset.uid, tileId } });
+      this.render();
+    });
     root.addEntity.addEventListener("click", () => {
       if (!this.project) return;
       this.selectedEntityUid = this.project.addEntityDef("Entity").uid;
@@ -248,17 +263,19 @@ export default class EntityDefsEditor {
         update({ tile: { tilesetUid: Number(tilesetSelect.value), tileId: 0 } })
       );
       const tileset = project.getTileset(tile.tilesetUid);
-      const count = tileset ? tilesetGrid(tileset).columns * tilesetGrid(tileset).rows : 0;
-      const tileId = int(tile.tileId, 0, (v) =>
-        update({ tile: { ...tile, tileId: Math.min(v, Math.max(0, count - 1)) } })
+      const columns = tileset ? tilesetGrid(tileset).columns : 0;
+      this.tilePick = { entityUid: def.uid, tilesetUid: tile.tilesetUid };
+      this.tilePicker.render(
+        project,
+        tileset,
+        columns
+          ? { x: tile.tileId % columns, y: Math.floor(tile.tileId / columns), width: 1, height: 1 }
+          : null
       );
       parts.push(
-        el(
-          "div",
-          { className: "tileset-fields" },
-          field("Tileset", tilesetSelect),
-          field(`Tile id (0–${Math.max(0, count - 1)})`, tileId)
-        )
+        field("Tileset", tilesetSelect),
+        el("span", { className: "label", textContent: `Tile #${tile.tileId} (click to choose)` }),
+        this.tilePickerHost
       );
     }
 

@@ -264,3 +264,57 @@ describe("EntityController", () => {
     expect(level.entities).toHaveLength(1);
   });
 });
+
+describe("locked entity layers", () => {
+  it("allow selecting but block placing, moving and deleting", () => {
+    const { project, layer, instance } = setup();
+    const level = project.levels[0];
+    project.insertEntity(level, instance(4, 4));
+    level.doc.setActiveLayer(layerIdFor(layer.uid));
+    level.doc.getLayer(layerIdFor(layer.uid))!.locked = true;
+    const messages: string[] = [];
+    const ctl = new EntityController({
+      getProject: () => project,
+      getLevel: () => level,
+      history: new HistoryManager(),
+      getZoom: () => 4,
+      isPicking: () => false,
+      requestRender: () => {},
+      refreshCursor: () => {},
+      notify: (m) => messages.push(m),
+    });
+    const ev = (x: number, y: number) =>
+      ({ world: { x, y }, button: 0, shiftKey: false }) as ScenePointerEvent;
+    ctl.onPointerDown(ev(40, 40));
+    ctl.onPointerUp(ev(40, 40));
+    expect(level.entities).toHaveLength(1);
+    ctl.onPointerDown(ev(4, 4));
+    ctl.onPointerMove(ev(30, 4));
+    ctl.onPointerUp(ev(30, 4));
+    expect(ctl.selected?.x).toBe(4);
+    expect(ctl.deleteSelected()).toBe(true);
+    expect(level.entities).toHaveLength(1);
+    expect(messages.at(-1)).toMatch(/locked/);
+    expect(ctl.getCursor()).toBe("not-allowed");
+  });
+});
+
+describe("legacy game exports", () => {
+  it("keep the old spawns value names", async () => {
+    const { fromGameFormat } = await import("../src/io/gameFormat");
+    const cells = Array.from({ length: 4 }, (_, i) => (i === 1 ? 3 : 0));
+    const project = fromGameFormat({
+      metadata: { name: "old", columns: 2, rows: 2, tileSize: 8 },
+      layers: { spawns: cells },
+    });
+    const def = project.defs.layers[0];
+    expect(def.identifier).toBe("spawns");
+    expect(def.intGridValues.map((v) => v.identifier)).toEqual([
+      "pacman",
+      "blinky",
+      "inky",
+      "pinky",
+      "clyde",
+    ]);
+  });
+});

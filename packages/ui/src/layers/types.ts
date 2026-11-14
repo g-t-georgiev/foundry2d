@@ -5,6 +5,15 @@ export interface LayerView {
   visible: boolean;
   /** 0..1 */
   opacity: number;
+  /**
+   * Locked layers can't be drawn on. Leave `undefined` to hide the lock
+   * toggle (hosts that don't support locking).
+   */
+  locked?: boolean;
+  /** `false` shows the lock but disables it (e.g. generated layers). Defaults to `true`. */
+  lockable?: boolean;
+  /** Tooltip for a disabled lock. */
+  lockReason?: string;
 }
 
 export const LayerPanelEvents = {
@@ -16,6 +25,7 @@ export const LayerPanelEvents = {
   Rename: "layer-rename",
   Visibility: "layer-visibility",
   Opacity: "layer-opacity",
+  Lock: "layer-lock",
 } as const;
 
 export type LayerPanelEventPayloads = {
@@ -27,6 +37,7 @@ export type LayerPanelEventPayloads = {
   [LayerPanelEvents.Move]: { id: string; direction: "up" | "down" };
   [LayerPanelEvents.Rename]: { id: string; name: string };
   [LayerPanelEvents.Visibility]: { id: string; visible: boolean };
+  [LayerPanelEvents.Lock]: { id: string; locked: boolean };
   /**
    * Fired continuously while the slider moves (`final: false`) and once when
    * released (`final: true`), so apps can preview live and record one undo step.

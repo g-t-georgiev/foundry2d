@@ -142,7 +142,11 @@ export class SelectTool<Buffer extends CellBuffer = CellBuffer> extends Tool<Buf
 
   constructor(
     private readonly selection: Selection,
-    name: ToolType = "select"
+    name: ToolType = "select",
+    private readonly options: {
+      /** Called when a move starts on a layer that can't be edited (locked, hidden). */
+      onBlocked?: (layer: GridLayer<CellBuffer>) => void;
+    } = {}
   ) {
     super(name, "crosshair");
   }
@@ -152,7 +156,14 @@ export class SelectTool<Buffer extends CellBuffer = CellBuffer> extends Tool<Buf
     this.dragged = false;
     this.startSelection = this.selection.rect;
     const rect = this.selection.rect;
-    if (rect && this.selection.contains(coords.x, coords.y) && ctx.layer.isEditable) {
+    const inside = !!rect && this.selection.contains(coords.x, coords.y);
+    if (inside && !ctx.layer.isEditable) {
+      // Keep the selection (a new drag would silently replace it) and say why.
+      this.mode = null;
+      this.options.onBlocked?.(ctx.layer);
+      return;
+    }
+    if (rect && inside) {
       this.mode = "move";
       this.source = rect;
       this.block = readRegion(ctx.layer, rect);

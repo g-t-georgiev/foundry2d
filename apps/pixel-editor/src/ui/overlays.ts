@@ -53,21 +53,47 @@ export class MirrorGuidePass implements RenderPass {
     const tl = camera.worldToLocal(0, 0);
     const br = camera.worldToLocal(width, height);
     const center = camera.worldToLocal(width / 2, height / 2);
-    ctx.lineWidth = 1;
-    ctx.setLineDash([6, 4]);
-    ctx.strokeStyle = "rgba(76, 159, 254, 0.9)";
-    ctx.beginPath();
-    if (mirror.x) {
-      const cx = Math.round(center.x) + 0.5;
-      ctx.moveTo(cx, tl.y);
-      ctx.lineTo(cx, br.y);
-    }
-    if (mirror.y) {
-      const cy = Math.round(center.y) + 0.5;
-      ctx.moveTo(tl.x, cy);
-      ctx.lineTo(br.x, cy);
-    }
+    // Overshoot past the sprite so the axis reads even over busy pixels.
+    const over = 14;
+    const path = () => {
+      ctx.beginPath();
+      if (mirror.x) {
+        const cx = Math.round(center.x);
+        ctx.moveTo(cx, tl.y - over);
+        ctx.lineTo(cx, br.y + over);
+      }
+      if (mirror.y) {
+        const cy = Math.round(center.y);
+        ctx.moveTo(tl.x - over, cy);
+        ctx.lineTo(br.x + over, cy);
+      }
+    };
+    // Dark casing under a bright dashed line: visible on light and dark pixels alike.
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.55)";
+    path();
+    ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 5]);
+    ctx.strokeStyle = "#4c9ffe";
+    path();
     ctx.stroke();
     ctx.setLineDash([]);
+
+    // Axis labels at the line ends, outside the sprite.
+    ctx.font = `bold 11px ${rc.theme.font}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const label = (text: string, x: number, y: number) => {
+      ctx.fillStyle = "#4c9ffe";
+      ctx.beginPath();
+      ctx.arc(x, y, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.fillText(text, x, y + 0.5);
+    };
+    if (mirror.x) label("X", Math.round(center.x), tl.y - over - 9);
+    if (mirror.y) label("Y", tl.x - over - 9, Math.round(center.y));
+    ctx.textAlign = "start";
   }
 }

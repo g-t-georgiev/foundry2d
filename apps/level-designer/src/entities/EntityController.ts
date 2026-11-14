@@ -75,6 +75,25 @@ export class EntityController implements ScenePointerDelegate {
     return this.activeLayerDef() !== undefined;
   }
 
+  /**
+   * Why the active Entities layer can't be edited (locked or hidden), or
+   * `null` when it can. Selection and inspection still work.
+   */
+  get blockedReason(): string | null {
+    const layer = this.hooks.getLevel().doc.getActiveLayer();
+    if (!layer || !this.isActive) return null;
+    if (layer.locked) return `"${layer.name}" is locked. Unlock it in the layers panel to edit.`;
+    if (!layer.visible) return `"${layer.name}" is hidden. Show it to edit.`;
+    return null;
+  }
+
+  /** Reports a blocked edit; returns true when blocked. */
+  private blocked(): boolean {
+    const reason = this.blockedReason;
+    if (reason) this.hooks.notify(reason, 3500);
+    return reason !== null;
+  }
+
   /** Definition placed by a click on empty space (defaults to the first one). */
   get placeDef(): EntityDef | undefined {
     const project = this.hooks.getProject();
@@ -116,6 +135,7 @@ export class EntityController implements ScenePointerDelegate {
   deleteSelected(): boolean {
     const selected = this.selected;
     if (!selected) return false;
+    if (this.blocked()) return true;
     const { history } = this.hooks;
     history.execute(
       new RemoveEntityCommand(this.hooks.getProject(), this.hooks.getLevel(), selected.iid)
@@ -131,6 +151,7 @@ export class EntityController implements ScenePointerDelegate {
     const level = this.hooks.getLevel();
     const def = selected ? project.getEntityDef(selected.defUid) : undefined;
     if (!selected || !def) return false;
+    if (this.blocked()) return true;
     if (this.atLimit(def)) {
       this.hooks.notify(`${def.identifier} is limited to ${def.maxPerLevel} per level.`, 3500);
       return true;
@@ -148,6 +169,7 @@ export class EntityController implements ScenePointerDelegate {
   nudge(dx: number, dy: number, fine: boolean): boolean {
     const selected = this.selected;
     if (!selected) return false;
+    if (this.blocked()) return true;
     const step = fine ? 1 : this.hooks.getProject().gridSize;
     this.commitPosition(selected, selected.x + dx * step, selected.y + dy * step, "Move entity");
     return true;
@@ -157,7 +179,7 @@ export class EntityController implements ScenePointerDelegate {
   update(iid: string, patch: Partial<Pick<EntityInstance, "x" | "y" | "fields">>, label: string) {
     const level = this.hooks.getLevel();
     const before = level.entities.find((e) => e.iid === iid);
-    if (!before) return;
+    if (!before || this.blocked()) return;
     const after = { ...cloneInstance(before), ...structuredClone(patch) };
     if (JSON.stringify(after) === JSON.stringify(before)) return;
     this.hooks.history.execute(
@@ -199,6 +221,7 @@ export class EntityController implements ScenePointerDelegate {
     if (this.pointPick) return "cell";
     if (this.drag) return "grabbing";
     if (this.hooks.isPicking()) return "copy";
+    if (this.blockedReason) return this.hoverIid ? "pointer" : "not-allowed";
     return this.hoverIid ? "grab" : "crosshair";
   }
 
@@ -222,6 +245,12 @@ export class EntityController implements ScenePointerDelegate {
     const hit = this.hitTest(ev.world);
     if (this.hooks.isPicking()) {
       if (hit) this.setPlaceDef(hit.defUid);
+      return;
+    }
+    if (this.blockedReason) {
+      // Locked or hidden: clicks only select, so the inspector can still show values.
+      this.select(hit?.iid ?? null);
+      if (!hit || ev.button === 2) this.blocked();
       return;
     }
     if (ev.button === 2) {

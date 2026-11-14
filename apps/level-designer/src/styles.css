@@ -1195,3 +1195,63 @@ body {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ------------------------------------------------------------------ dialog tabs */
+
+.dialog-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  gap: 2px;
+  padding: 0 16px;
+  background: var(--theme-bg-panel);
+  border-bottom: 1px solid var(--theme-border-color);
+}
+
+.dialog-tabs button {
+  padding: 9px 12px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--theme-text-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+}
+
+.dialog-tabs button:hover {
+  color: var(--theme-text-main);
+}
+
+.dialog-tabs button[aria-selected="true"] {
+  color: var(--theme-text-main);
+  border-bottom-color: var(--theme-border-active);
+}
+
+.dialog-tabs button:focus-visible {
+  outline: 2px solid var(--theme-color-accent);
+  outline-offset: -2px;
+}
+
+[data-panel][hidden] {
+  display: none;
+}
+
+/* Header and tabs stay put; only the body scrolls. */
+.dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog > .dialog-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.entity-tile-picker {
+  max-height: 220px;
+  overflow: auto;
+}

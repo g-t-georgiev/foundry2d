@@ -348,14 +348,20 @@
         <h2 id="settingsTitle">Project settings</h2>
         <button class="btn btn-icon" value="close" aria-label="Close">✕</button>
       </form>
+      <nav class="dialog-tabs" role="tablist" aria-label="Settings sections">
+        <button type="button" role="tab" data-tab="layers">Layers</button>
+        <button type="button" role="tab" data-tab="tilesets">Tilesets</button>
+        <button type="button" role="tab" data-tab="entities">Entities</button>
+        <button type="button" role="tab" data-tab="enums">Enums</button>
+      </nav>
       <div class="dialog-body">
-        <section class="dialog-section">
+        <section class="dialog-section" data-panel="layers" role="tabpanel">
           <label class="field inline">
             <span class="label">Grid size (px)</span>
             <input id="gridSizeInput" class="input" type="number" min="1" max="256" step="1" />
           </label>
         </section>
-        <section class="dialog-columns">
+        <section class="dialog-columns" data-panel="layers" role="tabpanel">
           <div class="defs-list-column">
             <div class="column-header">
               <span class="label">Layers</span>
@@ -369,7 +375,7 @@
           </div>
           <div class="def-editor" id="defEditor"></div>
         </section>
-        <section class="dialog-columns">
+        <section class="dialog-columns" data-panel="tilesets" role="tabpanel">
           <div class="defs-list-column">
             <div class="column-header">
               <span class="label">Tilesets</span>
@@ -385,7 +391,7 @@
           </div>
           <div class="def-editor" id="tilesetEditor"></div>
         </section>
-        <section class="dialog-columns">
+        <section class="dialog-columns" data-panel="entities" role="tabpanel">
           <div class="defs-list-column">
             <div class="column-header">
               <span class="label">Entities</span>
@@ -400,7 +406,7 @@
           </div>
           <div class="def-editor" id="entityDefEditor"></div>
         </section>
-        <section class="dialog-columns">
+        <section class="dialog-columns" data-panel="enums" role="tabpanel">
           <div class="defs-list-column">
             <div class="column-header">
               <span class="label">Enums</span>

@@ -1,6 +1,9 @@
 import type { GridDocument, GridLayer } from "./index";
 
-/** Bytes of an RGBA pixel layer (0xAABBGGRR words are RGBA bytes on little-endian hosts). */
+/**
+ * Bytes of an RGBA pixel layer (0xAABBGGRR words are RGBA bytes on
+ * little-endian hosts; apps call `assertPixelByteOrder()` at startup).
+ */
 function layerBytes(layer: GridLayer<Uint32Array>): Uint8Array {
   return new Uint8Array(layer.data.buffer, layer.data.byteOffset, layer.data.byteLength);
 }

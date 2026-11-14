@@ -103,7 +103,15 @@ export default class Application implements ApplicationContext {
     this.tools.registerTool(new LineTool<Uint32Array>("line"));
     this.tools.registerTool(new RectangleTool<Uint32Array>("rect", false));
     this.tools.registerTool(new EllipseTool<Uint32Array>("ellipse", false));
-    this.tools.registerTool(new SelectTool<Uint32Array>(this.selection, "select"));
+    this.tools.registerTool(
+      new SelectTool<Uint32Array>(this.selection, "select", {
+        onBlocked: (layer) =>
+          this.ui.showMessage(
+            `Can't move pixels: "${layer.name}" is ${layer.locked ? "locked" : "hidden"}.`,
+            3500
+          ),
+      })
+    );
 
     this.workspace = new Workspace(elements.viewport, { canvas: elements.canvas });
     this.ui = new UIManager(this);

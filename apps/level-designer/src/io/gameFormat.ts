@@ -139,8 +139,23 @@ export function isGameFormat(json: unknown): json is GameLevelFile {
 }
 
 /**
+ * Value names of layers the original Pac-Man editor exported that the current
+ * presets no longer have (the `spawns` layer became entities in Phase 7).
+ */
+const LEGACY_LAYER_VALUES: Record<string, { value: number; identifier: string; color: string }[]> =
+  {
+    spawns: [
+      { value: 1, identifier: "pacman", color: "#ffff00" },
+      { value: 2, identifier: "blinky", color: "#ff0000" },
+      { value: 3, identifier: "inky", color: "#00eeff" },
+      { value: 4, identifier: "pinky", color: "#ff00ea" },
+      { value: 5, identifier: "clyde", color: "#ff7300" },
+    ],
+  };
+
+/**
  * Imports a game-format file. Layers whose keys match the Pac-Man seed keep
- * its value names and colors; other keys get a generated IntGrid def with
+ * its value names and colors (as do legacy keys such as `spawns`); other keys get a generated IntGrid def with
  * one entry per distinct value found.
  */
 export function fromGameFormat(json: unknown): LevelProject {
@@ -168,6 +183,7 @@ export function fromGameFormat(json: unknown): LevelProject {
     const known = seed.defs.layers.find((d) => d.identifier === key);
     const values =
       known?.intGridValues ??
+      LEGACY_LAYER_VALUES[key] ??
       [...new Set(data.filter((v): v is number => Number.isInteger(v) && v > 0))]
         .sort((a, b) => a - b)
         .map((value) => ({ value, identifier: `value_${value}`, color: "#ff00ff" }));

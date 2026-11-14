@@ -45,3 +45,19 @@ export class PixelUtils {
     return `rgba(${r}, ${g}, ${b}, ${+(a / 255).toFixed(3)})`;
   }
 }
+
+/** True when the host stores multi-byte numbers little-endian (every current browser). */
+export const HOST_IS_LITTLE_ENDIAN = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
+
+/**
+ * Pixel layers pack RGBA as `0xAABBGGRR` words and are read back as RGBA
+ * bytes (bitmaps, exports, compositing), which only holds on little-endian
+ * hosts. Call once at startup to fail loudly rather than show wrong colours.
+ */
+export function assertPixelByteOrder(): void {
+  if (!HOST_IS_LITTLE_ENDIAN) {
+    throw new Error(
+      "foundry2d needs a little-endian host: pixel data is stored as 0xAABBGGRR words and read as RGBA bytes."
+    );
+  }
+}

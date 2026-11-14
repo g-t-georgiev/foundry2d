@@ -13,6 +13,8 @@ const ICONS = {
   up: `<svg viewBox="0 0 24 24"><path d="M7.4 15.4 12 10.8l4.6 4.6L18 14l-6-6-6 6z"/></svg>`,
   down: `<svg viewBox="0 0 24 24"><path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z"/></svg>`,
   delete: `<svg viewBox="0 0 24 24"><path d="M9 3v1H4v2h1v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6h1V4h-5V3H9m0 5h2v9H9V8m4 0h2v9h-2V8z"/></svg>`,
+  lock: `<svg viewBox="0 0 24 24"><path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5m-3 8V7a3 3 0 0 1 6 0v3H9z"/></svg>`,
+  unlock: `<svg viewBox="0 0 24 24"><path d="M12 2a5 5 0 0 0-5 5h2a3 3 0 0 1 6 0v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5z"/></svg>`,
   eye: `<svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.7 7.6 1 12c1.7 4.4 6 7.5 11 7.5s9.3-3.1 11-7.5c-1.7-4.4-6-7.5-11-7.5M12 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10m0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>`,
   eyeOff: `<svg viewBox="0 0 24 24"><path d="M2 5.3 3.3 4 20 20.7 18.7 22l-3.1-3.1c-1.1.4-2.3.6-3.6.6-5 0-9.3-3.1-11-7.5.8-2 2.1-3.7 3.8-5L2 5.3M12 9a3 3 0 0 1 3 3v.4L11.6 9H12m0-4.5c5 0 9.3 3.1 11 7.5a11.8 11.8 0 0 1-4.1 5.3l-1.4-1.4A9.8 9.8 0 0 0 20.8 12 9.8 9.8 0 0 0 12 6.5c-1.1 0-2.2.2-3.2.5L7.2 5.4c1.5-.6 3.1-.9 4.8-.9M3.2 12A9.8 9.8 0 0 0 12 17.5c.7 0 1.4-.1 2-.2l-2.3-2.3A3 3 0 0 1 9 12.3L5.6 8.9c-1 .9-1.9 1.9-2.4 3.1z"/></svg>`,
 };
@@ -117,6 +119,14 @@ template.innerHTML = `
       box-sizing: border-box;
     }
     .opacity-badge { color: var(--_muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+    .lock { color: var(--_muted); }
+    /* Unlocked layers show the toggle only on hover or for the active row, to keep rows calm. */
+    .lock[aria-pressed="false"] { opacity: 0; }
+    .row:hover .lock[aria-pressed="false"],
+    .row[aria-selected="true"] .lock[aria-pressed="false"],
+    .lock:focus-visible { opacity: 0.6; }
+    .lock[aria-pressed="true"] { color: var(--layers-text, #e0e0e0); }
+    .lock:disabled { cursor: help; }
     .footer {
       display: flex;
       align-items: center;
@@ -294,6 +304,13 @@ export default class LayersPanel extends Base implements WebComponent {
     if (!row?.dataset.id) return;
     const id = row.dataset.id;
 
+    if ((ev.target as Element).closest('[data-action="lock"]')) {
+      const layer = this._layers.find((l) => l.id === id);
+      if (layer && layer.lockable !== false) {
+        this.emit(LayerPanelEvents.Lock, { id, locked: !layer.locked });
+      }
+      return;
+    }
     if ((ev.target as Element).closest('[data-action="visibility"]')) {
       const layer = this._layers.find((l) => l.id === id);
       if (layer) this.emit(LayerPanelEvents.Visibility, { id, visible: !layer.visible });
@@ -430,6 +447,21 @@ export default class LayersPanel extends Base implements WebComponent {
       badge.className = "opacity-badge";
       badge.textContent = `${Math.round(layer.opacity * 100)}%`;
       row.append(badge);
+    }
+    if (layer.locked !== undefined) {
+      const lock = document.createElement("button");
+      lock.className = "lock";
+      lock.dataset.action = "lock";
+      lock.disabled = layer.lockable === false;
+      lock.title = lock.disabled
+        ? (layer.lockReason ?? "Always locked")
+        : layer.locked
+          ? "Unlock layer"
+          : "Lock layer (no drawing)";
+      lock.setAttribute("aria-label", lock.title);
+      lock.setAttribute("aria-pressed", String(layer.locked));
+      lock.innerHTML = layer.locked ? ICONS.lock : ICONS.unlock;
+      row.append(lock);
     }
     return row;
   }

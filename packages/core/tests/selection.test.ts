@@ -113,6 +113,28 @@ describe("selection", () => {
     expect(row(0)[0]).toBe(1);
   });
 
+  it("keeps the selection and reports a blocked move on a locked layer", () => {
+    const { doc, layer, history, selection, ctx, row } = setup();
+    const blocked: string[] = [];
+    const tools = new ToolManager<Int32Array>();
+    tools.registerTool(
+      new SelectTool<Int32Array>(selection, "select", { onBlocked: (l) => blocked.push(l.name) })
+    );
+    tools.setTool("select");
+    layer.set(0, 0, 1);
+    selection.set({ x: 0, y: 0, width: 2, height: 1 });
+    layer.locked = true;
+    const c = ctx();
+    tools.executePointerAction("down", { x: 0, y: 0 }, c);
+    tools.executePointerAction("move", { x: 3, y: 0 }, c);
+    tools.executePointerAction("up", { x: 3, y: 0 }, c);
+    expect(blocked).toEqual(["L"]);
+    expect(selection.rect).toEqual({ x: 0, y: 0, width: 2, height: 1 });
+    expect(row(0)[0]).toBe(1);
+    expect(history.canUndo).toBe(false);
+    expect(doc.layers).toHaveLength(1);
+  });
+
   it("reads, clears and pastes regions", () => {
     const { layer } = setup(4, 2);
     layer.set(1, 0, 5);
@@ -137,5 +159,13 @@ describe("compositeRgba", () => {
     doc.addLayer("a").set(0, 0, 0xff0000ff); // red
     doc.addLayer({ name: "b", opacity: 0.5 }).set(0, 0, 0xffff0000); // blue
     expect(Array.from(compositeRgba(doc))).toEqual([128, 0, 128, 255]);
+  });
+});
+
+describe("pixel byte order", () => {
+  it("runs on a little-endian host", async () => {
+    const { HOST_IS_LITTLE_ENDIAN, assertPixelByteOrder } = await import("../src");
+    expect(HOST_IS_LITTLE_ENDIAN).toBe(true);
+    expect(() => assertPixelByteOrder()).not.toThrow();
   });
 });

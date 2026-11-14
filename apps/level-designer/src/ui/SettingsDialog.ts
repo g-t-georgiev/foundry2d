@@ -56,8 +56,11 @@ export async function readImageFile(
  * tilesets. Edits apply immediately to the live project; they are not undo
  * steps (like LDtk), and data-removing edits ask for confirmation.
  */
+export type SettingsTab = "layers" | "tilesets" | "entities" | "enums";
+
 export default class SettingsDialog {
   private project: LevelProject | null = null;
+  private tab: SettingsTab = "layers";
   private selectedLayerUid: number | null = null;
   private selectedTilesetUid: number | null = null;
   private readonly gridSizeInput: HTMLInputElement;
@@ -90,6 +93,19 @@ export default class SettingsDialog {
       },
       hooks
     );
+
+    for (const button of dialog.querySelectorAll<HTMLButtonElement>("[data-tab]")) {
+      button.addEventListener("click", () => this.showTab(button.dataset.tab as SettingsTab));
+    }
+    dialog.querySelector(".dialog-tabs")!.addEventListener("keydown", (ev) => {
+      const key = (ev as KeyboardEvent).key;
+      if (key !== "ArrowLeft" && key !== "ArrowRight") return;
+      const tabs = [...dialog.querySelectorAll<HTMLButtonElement>("[data-tab]")];
+      const index = tabs.findIndex((t) => t.dataset.tab === this.tab);
+      const next = tabs[(index + (key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+      this.showTab(next.dataset.tab as SettingsTab);
+      next.focus();
+    });
 
     this.gridSizeInput.addEventListener("change", () => {
       const size = Number(this.gridSizeInput.value);
@@ -137,8 +153,26 @@ export default class SettingsDialog {
     });
   }
 
-  open(project: LevelProject, layerDefUid: number | null = null): void {
+  /** Switches the visible section (keeps edits; they apply immediately anyway). */
+  showTab(tab: SettingsTab): void {
+    this.tab = tab;
+    for (const button of this.dialog.querySelectorAll<HTMLButtonElement>("[data-tab]")) {
+      const selected = button.dataset.tab === tab;
+      button.setAttribute("aria-selected", String(selected));
+      button.tabIndex = selected ? 0 : -1;
+    }
+    for (const panel of this.dialog.querySelectorAll<HTMLElement>("[data-panel]")) {
+      panel.hidden = panel.dataset.panel !== tab;
+    }
+  }
+
+  open(
+    project: LevelProject,
+    layerDefUid: number | null = null,
+    tab: SettingsTab = "layers"
+  ): void {
     this.project = project;
+    this.showTab(tab);
     this.selectedLayerUid = layerDefUid ?? project.defs.layers.at(-1)?.uid ?? null;
     this.selectedTilesetUid = project.defs.tilesets[0]?.uid ?? null;
     this.render();

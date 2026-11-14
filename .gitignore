@@ -15,6 +15,11 @@ out/
 # Test Coverage
 coverage/
 
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+
 # Environment and Local Configs
 .env
 .env*.local

@@ -47,11 +47,12 @@ export default class LayersController {
 
   sync(): void {
     const doc = this.sprite.doc;
-    this.panel.layers = doc.layers.map(({ id, name, visible, opacity }) => ({
+    this.panel.layers = doc.layers.map(({ id, name, visible, opacity, locked }) => ({
       id,
       name,
       visible,
       opacity,
+      locked,
     }));
     this.panel.activeId = doc.activeLayerId;
   }
@@ -107,6 +108,12 @@ export default class LayersController {
       LayerPanelEvents.Visibility,
       (ev) =>
         this.run(setLayerPropertyInAllFrames(sprite, ev.detail.id, "visible", ev.detail.visible)),
+      { signal }
+    );
+    panel.addEventListener(
+      LayerPanelEvents.Lock,
+      (ev) =>
+        this.run(setLayerPropertyInAllFrames(sprite, ev.detail.id, "locked", ev.detail.locked)),
       { signal }
     );
     panel.addEventListener(

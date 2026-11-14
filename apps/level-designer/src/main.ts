@@ -1,6 +1,8 @@
 import "@foundry2d/ui";
-import { openStorage } from "@foundry2d/core";
+import { assertPixelByteOrder, openStorage } from "@foundry2d/core";
 import Application from "./Application";
+
+assertPixelByteOrder();
 
 const app = new Application(await openStorage());
 

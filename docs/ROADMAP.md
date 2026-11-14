@@ -9,7 +9,9 @@ The reference repos (`2d-pixel-art-editor`, `level-editor`) are sources of behav
 
 ---
 
-## 1. Where things stand (2026-11-13)
+## 1. Where things stood before Phase 0 (2026-11-13)
+
+_Historical snapshot, kept for context. Everything listed here was addressed in Phases 0–7b; the defects below were fixed in Phase 0._
 
 | Area                  | State                                                                                                                                                                                                                                                         |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -72,15 +74,15 @@ Project
 │  ├─ layers[]     { uid, name, kind: "intgrid" | "tiles" | "entities",
 │  │                 gridSize, intGridValues[{value, name, color}], tilesetUid? }
 │  ├─ tilesets[]   { uid, name, imagePath | embeddedPng, tileSize, spacing, padding }
-│  ├─ entities[]   { uid, name, size, color, fields[] }      (later)
-│  └─ enums[]                                                   (later)
+│  ├─ entities[]   { uid, name, size, pivot, shape, color, fields[] }   (Phase 7)
+│  └─ enums[]      { uid, name, values[{ id, color }] }                 (Phase 7)
 ├─ worldLayout: "free" | "gridvania" | "linearH" | "linearV"
 └─ levels[]       { uid, name, worldX, worldY, pxWidth, pxHeight,
                     layerInstances[] { defUid, data: Int32Array (RLE in JSON) | entities[] } }
 ```
 
 - IntGrid and Tile layer instances are `GridLayer<Int32Array>`, so pen, eraser, bucket, eyedropper and history work unchanged.
-- Entity layers are a separate non-grid layer type in core. They get their own commands.
+- Entity layers ended up app-level (Phase 7): an Entities layer keeps an empty grid layer so ordering, visibility and opacity work like other layers, and its instances live on the level with their own commands. Core stayed grid-only.
 - The Pac-Man `layersData.js` (collision / collectibles / spawns) becomes three IntGrid layer defs in a seed project.
 
 ---
@@ -253,7 +255,29 @@ LDtk's signature feature, simplified: a Tiles layer can be **generated** from an
 
 ### Phase 8: Refactor and polish
 
-Issues, improvements and polish candidates collected along the way. Items marked **earlier** are cheap enough, or annoying enough, to fold into whichever phase touches that code first.
+Issues, improvements and polish candidates collected along the way, including everything earlier phases marked "not done" or "later". Items marked **earlier** are cheap enough, or annoying enough, to fold into whichever phase touches that code first.
+
+**Order of work.** The list is long, so Phase 8 runs in stages:
+
+- **8.1 Quick UX wins** ✅ (2026-11-14): items 10, 11, 21, 22, 24, 29 and 5. Notes:
+  - **Layer locks (29):** the lock toggle is on each layer row in both apps and saved with the project. Locking an Entities layer also blocks entity edits (selection still works for inspecting). Auto-layers show a disabled lock that explains why.
+  - **Pixel editor (10, 11):** the mirror guide is a cased 2px dashed line with X and Y badges. Moving a selection on a locked or hidden layer keeps the selection and says why in the status bar.
+  - **Level designer (21, 22):** Project settings has tabs (Layers, Tilesets, Entities, Enums, switchable with the arrow keys). Dialog bodies scroll under a fixed header. Entity tiles are picked visually.
+  - **Other (24, 5):** old game exports with `spawns` keep the original value names. Both apps check the pixel byte order at startup (`assertPixelByteOrder`).
+- **8.2 Safety net** ✅ (2026-11-14): browser end-to-end smoke tests (item 25).
+  - **Setup:** Playwright (`@playwright/test`, Chromium) with the config and specs in `e2e/` (`e2e/playwright.config.ts`). Run them with `vp run test:e2e`; the first time on a machine, run `pnpm exec playwright install chromium`.
+  - **Isolation:** each app gets its own dev server on ports 4170 and 4171, and every test runs in a fresh browser context with empty storage.
+  - **Coverage:** 12 smoke tests, all driven by real mouse and keyboard input.
+    - Pixel editor: draw, undo and redo; the zoom readout; crash recovery; layer locks; selection moves; saving to the library and the start screen.
+    - Level designer: painting the maze; entity drag and undo; entity edits surviving a reload; auto-layers in the platformer preset; world and level switching; settings tabs.
+    - The suite passed 60 of 60 runs with `--repeat-each=5`.
+  - **Bugs it found and fixed:**
+    - The level designer dropped World/Level switches requested during the 320 ms zoom animation (Enter right after switching to the world did nothing). Transitions are now queued.
+    - `<body data-view>` was picked up as a view tab and given `aria-selected`.
+- **8.3 Architecture:** items 1–4, done under the smoke tests from 8.2.
+- **8.4 Files and storage:** items 6–9.
+- **8.5 Features:** items 12–15, 17–20, 23, 30 and 31.
+- **8.6 Quality:** items 16, 26–28.
 
 **Architecture**
 
@@ -297,6 +321,12 @@ Issues, improvements and polish candidates collected along the way. Items marked
 26. Toolchain quirk seen in Phase 7b on Windows: the dev server kept serving a stale module after a file was appended to from a shell, and the test runner kept a stale `import.meta.glob` result until the importing file's content changed. Restarting the dev server, or editing the importing file, fixes it. Check whether a newer Vite+ fixes it, and otherwise document it in the contributor notes.
 27. Accessibility pass: focus order, visible focus rings, `aria` labels on canvas-adjacent controls, and keyboard access to every panel action.
 28. Performance check on big levels (256×256 with several layers) and long animations (100+ frames): thumbnails, onion skin and autosave serialization.
+
+**Collected from earlier phases' "not done" notes**
+
+29. Phase 1 kept `locked` in core but never exposed it. Add a lock toggle to `<layers-panel>` for both apps. The level designer's generated auto-layers show as locked and can't be unlocked.
+30. Phase 7b auto-layer gaps (LDtk has them): several tiles stacked in one cell (rules that don't stop at the first match), rule groups that can be toggled together, per-rule out-of-bounds handling, tile offsets, and auto-layers fed by other auto-layers.
+31. The target architecture planned shared `@foundry2d/ui` components (tool bar, palette, panel section, property grid, modal, status bar). Both apps still build these in plain HTML. Extract them alongside items 2 and 3.
 
 ### Phase 9: Documentation, manual and onboarding
 

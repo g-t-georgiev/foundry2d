@@ -220,3 +220,20 @@ describe("platformer preset", () => {
     expect(at(20, 5)).toBe("."); // sky
   });
 });
+
+describe("layer locks", () => {
+  it("keeps hand locks through auto-layer changes and saves them", () => {
+    const project = createProjectFromPreset("platformer");
+    const level = project.levels[0];
+    const entities = level.doc.getLayer(layerIdFor(20))!;
+    entities.locked = true;
+    project.setAutoSource(2, null);
+    expect(entities.locked).toBe(true);
+    expect(level.doc.getLayer(layerIdFor(2))!.locked).toBe(false);
+    project.setAutoSource(2, 1);
+    const loaded = deserializeProject(JSON.parse(JSON.stringify(serializeProject(project))));
+    expect(loaded.levels[0].doc.getLayer(layerIdFor(20))!.locked).toBe(true);
+    expect(loaded.levels[0].doc.getLayer(layerIdFor(2))!.locked).toBe(true);
+    expect(loaded.levels[0].doc.getLayer(layerIdFor(1))!.locked).toBe(false);
+  });
+});

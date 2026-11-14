@@ -591,18 +591,24 @@ export class LevelProject {
     this.applyAutoLocks(level);
   }
 
-  /** Auto-layers are locked so the grid tools leave them alone. */
+  /** Auto-layers are locked so the grid tools leave them alone (hand locks are kept). */
   private applyAutoLocks(level: Level): void {
     for (const def of this.defs.layers) {
       const layer = level.doc.getLayer(layerIdFor(def.uid));
-      if (layer) layer.locked = this.isAutoLayer(def);
+      if (layer && this.isAutoLayer(def)) layer.locked = true;
     }
   }
 
   private setAutoSourceInternal(def: LayerDef, sourceUid: number | null): void {
+    const wasAuto = this.isAutoLayer(def);
     def.autoSourceUid = sourceUid;
     def.autoRules ??= [];
-    for (const level of this.levels) this.applyAutoLocks(level);
+    for (const level of this.levels) {
+      // A layer that stops being generated becomes paintable again.
+      const layer = level.doc.getLayer(layerIdFor(def.uid));
+      if (layer && wasAuto && !this.isAutoLayer(def)) layer.locked = false;
+      this.applyAutoLocks(level);
+    }
   }
 
   private autoRulesChanged(def: LayerDef): void {
@@ -686,11 +692,11 @@ export class LevelProject {
   removeLayerDef(uid: number): boolean {
     const index = this.defs.layers.findIndex((d) => d.uid === uid);
     if (index === -1 || this.defs.layers.length <= 1) return false;
-    const [removed] = this.defs.layers.splice(index, 1);
     for (const def of this.defs.layers) {
       // Auto-layers fed by the removed layer keep their tiles and become manual.
       if (def.autoSourceUid === uid) this.setAutoSourceInternal(def, null);
     }
+    const [removed] = this.defs.layers.splice(index, 1);
     for (const level of this.levels) {
       level.doc.removeLayer(layerIdFor(uid));
       if (removed.type === "Entities") {

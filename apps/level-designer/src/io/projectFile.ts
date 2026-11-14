@@ -28,6 +28,8 @@ export interface SerializedLevelLayer {
   defUid: number;
   visible: boolean;
   opacity: number;
+  /** Hand-locked layers (auto-layers are always locked and don't store it). */
+  locked?: boolean;
   /** RLE-encoded cells: `[count, value, ...]`. */
   data: number[];
 }
@@ -97,6 +99,7 @@ export function serializeProject(project: LevelProject): LevelProjectFile {
             defUid: def.uid,
             visible: layer.visible,
             opacity: layer.opacity,
+            ...(layer.locked && !project.isAutoLayer(def) ? { locked: true } : {}),
             data: encodeRLE(layer.data),
           };
         }),
@@ -439,6 +442,7 @@ export function deserializeProject(json: unknown): LevelProject {
         layer.version++;
       }
       if (typeof entry.visible === "boolean") layer.visible = entry.visible;
+      if (entry.locked === true) layer.locked = true;
       if (typeof entry.opacity === "number")
         layer.opacity = Math.min(1, Math.max(0, entry.opacity));
     }
@@ -454,7 +458,7 @@ export function deserializeProject(json: unknown): LevelProject {
   for (const level of project.levels) {
     for (const def of project.defs.layers) {
       const layer = level.doc.getLayer(layerIdFor(def.uid));
-      if (layer) layer.locked = project.isAutoLayer(def);
+      if (layer && project.isAutoLayer(def)) layer.locked = true;
     }
   }
   project.regenerateAutoLayers();

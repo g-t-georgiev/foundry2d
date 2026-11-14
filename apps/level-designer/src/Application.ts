@@ -103,7 +103,12 @@ export default class Application {
   private loading = false;
   private readonly layersPanel: LayersPanel;
   private altHeld = false;
-  private transitioning = false;
+  /**
+   * The running view transition. World/level switches are chained on it, so
+   * a request made mid-animation (e.g. Enter right after Escape) runs next
+   * instead of being dropped.
+   */
+  private transition: Promise<void> = Promise.resolve();
   private messageTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(storage: Storage) {
@@ -194,7 +199,7 @@ export default class Application {
       notify: (message, timeout) => this.showMessage(message, timeout),
     });
     this.entityPanel = new EntityPanel($("#entityList"), $("#entityInspector"), this.entities, () =>
-      this.settings.open(this.project, this.activeDef()?.uid ?? null)
+      this.settings.open(this.project, null, "entities")
     );
     this.entities.events.on("changed", () => this.renderEntityPanel());
 
@@ -380,9 +385,25 @@ export default class Application {
   // ------------------------------------------------------------------ views
 
   /** Opens a level for editing, zooming in from its place in the world. */
-  async enterLevel(uid: number, animate = true): Promise<void> {
+  enterLevel(uid: number, animate = true): Promise<void> {
+    return this.queueTransition(() => this.enterLevelNow(uid, animate));
+  }
+
+  /** Returns to the world, zooming out around the level that was open. */
+  showWorld(animate = true): Promise<void> {
+    return this.queueTransition(() => this.showWorldNow(animate));
+  }
+
+  private queueTransition(run: () => Promise<void>): Promise<void> {
+    const next = this.transition.then(run);
+    // Keep the chain alive even if one transition fails.
+    this.transition = next.catch((error: unknown) => console.error(error));
+    return next;
+  }
+
+  private async enterLevelNow(uid: number, animate: boolean): Promise<void> {
     const level = this.project.getLevel(uid);
-    if (!level || this.transitioning) return;
+    if (!level) return;
     levelStore.dispatch(LevelActions.SelectLevel, { uid });
     if (level !== this.level) this.openLevelSession(level);
 
@@ -401,18 +422,12 @@ export default class Application {
       x: world.x + level.worldX * world.zoom,
       y: world.y + level.worldY * world.zoom,
     };
-    this.transitioning = true;
-    try {
-      await this.workspace.setScene(this.levelScene, { camera: start });
-      await this.workspace.fitToView(TRANSITION_MS);
-    } finally {
-      this.transitioning = false;
-    }
+    await this.workspace.setScene(this.levelScene, { camera: start });
+    await this.workspace.fitToView(TRANSITION_MS);
   }
 
-  /** Returns to the world, zooming out around the level that was open. */
-  async showWorld(animate = true): Promise<void> {
-    if (this.view === "world" || this.transitioning) return;
+  private async showWorldNow(animate: boolean): Promise<void> {
+    if (this.view === "world") return;
     this.workspace.input.cancelStroke();
     const level = this.level;
     const local = this.workspace.camera.getState();
@@ -429,13 +444,8 @@ export default class Application {
     const target = this.workspace.computeFitState(
       inflate(rect, Math.max(rect.width, rect.height) * 0.75)
     );
-    this.transitioning = true;
-    try {
-      await this.workspace.setScene(this.worldScene, { camera: start });
-      if (target) await this.workspace.animateTo(target, animate ? TRANSITION_MS : 0);
-    } finally {
-      this.transitioning = false;
-    }
+    await this.workspace.setScene(this.worldScene, { camera: start });
+    if (target) await this.workspace.animateTo(target, animate ? TRANSITION_MS : 0);
   }
 
   /** Selects a level in the world; optionally pans it into view. */
@@ -941,7 +951,7 @@ export default class Application {
     for (const button of document.querySelectorAll<HTMLButtonElement>("[data-command]")) {
       button.addEventListener("click", () => this.runCommand(button.dataset.command ?? ""));
     }
-    for (const tab of document.querySelectorAll<HTMLButtonElement>("[data-view]")) {
+    for (const tab of document.querySelectorAll<HTMLButtonElement>("button[data-view]")) {
       tab.addEventListener("click", () => {
         if (tab.dataset.view === "world") void this.showWorld();
         else void this.enterLevel(this.selectedLevel()?.uid ?? this.level.uid);
@@ -1241,7 +1251,8 @@ export default class Application {
   private renderView(): void {
     const view = this.view;
     document.body.dataset.view = view;
-    for (const tab of document.querySelectorAll<HTMLButtonElement>("[data-view]")) {
+    // `button`: <body> carries data-view too.
+    for (const tab of document.querySelectorAll<HTMLButtonElement>("button[data-view]")) {
       tab.setAttribute("aria-selected", String(tab.dataset.view === view));
     }
     $("#currentLevelName").textContent = this.level.identifier;
