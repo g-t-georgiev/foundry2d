@@ -15,6 +15,12 @@ import {
   type Selection,
 } from "@foundry2d/core";
 import type { PixelDocument } from "../model/Sprite";
+import {
+  imageFromPasteEvent,
+  imageToRegion,
+  regionToPng,
+  writeImageToClipboard,
+} from "./systemClipboard";
 
 export interface ClipboardHooks {
   /** The frame document being edited. */
@@ -33,6 +39,12 @@ export interface ClipboardHooks {
  */
 export class ClipboardController {
   private clipboard: Region | null = null;
+  /**
+   * Whether the last copy also reached the system clipboard. If it did, an
+   * image there is either ours or newer (copied in another app since), so
+   * it wins over the internal copy on paste.
+   */
+  private systemHasLastCopy = false;
 
   constructor(private readonly hooks: ClipboardHooks) {}
 
@@ -57,13 +69,24 @@ export class ClipboardController {
     );
   }
 
-  /** Copies the selection (or the whole layer) of the active layer. */
+  /**
+   * Copies the selection (or the whole layer) of the active layer, also to
+   * the system clipboard as a PNG so other apps can paste it.
+   */
   copy(): boolean {
     const layer = this.doc.getActiveLayer();
     if (!layer) return false;
     const rect = this.targetRect();
-    this.clipboard = readRegion(layer, rect);
+    const region = readRegion(layer, rect);
+    this.clipboard = region;
+    this.systemHasLastCopy = false;
     this.hooks.notify(`Copied ${rect.width}×${rect.height} px`, 1500);
+    void regionToPng(region)
+      .then(writeImageToClipboard)
+      .then((ok) => {
+        // Only if no newer copy happened while the PNG was being written.
+        if (this.clipboard === region) this.systemHasLastCopy = ok;
+      });
     return true;
   }
 
@@ -77,18 +100,51 @@ export class ClipboardController {
     }
   }
 
+  /** Pastes the internal clipboard (pixels copied in this editor). */
+  paste(): void {
+    if (!this.clipboard) {
+      this.hooks.notify("Nothing to paste.");
+      return;
+    }
+    this.pasteRegion(this.clipboard);
+  }
+
+  /**
+   * Handles the browser's paste event (Ctrl+V): an image on the system
+   * clipboard is pasted when it's ours or newer than our last copy;
+   * otherwise the internal clipboard is used.
+   */
+  async pasteFromEvent(ev: ClipboardEvent): Promise<void> {
+    const image = imageFromPasteEvent(ev);
+    if (image && (this.systemHasLastCopy || !this.clipboard)) {
+      try {
+        const region = await imageToRegion(image);
+        const doc = this.doc;
+        if (region.width > doc.width || region.height > doc.height) {
+          this.hooks.notify(
+            `Pasted a ${region.width}×${region.height} image; parts outside the ${doc.width}×${doc.height} sprite are cut off.`,
+            4000
+          );
+        }
+        this.pasteRegion(region);
+        return;
+      } catch (error) {
+        console.error(error);
+        this.hooks.notify("Could not read the pasted image.", 4000);
+        if (!this.clipboard) return;
+      }
+    }
+    this.paste();
+  }
+
   /**
    * Pastes at the selection's top-left (or the top-left corner) and selects
    * the pasted block, as one undo step.
    */
-  paste(): void {
+  private pasteRegion(region: Region): void {
     const { selection, history } = this.hooks;
     const layer = this.doc.getActiveLayer();
-    const region = this.clipboard;
-    if (!layer || !region) {
-      this.hooks.notify("Nothing to paste.");
-      return;
-    }
+    if (!layer) return;
     if (!this.doc.getPolicy(layer.id).canDraw) {
       this.hooks.notify("The active layer is hidden or locked.");
       return;

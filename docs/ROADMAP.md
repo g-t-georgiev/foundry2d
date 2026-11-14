@@ -317,6 +317,10 @@ Issues, improvements and polish candidates collected along the way, including ev
     - Auto-layers regenerate only the dirty area, widened by the rules' reach (`generateAutoTilesInto`).
     - On a 256×256 level, a single-cell edit now costs about 0.014 ms instead of about 21 ms for a full pass. A test checks that incremental results match a full regeneration after random strokes and undos.
   - ✅ **Selection across layers and frames (12), a decision:** the selection belongs to the canvas, not to a layer, so it is kept when switching layer or frame (as in Aseprite and Photoshop). Workflows like "select, switch layer, copy" rely on it.
+  - ✅ **System clipboard images (14, partly):** Copy and Cut also put the selection on the system clipboard as a PNG, so other apps can paste it. Ctrl+V accepts images copied in other apps: they paste like internal copies, at the selection's top-left, selected, as one undo step. Fully transparent pixels become empty cells, and anything outside the sprite is cut off with a message.
+    - **Paste event:** pasting uses the browser's `paste` event, which carries the clipboard without a permission prompt. Ctrl+V is therefore no longer a keymap binding, because cancelling the key press would also cancel the event.
+    - **Which copy wins:** an image on the system clipboard wins over the internal copy only when our last copy reached the system clipboard. Then the image is either ours or newer. If the write failed, the internal copy is used, since an image there could be older.
+    - **Tests:** end-to-end tests in Chromium with clipboard permissions check both directions, using a synthetic paste event for "copied in another app". Lasso and magic wand (the rest of 14) are still open.
   - ✅ **GIF palette (15):** above 255 colours the GIF encoder now uses a pixel-weighted **median cut** (`export/quantize.ts`) instead of keeping the 255 most frequent colours. On a 4,096-colour gradient the average error per channel dropped from about 61 to about 3.5 (out of 255). Up to 255 colours stay exact, as before. Optional **Floyd–Steinberg dithering** (off by default; "Dither" in the GIF tab) applies only when the palette is reduced, and leaves transparent pixels alone.
   - ✅ **Flip and rotate (13, partly):** Shift+H and Shift+V flip, and Shift+R rotates 90° clockwise. They act on the selected pixels, or the whole active layer without a selection, and each is one undo step.
     - Rotation turns around the selection's centre, swaps its width and height, and is kept on the canvas.
@@ -346,7 +350,7 @@ Issues, improvements and polish candidates collected along the way, including ev
 11. Moving a selection on a locked or hidden layer silently does nothing. Show the not-allowed cursor and a status message (**earlier**).
 12. Decide what happens to the selection when switching layer or frame. It is kept today, which is useful but surprising when the new layer is empty there.
 13. Selection handles for resizing, plus flip and rotate of the selected pixels. (Flip and rotate ✅ in 8.5; handles still open.)
-14. From Phase 6b: paste images from the system clipboard (and copy as PNG), lasso and magic wand selections.
+14. From Phase 6b: paste images from the system clipboard (and copy as PNG), lasso and magic wand selections. (Clipboard images ✅ in 8.5; lasso and magic wand still open.)
 15. The GIF encoder is exact up to 255 colours. Above that it needs a proper quantizer (median cut or octree), with optional dithering. ✅ Done in 8.5 (median cut, optional dithering).
 16. The export dialog was tested through unit tests and the dialog UI, but no download was clicked in a real browser session. Do one manual pass per format.
 

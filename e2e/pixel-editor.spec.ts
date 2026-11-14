@@ -147,3 +147,60 @@ test("flips and rotates the selection, each as one undo step", async ({ page }) 
   await expect.poll(() => pixel(page, 2, 1)).not.toBe(0);
   expect(await pixel(page, 1, 1)).toBe(0);
 });
+
+test.describe("system clipboard", () => {
+  test.beforeEach(async ({ context }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  });
+
+  test("Ctrl+C also puts the selection on the system clipboard as a PNG", async ({ page }) => {
+    const p = await at(page, 1, 1);
+    await page.mouse.click(p.x, p.y);
+    await page.keyboard.press("m");
+    await drag(page, await at(page, 0, 0), await at(page, 2, 2));
+    await page.keyboard.press("Control+c");
+
+    // The PNG is written asynchronously, so poll until it's there.
+    const readClipboardImage = () =>
+      page.evaluate(async () => {
+        const item = (await navigator.clipboard.read()).find((i) => i.types.includes("image/png"));
+        if (!item) return null;
+        const bitmap = await createImageBitmap(await item.getType("image/png"));
+        const ctx = new OffscreenCanvas(bitmap.width, bitmap.height).getContext("2d")!;
+        ctx.drawImage(bitmap, 0, 0);
+        return {
+          size: [bitmap.width, bitmap.height],
+          centreAlpha: ctx.getImageData(1, 1, 1, 1).data[3],
+          cornerAlpha: ctx.getImageData(0, 0, 1, 1).data[3],
+        };
+      });
+    await expect
+      .poll(readClipboardImage)
+      .toEqual({ size: [3, 3], centreAlpha: 255, cornerAlpha: 0 });
+  });
+
+  test("pastes an image copied in another app as a new selection", async ({ page }) => {
+    // A 2×1 PNG (red, green) delivered by a paste event, as from another app.
+    await page.evaluate(async () => {
+      const canvas = new OffscreenCanvas(2, 1);
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = "#ff0000";
+      ctx.fillRect(0, 0, 1, 1);
+      ctx.fillStyle = "#00ff00";
+      ctx.fillRect(1, 0, 1, 1);
+      const blob = await canvas.convertToBlob({ type: "image/png" });
+      const data = new DataTransfer();
+      data.items.add(new File([blob], "copied.png", { type: "image/png" }));
+      document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true }));
+    });
+    await expect.poll(() => pixel(page, 0, 0)).toBe(0xff0000ff >>> 0);
+    expect(await pixel(page, 1, 0)).toBe(0xff00ff00 >>> 0);
+    const rect = await page.evaluate(
+      () => (window.foundry as unknown as { selection: { rect: unknown } }).selection.rect
+    );
+    expect(rect).toEqual({ x: 0, y: 0, width: 2, height: 1 });
+
+    await page.keyboard.press("Control+z");
+    await expect.poll(() => pixel(page, 0, 0)).toBe(0);
+  });
+});

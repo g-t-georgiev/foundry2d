@@ -346,7 +346,7 @@ describe("GIF colour reduction", () => {
       [0xff0000, 3],
       [0x00ff00, 1],
     ]);
-    expect(medianCut(few, 255).sort()).toEqual([0x00ff00, 0xff0000].sort());
+    expect(medianCut(few, 255).sort((a, b) => a - b)).toEqual([0x00ff00, 0xff0000]);
 
     const counts = new Map<number, number>();
     const img = gradient();

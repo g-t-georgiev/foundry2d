@@ -68,7 +68,9 @@ export function bindKeys(keymap: Keymap, app: Application): void {
   keymap.bind("mod+d", () => void clipboard.deselect());
   keymap.bind("mod+c", () => void clipboard.copy());
   keymap.bind("mod+x", () => clipboard.cut());
-  keymap.bind("mod+v", () => clipboard.paste());
+  // Ctrl+V is handled by the document "paste" event (Application), so
+  // images copied in other apps arrive with it; a keymap binding would
+  // cancel the key press and with it the paste event.
   keymap.bind("escape", () => clipboard.deselect());
   keymap.bind("delete", () => clipboard.clearLayer());
   keymap.bind("shift+h", () => clipboard.transform("flipX"));

@@ -17,6 +17,7 @@ import {
   ProjectSession,
   Workspace,
   editorBlock,
+  isTypingTarget,
   readBoolean,
   readCamera,
   readInteger,
@@ -232,6 +233,12 @@ export default class Application implements ApplicationContext {
       setName: (name) => this.rename(name),
     });
     bindProjectBrowser(elements.projectBrowser, this.files);
+    // Paste (Ctrl+V): images from the system clipboard or the internal copy.
+    document.addEventListener("paste", (ev) => {
+      if (isTypingTarget(ev.target) || isTypingTarget(document.activeElement)) return;
+      ev.preventDefault();
+      void this.clipboard.pasteFromEvent(ev);
+    });
     for (const button of document.querySelectorAll<HTMLButtonElement>("[data-transform]")) {
       button.addEventListener("click", () =>
         this.clipboard.transform(button.dataset.transform as "flipX" | "flipY" | "rotateCW")
