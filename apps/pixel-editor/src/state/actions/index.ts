@@ -7,6 +7,7 @@ import {
   setPenSizeSchema,
   gridToggleSchema,
   previewToggleSchema,
+  onionToggleSchema,
   documentResizeSchema,
 } from "../schemas";
 
@@ -84,5 +85,16 @@ export const previewToggleAction = defineAction<
   schema: previewToggleSchema,
   reducer(state, payload) {
     state.preferences.preview.enabled = payload.enabled;
+  },
+});
+
+export const onionToggleAction = defineAction<
+  ApplicationState,
+  ApplicationStateActions.ToggleOnionSkin,
+  typeof onionToggleSchema
+>(ApplicationStateActions.ToggleOnionSkin, {
+  schema: onionToggleSchema,
+  reducer(state, payload) {
+    state.preferences.onionSkin.enabled = payload.enabled;
   },
 });

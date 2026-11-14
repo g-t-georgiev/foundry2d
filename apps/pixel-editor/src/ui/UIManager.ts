@@ -17,7 +17,6 @@ const $$ = <T extends Element = HTMLElement>(selector: string) => [
 export default class UIManager {
   private readonly elements = {
     documentSizeSelect: $<HTMLSelectElement>("#documentSizeSelect"),
-    exportScale: $<HTMLSelectElement>("#exportScale"),
     colorPicker: $<ColorPickerButton>("#colorPicker"),
     gridToggle: $<HTMLInputElement>("#gridToggle"),
     previewToggle: $<HTMLInputElement>("#previewToggle"),
@@ -109,7 +108,7 @@ export default class UIManager {
         void app.saveAs();
         break;
       case "export":
-        void app.exportPNG(Number(this.elements.exportScale?.value ?? 1));
+        app.openExport();
         break;
       case "undo":
         app.undo();

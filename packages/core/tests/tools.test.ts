@@ -173,3 +173,53 @@ describe("RectangleTool", () => {
     expect(layer.get(2, 1)).toBe(1);
   });
 });
+
+describe("Line and ellipse tools", () => {
+  const filledCells = (layer: { data: Int32Array; width: number }) => {
+    const cells: string[] = [];
+    for (let i = 0; i < layer.data.length; i++) {
+      if (layer.data[i] === 1) cells.push(`${i % layer.width},${Math.floor(i / layer.width)}`);
+    }
+    return cells;
+  };
+
+  it("draws a Bresenham line and undoes it in one step", async () => {
+    const { LineTool } = await import("../src");
+    const { layer, history, tools, ctx } = setup(5, 5);
+    tools.registerTool(new LineTool<Int32Array>());
+    tools.setTool("line");
+    tools.executePointerAction("down", { x: 0, y: 0 }, ctx());
+    tools.executePointerAction("move", { x: 4, y: 0 }, ctx());
+    tools.executePointerAction("move", { x: 4, y: 4 }, ctx());
+    tools.executePointerAction("up", { x: 4, y: 4 }, ctx());
+    expect(filledCells(layer)).toEqual(["0,0", "1,1", "2,2", "3,3", "4,4"]);
+    history.undo();
+    expect(layer.isEmpty()).toBe(true);
+  });
+
+  it("draws symmetric ellipse outlines and fills", async () => {
+    const { EllipseTool } = await import("../src");
+    const { layer, tools, ctx } = setup(7, 7);
+    tools.registerTool(new EllipseTool<Int32Array>("ellipse", false));
+    tools.setTool("ellipse");
+    tools.executePointerAction("down", { x: 0, y: 0 }, ctx());
+    tools.executePointerAction("up", { x: 6, y: 6 }, ctx());
+    const outline = filledCells(layer);
+    // Mirror symmetry and a hollow centre.
+    for (const cell of outline) {
+      const [x, y] = cell.split(",").map(Number);
+      expect(outline).toContain(`${6 - x},${y}`);
+      expect(outline).toContain(`${x},${6 - y}`);
+    }
+    expect(layer.get(3, 3)).toBe(-1);
+    expect(layer.get(3, 0)).toBe(1);
+
+    const filled = setup(4, 4);
+    filled.tools.registerTool(new EllipseTool<Int32Array>("disc", true));
+    filled.tools.setTool("disc");
+    filled.tools.executePointerAction("down", { x: 0, y: 0 }, filled.ctx());
+    filled.tools.executePointerAction("up", { x: 3, y: 3 }, filled.ctx());
+    expect(filled.layer.get(1, 1)).toBe(1);
+    expect(filled.layer.get(0, 0)).toBe(-1);
+  });
+});

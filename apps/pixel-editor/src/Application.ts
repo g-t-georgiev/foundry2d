@@ -1,19 +1,34 @@
 import {
   ClearCommand,
-  GridDocument,
+  EllipseTool,
   HistoryManager,
+  LineTool,
   PixelUtils,
-  ResizeCommand,
+  RectangleTool,
   ToolManager,
   type Storage,
+  type Unsubscribe,
 } from "@foundry2d/core";
+import { LayerStackPass } from "@foundry2d/render";
 import { GridDocumentScene, ProjectSession, Workspace } from "@foundry2d/workspace";
 import { ProjectBrowserEvents, type LayersPanel, type ProjectBrowser } from "@foundry2d/ui";
 import type { ApplicationContext } from "./types";
 import { ApplicationStateActions, applicationStore } from "./state";
 import UIManager from "./ui/UIManager";
 import LayersController from "./ui/LayersController";
-import { exportPng, renderThumbnail } from "./io/exportPng";
+import TimelineView from "./ui/TimelineView";
+import AnimationPreview from "./ui/AnimationPreview";
+import ExportDialog from "./ui/ExportDialog";
+import { ExportController } from "./export/ExportController";
+import { Sprite, type PixelDocument } from "./model/Sprite";
+import {
+  AddFrameCommand,
+  MoveFrameCommand,
+  RemoveFrameCommand,
+  SetFrameDurationCommand,
+  resizeAllFrames,
+} from "./model/commands";
+import { renderThumbnail } from "./io/thumbnail";
 import {
   PROJECT_EXTENSION,
   ProjectFormatError,
@@ -26,35 +41,140 @@ export interface ApplicationElements {
   canvas: HTMLCanvasElement;
   layersPanel: LayersPanel;
   projectBrowser: ProjectBrowser;
+  timeline: HTMLElement;
+  previewCanvas: HTMLCanvasElement;
+  previewToggle: HTMLButtonElement | null;
+  exportDialog: HTMLDialogElement;
 }
 
 const DEFAULT_NAME = "sprite";
 const NEW_SIZES = [16, 32, 64, 128];
+const ONION_ALPHA = 0.28;
 
 /**
  * Composition root of the pixel editor.
  *
- * Ownership: cell data, layers and undo history live in core objects
- * (`GridDocument`, `HistoryManager`); the store only holds thin UI metadata
- * (tool, color, pen size, toggles, mirrored document size).
+ * Ownership: pixels, layers, frames and undo history live in the model
+ * (`Sprite` with one `GridDocument` per frame, `HistoryManager`); the store
+ * only holds thin UI metadata (tool, color, pen size, toggles).
  */
 export default class Application implements ApplicationContext {
-  readonly doc: GridDocument<Uint32Array>;
+  readonly sprite: Sprite;
   readonly history = new HistoryManager();
   readonly tools = new ToolManager<Uint32Array>();
   readonly workspace: Workspace;
-  readonly scene: GridDocumentScene<Uint32Array>;
+  scene!: GridDocumentScene<Uint32Array>;
   readonly ui: UIManager;
   readonly layers: LayersController;
+  readonly timeline: TimelineView;
+  readonly preview: AnimationPreview;
+  readonly exporter: ExportController;
+  private readonly exportDialog: ExportDialog;
   readonly session: ProjectSession;
   private readonly browser: ProjectBrowser;
   private name = DEFAULT_NAME;
-  /** True while a document is being loaded, so load-time events don't mark it dirty. */
+  /** True while a sprite is being loaded, so load-time events don't mark it dirty. */
   private loading = false;
+  private docSubscriptions: Unsubscribe[] = [];
+  private altHeld = false;
 
   constructor(elements: ApplicationElements, storage: Storage) {
     const { size } = applicationStore.getState().doc;
-    this.doc = Application.createDocument(size.width, size.height);
+    this.sprite = Sprite.create(size.width, size.height);
+
+    this.tools.registerTool(new LineTool<Uint32Array>("line"));
+    this.tools.registerTool(new RectangleTool<Uint32Array>("rect", false));
+    this.tools.registerTool(new EllipseTool<Uint32Array>("ellipse", false));
+
+    this.workspace = new Workspace(elements.viewport, { canvas: elements.canvas });
+    this.ui = new UIManager(this);
+    this.layers = new LayersController(elements.layersPanel, this.sprite, this.history);
+    this.timeline = new TimelineView(elements.timeline, {
+      select: (index) => this.sprite.selectFrame(index),
+      add: () => this.addFrame(false),
+      duplicate: () => this.addFrame(true),
+      remove: () => this.deleteFrame(),
+      move: (direction) => this.moveFrame(direction),
+      setDuration: (ms) => this.setFrameDuration(ms),
+      setFps: (fps) => {
+        this.sprite.setFps(fps);
+      },
+      setOnionSkin: (enabled) =>
+        applicationStore.dispatch(ApplicationStateActions.ToggleOnionSkin, { enabled }),
+    });
+    this.preview = new AnimationPreview(
+      elements.previewCanvas,
+      this.sprite,
+      elements.previewToggle
+    );
+    this.exporter = new ExportController(
+      this.sprite,
+      () => this.name,
+      () => this.sprite.doc.activeLayerId
+    );
+    this.exportDialog = new ExportDialog(elements.exportDialog, this.exporter, (message) =>
+      this.ui.showMessage(message, 3500)
+    );
+    this.browser = elements.projectBrowser;
+    this.session = new ProjectSession({
+      app: "pixel",
+      storage,
+      titleSuffix: "Foundry2D Pixel Editor",
+      fileType: {
+        description: "Foundry2D sprite",
+        mimeType: "application/json",
+        extensions: [PROJECT_EXTENSION],
+      },
+      serialize: () => toProjectFile(this.sprite, this.name),
+      getName: () => this.name,
+      thumbnail: () => renderThumbnail(this.sprite.frames[0].doc),
+      onChange: (state) =>
+        this.ui.updateFileState(
+          `${state.dirty ? "● " : ""}${state.fileName ?? (state.libraryId ? "browser library" : "not saved yet")}`
+        ),
+    });
+    this.session.installUnloadGuard();
+    this.ui.updateName(this.name);
+
+    this.bindStore();
+    this.bindSprite();
+    this.bindWorkspace();
+    this.bindKeys();
+    this.bindBrowser();
+
+    this.showFrame(true);
+    this.session.refresh();
+    void this.startup();
+  }
+
+  /** The frame document being edited. */
+  get doc(): PixelDocument {
+    return this.sprite.doc;
+  }
+
+  get spriteName(): string {
+    return this.name;
+  }
+
+  // ------------------------------------------------------------------ frames
+
+  /** Rebuilds the scene for the current frame; keeps the camera unless `fit`. */
+  private showFrame(fit: boolean): void {
+    this.workspace.input.cancelStroke();
+    const sprite = this.sprite;
+    const onion = (offset: -1 | 1) =>
+      new LayerStackPass(
+        {
+          getSource: () => sprite.frames[sprite.currentIndex + offset]?.doc ?? null,
+          cellSize: { width: 1, height: 1 },
+          getMode: () => "composite",
+          getAlpha: () => {
+            const { onionSkin, preview } = applicationStore.getState().preferences;
+            return onionSkin.enabled && !preview.enabled ? ONION_ALPHA : 0;
+          },
+        },
+        offset < 0 ? "onion-prev" : "onion-next"
+      );
 
     this.scene = new GridDocumentScene<Uint32Array>({
       doc: this.doc,
@@ -67,56 +187,47 @@ export default class Application implements ApplicationContext {
       isPreview: () => applicationStore.getState().preferences.preview.enabled,
       showGrid: () => applicationStore.getState().preferences.grid.enabled,
       majorGridEvery: 8,
+      underlayPasses: [onion(-1), onion(1)],
     });
-
-    this.workspace = new Workspace(elements.viewport, { canvas: elements.canvas });
-    this.ui = new UIManager(this);
-    this.layers = new LayersController(elements.layersPanel, this.doc, this.history);
-    this.browser = elements.projectBrowser;
-    this.session = new ProjectSession({
-      app: "pixel",
-      storage,
-      titleSuffix: "Foundry2D Pixel Editor",
-      fileType: {
-        description: "Foundry2D sprite",
-        mimeType: "application/json",
-        extensions: [PROJECT_EXTENSION],
-      },
-      serialize: () => toProjectFile(this.doc, this.name),
-      getName: () => this.name,
-      thumbnail: () => renderThumbnail(this.doc),
-      onChange: (state) =>
-        this.ui.updateFileState(
-          `${state.dirty ? "● " : ""}${state.fileName ?? (state.libraryId ? "browser library" : "not saved yet")}`
-        ),
-    });
-    this.session.installUnloadGuard();
-    this.ui.updateName(this.name);
-
-    this.bindStore();
+    const camera = fit ? undefined : this.workspace.camera.getState();
+    void this.workspace.setScene(this.scene, { fit, camera });
     this.bindDocument();
-    this.bindWorkspace();
-    this.bindKeys();
-
-    this.bindBrowser();
-
-    void this.workspace.setScene(this.scene);
-    this.session.refresh();
-    void this.startup();
   }
 
-  static createDocument(width: number, height: number): GridDocument<Uint32Array> {
-    const doc = new GridDocument<Uint32Array>({
-      width,
-      height,
-      emptyValue: 0x00000000,
-      bufferCtor: Uint32Array,
-    });
-    doc.addLayer("Layer 1");
-    return doc;
+  addFrame(duplicate: boolean): void {
+    const sprite = this.sprite;
+    const frame = sprite.createFrame(duplicate ? sprite.currentIndex : null);
+    this.history.execute(
+      new AddFrameCommand(
+        sprite,
+        frame,
+        sprite.currentIndex + 1,
+        duplicate ? "Duplicate frame" : "Add frame"
+      )
+    );
   }
 
-  // ------------------------------------------------------------------ commands
+  deleteFrame(): void {
+    const command = new RemoveFrameCommand(this.sprite, this.sprite.currentIndex);
+    command.execute();
+    if (command.succeeded) this.history.record(command);
+    else this.ui.showMessage("A sprite needs at least one frame.");
+  }
+
+  moveFrame(direction: "left" | "right"): void {
+    const from = this.sprite.currentIndex;
+    const to = direction === "left" ? from - 1 : from + 1;
+    if (to < 0 || to >= this.sprite.frames.length) return;
+    this.history.execute(new MoveFrameCommand(this.sprite, from, to));
+  }
+
+  setFrameDuration(ms: number | null): void {
+    const frame = this.sprite.current;
+    if (frame.duration === ms) return;
+    this.history.execute(new SetFrameDurationCommand(this.sprite, frame, ms));
+  }
+
+  // ------------------------------------------------------------------ files
 
   private confirmDiscard(action: string): boolean {
     return !this.session.state.dirty || confirm(`${action}? Unsaved changes will be lost.`);
@@ -125,9 +236,9 @@ export default class Application implements ApplicationContext {
   /** Starts a new sprite of `size`×`size` (or the current size). */
   newDocument(size?: number): void {
     if (!this.confirmDiscard("Start a new sprite")) return;
-    const width = size ?? this.doc.width;
-    const height = size ?? this.doc.height;
-    this.loadDocument(Application.createDocument(width, height), DEFAULT_NAME);
+    const width = size ?? this.sprite.width;
+    const height = size ?? this.sprite.height;
+    this.loadSprite(Sprite.create(width, height), DEFAULT_NAME);
     this.session.resetIdentity();
     this.ui.showMessage(`New ${width}×${height} sprite`);
   }
@@ -150,8 +261,8 @@ export default class Application implements ApplicationContext {
     try {
       const picked = await this.session.pickFile();
       if (!picked) return;
-      const { doc, name } = fromProjectFile(picked.json);
-      this.loadDocument(doc, name || picked.name);
+      const { sprite, name } = fromProjectFile(picked.json);
+      this.loadSprite(sprite, name || picked.name);
       await this.session.adoptFile(picked.name, picked.handle);
       this.ui.showMessage(`Opened ${picked.handle?.name ?? picked.name}`);
     } catch (error) {
@@ -167,8 +278,8 @@ export default class Application implements ApplicationContext {
         this.ui.showMessage("That file is no longer available.", 4000);
         return;
       }
-      const { doc, name } = fromProjectFile(opened.json);
-      this.loadDocument(doc, name || opened.name);
+      const { sprite, name } = fromProjectFile(opened.json);
+      this.loadSprite(sprite, name || opened.name);
       await this.session.adoptFile(opened.name, opened.handle);
       this.ui.showMessage(`Opened ${opened.handle.name}`);
     } catch (error) {
@@ -184,8 +295,8 @@ export default class Application implements ApplicationContext {
         this.ui.showMessage("That sprite is no longer in this browser.", 4000);
         return;
       }
-      const { doc, name } = fromProjectFile(opened.json);
-      this.loadDocument(doc, name || opened.name);
+      const { sprite, name } = fromProjectFile(opened.json);
+      this.loadSprite(sprite, name || opened.name);
       this.session.adoptLibrary(id);
       this.ui.showMessage(`Opened ${opened.name}`);
     } catch (error) {
@@ -276,11 +387,14 @@ export default class Application implements ApplicationContext {
     });
   }
 
-  async exportPNG(scale: number): Promise<void> {
-    await exportPng(this.doc, this.name, scale);
-    this.ui.showMessage(`Exported PNG at ${scale}×`);
+  // ------------------------------------------------------------------ editing
+
+  /** Opens the export dialog. */
+  openExport(): void {
+    this.exportDialog.open();
   }
 
+  /** Clears the active layer in the current frame. */
   clearLayer(): void {
     const layer = this.doc.getActiveLayer();
     if (!layer || !this.doc.getPolicy(layer.id).canDraw) {
@@ -293,8 +407,8 @@ export default class Application implements ApplicationContext {
   }
 
   resizeDocument(width: number, height: number): void {
-    if (width === this.doc.width && height === this.doc.height) return;
-    this.history.execute(new ResizeCommand(this.doc, { width, height }));
+    if (width === this.sprite.width && height === this.sprite.height) return;
+    this.history.execute(resizeAllFrames(this.sprite, width, height));
   }
 
   undo(): void {
@@ -315,19 +429,19 @@ export default class Application implements ApplicationContext {
 
   // ------------------------------------------------------------------ internals
 
-  /** Swaps document contents in place, so every subscriber keeps working. */
-  private loadDocument(source: GridDocument<Uint32Array>, name: string): void {
+  /** Swaps the sprite contents in place, so every subscriber keeps working. */
+  private loadSprite(source: Sprite, name: string): void {
     this.loading = true;
     try {
       this.workspace.input.cancelStroke();
-      this.doc.replaceWith(source);
+      this.sprite.replaceWith(source);
       this.name = name;
       this.ui.updateName(name);
       this.history.clear();
     } finally {
       this.loading = false;
     }
-    void this.workspace.fitToView();
+    this.showFrame(true);
   }
 
   /** Restores unsaved work, or shows the start screen when there is saved work to pick from. */
@@ -336,8 +450,8 @@ export default class Application implements ApplicationContext {
     // Don't clobber work started before IndexedDB answered.
     if (recovered && !this.session.state.dirty) {
       try {
-        const { doc, name } = fromProjectFile(recovered.json);
-        this.loadDocument(doc, name);
+        const { sprite, name } = fromProjectFile(recovered.json);
+        this.loadSprite(sprite, name);
         await this.session.adoptRecovered(recovered.snapshot);
         this.ui.showMessage("Restored unsaved work from the last session");
         return;
@@ -369,7 +483,9 @@ export default class Application implements ApplicationContext {
     applicationStore.dispatch(ApplicationStateActions.SetTool, previousTool);
   }
 
-  private altHeld = false;
+  private renderTimeline(): void {
+    this.timeline.render(this.sprite, applicationStore.getState().preferences.onionSkin.enabled);
+  }
 
   /** Store → engine. The store is the single source of truth for the active tool. */
   private bindStore(): void {
@@ -381,36 +497,83 @@ export default class Application implements ApplicationContext {
     const invalidate = () => this.scene.invalidate();
     applicationStore.select((s) => s.preferences.grid.enabled, invalidate);
     applicationStore.select((s) => s.preferences.preview.enabled, invalidate);
+    applicationStore.select(
+      (s) => s.preferences.onionSkin.enabled,
+      () => {
+        invalidate();
+        this.renderTimeline();
+      }
+    );
     applicationStore.select((s) => s.penSize, invalidate);
     applicationStore.select((s) => s.currentColor, invalidate);
   }
 
-  /** Engine → store/UI. */
-  private bindDocument(): void {
-    const { doc, history } = this;
-
-    doc.events.on("resized", ({ width, height }) => {
-      const { size } = applicationStore.getState().doc;
-      if (size.width !== width || size.height !== height) {
-        applicationStore.dispatch(ApplicationStateActions.ResizeDocument, { width, height });
-      }
-      void this.workspace.fitToView();
+  /** Sprite (frames) → scene, timeline, preview. */
+  private bindSprite(): void {
+    const { sprite, history } = this;
+    sprite.events.on("frame:selected", () => {
+      if (!this.loading) this.showFrame(false);
+      this.renderTimeline();
+      this.preview.invalidate();
     });
-
-    const updateLayer = () => {
-      this.ui.updateLayer(doc.getActiveLayer()?.name ?? "—");
-      this.workspace.refreshCursor();
-    };
-    doc.events.on("layer:activated", updateLayer);
-    doc.events.on("layer:updated", updateLayer);
-    doc.events.on("layers:changed", updateLayer);
-    updateLayer();
+    sprite.events.on("frames:changed", () => {
+      this.renderTimeline();
+      this.preview.invalidate();
+      this.scene?.invalidate();
+    });
+    sprite.events.on("settings:changed", () => {
+      this.renderTimeline();
+      this.preview.invalidate();
+      if (!this.loading) this.session.markDirty();
+    });
 
     history.onChange((state) => {
       this.ui.updateHistory(state);
       if (!this.loading) this.session.markDirty();
     });
     this.ui.updateHistory(history.getState());
+    this.renderTimeline();
+  }
+
+  /** Current frame document → UI. Re-bound whenever another frame is shown. */
+  private bindDocument(): void {
+    this.docSubscriptions.forEach((unsubscribe) => unsubscribe());
+    const doc = this.doc;
+    const updateLayer = () => {
+      this.ui.updateLayer(doc.getActiveLayer()?.name ?? "—");
+      this.workspace.refreshCursor();
+    };
+    const pixelsChanged = () => {
+      this.timeline.invalidateThumb(this.sprite.currentIndex);
+      this.preview.invalidate();
+    };
+    const structureChanged = () => {
+      updateLayer();
+      this.timeline.invalidateThumb("all");
+      this.preview.invalidate();
+    };
+    this.docSubscriptions = [
+      doc.events.on("resized", ({ width, height }) => {
+        const { size } = applicationStore.getState().doc;
+        if (size.width !== width || size.height !== height) {
+          applicationStore.dispatch(ApplicationStateActions.ResizeDocument, { width, height });
+        }
+        structureChanged();
+        void this.workspace.fitToView();
+      }),
+      doc.events.on("layer:activated", updateLayer),
+      doc.events.on("layer:updated", structureChanged),
+      doc.events.on("layers:changed", structureChanged),
+      doc.events.on("cells:changed", pixelsChanged),
+    ];
+    updateLayer();
+    const { size } = applicationStore.getState().doc;
+    if (size.width !== doc.width || size.height !== doc.height) {
+      applicationStore.dispatch(ApplicationStateActions.ResizeDocument, {
+        width: doc.width,
+        height: doc.height,
+      });
+    }
   }
 
   private bindWorkspace(): void {
@@ -432,13 +595,20 @@ export default class Application implements ApplicationContext {
       applicationStore.dispatch(ApplicationStateActions.EditPen, { size });
     };
     const toggle =
-      (action: ApplicationStateActions.ToggleGrid | ApplicationStateActions.TogglePreview) =>
+      (
+        action:
+          | ApplicationStateActions.ToggleGrid
+          | ApplicationStateActions.TogglePreview
+          | ApplicationStateActions.ToggleOnionSkin
+      ) =>
       () => {
         const { preferences } = applicationStore.getState();
         const enabled =
           action === ApplicationStateActions.ToggleGrid
             ? preferences.grid.enabled
-            : preferences.preview.enabled;
+            : action === ApplicationStateActions.TogglePreview
+              ? preferences.preview.enabled
+              : preferences.onionSkin.enabled;
         applicationStore.dispatch(action, { enabled: !enabled });
       };
 
@@ -448,22 +618,31 @@ export default class Application implements ApplicationContext {
     keymap.bind("mod+s", () => void this.save());
     keymap.bind("mod+shift+s", () => void this.saveAs());
     keymap.bind("mod+o", () => this.ui.runCommand("open"));
-    keymap.bind("mod+e", () => void this.exportPNG(1));
+    keymap.bind("mod+e", () => this.openExport());
     keymap.bind("b", setTool("pen"));
     keymap.bind("p", setTool("pen"));
     keymap.bind("e", setTool("eraser"));
     keymap.bind("g", setTool("bucket"));
     keymap.bind("i", setTool("eyedropper"));
+    keymap.bind("l", setTool("line"));
+    keymap.bind("r", setTool("rect"));
+    keymap.bind("c", setTool("ellipse"));
     keymap.bind("[", penSize(-1), { repeat: true });
     keymap.bind("]", penSize(1), { repeat: true });
     keymap.bind("#", toggle(ApplicationStateActions.ToggleGrid));
     keymap.bind("alt+p", toggle(ApplicationStateActions.TogglePreview));
+    keymap.bind("alt+o", toggle(ApplicationStateActions.ToggleOnionSkin));
     keymap.bind("f", () => this.fitToView());
     keymap.bind("+", () => this.zoomBy(1.25), { repeat: true });
     keymap.bind("=", () => this.zoomBy(1.25), { repeat: true });
     keymap.bind("-", () => this.zoomBy(0.8), { repeat: true });
     keymap.bind("delete", () => this.clearLayer());
     keymap.bind("n", () => this.layers.addLayer());
+    // Frames.
+    keymap.bind(",", () => this.sprite.selectFrame(this.sprite.currentIndex - 1), { repeat: true });
+    keymap.bind(".", () => this.sprite.selectFrame(this.sprite.currentIndex + 1), { repeat: true });
+    keymap.bind("shift+n", () => this.addFrame(false));
+    keymap.bind("shift+d", () => this.addFrame(true));
     keymap.hold(
       "alt",
       () => {

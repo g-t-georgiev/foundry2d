@@ -21,15 +21,12 @@
         </button>
         <button data-command="save-as" title="Save as a file (Ctrl+Shift+S)">Save as…</button>
         <span class="divider"></span>
-        <select id="exportScale" title="Export scale" aria-label="Export scale">
-          <option value="1" selected>1×</option>
-          <option value="2">2×</option>
-          <option value="4">4×</option>
-          <option value="8">8×</option>
-          <option value="16">16×</option>
-        </select>
-        <button data-command="export" class="primary" title="Export PNG (Ctrl+E)">
-          Export PNG
+        <button
+          data-command="export"
+          class="primary"
+          title="Export images, spritesheets or GIF (Ctrl+E)"
+        >
+          Export…
         </button>
       </div>
 
@@ -99,6 +96,19 @@
             <svg viewBox="0 0 24 24">
               <path
                 d="m19.4 11.6-3-3 1.4-1.4 3 3-1.4 1.4m-5.9-5.8 3 3-7.8 7.7H5.7v-2.9l7.8-7.8m0-2.9L2 14.5V22h7.5L21 10.6c.8-.8.8-2.1 0-2.9l-4.7-4.7c-.8-.8-2-.8-2.8 0z"
+              />
+            </svg>
+          </button>
+          <button class="tool" data-tool="line" title="Line (L)" aria-label="Line">
+            <svg viewBox="0 0 24 24"><path d="M4 18.6 18.6 4 20 5.4 5.4 20z" /></svg>
+          </button>
+          <button class="tool" data-tool="rect" title="Rectangle (R)" aria-label="Rectangle">
+            <svg viewBox="0 0 24 24"><path d="M3 5h18v14H3V5m2 2v10h14V7H5z" /></svg>
+          </button>
+          <button class="tool" data-tool="ellipse" title="Ellipse (C)" aria-label="Ellipse">
+            <svg viewBox="0 0 24 24">
+              <path
+                d="M12 5c5 0 9 3.1 9 7s-4 7-9 7-9-3.1-9-7 4-7 9-7m0 2c-3.9 0-7 2.2-7 5s3.1 5 7 5 7-2.2 7-5-3.1-5-7-5z"
               />
             </svg>
           </button>
@@ -174,11 +184,54 @@
         </div>
       </aside>
 
-      <section class="viewport" id="viewport" aria-label="Canvas">
-        <canvas id="paintCanvas"></canvas>
-      </section>
+      <div class="center-column">
+        <section class="viewport" id="viewport" aria-label="Canvas">
+          <canvas id="paintCanvas"></canvas>
+        </section>
+
+        <section class="timeline" id="timeline" aria-label="Frames">
+          <div class="timeline-rail" role="toolbar" aria-label="Frame actions">
+            <button data-frame-action="add" title="New frame (Shift+N)">+ Frame</button>
+            <button data-frame-action="duplicate" title="Duplicate frame (Shift+D)">
+              Duplicate
+            </button>
+            <button data-frame-action="left" title="Move frame left" aria-label="Move frame left">
+              ◀
+            </button>
+            <button
+              data-frame-action="right"
+              title="Move frame right"
+              aria-label="Move frame right"
+            >
+              ▶
+            </button>
+            <button data-frame-action="delete" title="Delete frame" aria-label="Delete frame">
+              ✕
+            </button>
+            <span class="divider"></span>
+            <label class="inline-field" title="Duration of this frame; empty uses the FPS">
+              Duration <input id="frameDuration" type="number" min="10" step="10" /> ms
+            </label>
+            <label class="inline-field"
+              >FPS <input id="spriteFps" type="number" min="1" max="60" step="1"
+            /></label>
+            <label class="inline-field" title="Show neighbouring frames (Alt+O)"
+              ><input id="onionSkin" type="checkbox" /> Onion skin</label
+            >
+            <span class="hint">, and . switch frames</span>
+          </div>
+          <div class="frames" id="framesList" role="listbox" aria-label="Frames"></div>
+        </section>
+      </div>
 
       <aside class="side-column">
+        <section class="preview-panel" aria-label="Animation preview">
+          <div class="preview-header">
+            <span class="label">Preview</span>
+            <button id="previewPlay" class="icon-button"></button>
+          </div>
+          <div class="preview-box"><canvas id="previewCanvas"></canvas></div>
+        </section>
         <layers-panel id="layersPanel"></layers-panel>
       </aside>
     </main>
@@ -193,6 +246,119 @@
     </footer>
 
     <project-browser id="projectBrowser"></project-browser>
+
+    <dialog id="exportDialog" class="dialog" aria-labelledby="exportTitle">
+      <form method="dialog" class="dialog-header">
+        <h2 id="exportTitle">Export</h2>
+        <button value="cancel" aria-label="Close">✕</button>
+      </form>
+      <div class="tabs" role="tablist">
+        <button role="tab" data-export-tab="image" aria-selected="true">Image</button>
+        <button role="tab" data-export-tab="sheet" aria-selected="false">Spritesheet</button>
+        <button role="tab" data-export-tab="gif" aria-selected="false">GIF</button>
+      </div>
+      <div class="dialog-body">
+        <div class="common-fields">
+          <label
+            >Scale
+            <select id="exScale">
+              <option value="1">1×</option>
+              <option value="2">2×</option>
+              <option value="4">4×</option>
+              <option value="8">8×</option>
+              <option value="16">16×</option>
+              <option value="32">32×</option>
+            </select>
+          </label>
+          <label
+            >Pixels
+            <select id="exSource">
+              <option value="flattened">All visible layers</option>
+              <option value="layer">Active layer only</option>
+            </select>
+          </label>
+        </div>
+
+        <section data-export-panel="image">
+          <label
+            >Format
+            <select id="exFormat">
+              <option value="png">PNG</option>
+              <option value="webp">WebP (lossless)</option>
+              <option value="webp-lossy">WebP (lossy)</option>
+              <option value="jpeg">JPEG</option>
+              <option value="bmp">BMP (32-bit)</option>
+            </select>
+          </label>
+          <label data-when="lossy"
+            >Quality <input id="exQuality" type="range" min="10" max="100" value="90"
+          /></label>
+          <label data-when="jpeg"
+            >Background <input id="exBackground" type="color" value="#ffffff"
+          /></label>
+          <label
+            >Frames
+            <select id="exFrames">
+              <option value="current">Current frame</option>
+              <option value="all">All frames (ZIP)</option>
+            </select>
+          </label>
+          <label class="check"
+            ><input id="exTrim" type="checkbox" /> Trim transparent borders</label
+          >
+          <label
+            >File name <input id="exPattern" type="text" value="{name}" spellcheck="false"
+          /></label>
+          <p class="hint">Placeholders: {name} {frame} {w} {h}</p>
+        </section>
+
+        <section data-export-panel="sheet" hidden>
+          <label
+            >Layout
+            <select id="exLayout">
+              <option value="horizontal">Horizontal strip</option>
+              <option value="vertical">Vertical strip</option>
+              <option value="grid">Grid</option>
+              <option value="packed">Packed (trim-friendly)</option>
+            </select>
+          </label>
+          <label data-when="grid"
+            >Columns <input id="exColumns" type="number" min="1" placeholder="auto"
+          /></label>
+          <label>Padding <input id="exPadding" type="number" min="0" value="0" /></label>
+          <label>Extrude <input id="exExtrude" type="number" min="0" value="0" /></label>
+          <label class="check"><input id="exSheetTrim" type="checkbox" /> Trim frames</label>
+          <label
+            >Data
+            <select id="exData">
+              <option value="json-hash">TexturePacker JSON (Hash)</option>
+              <option value="json-array">TexturePacker JSON (Array)</option>
+              <option value="none">Image only</option>
+            </select>
+          </label>
+          <label
+            >Download as
+            <select id="exOutput">
+              <option value="zip">One ZIP</option>
+              <option value="files">Separate files</option>
+            </select>
+          </label>
+        </section>
+
+        <section data-export-panel="gif" hidden>
+          <label class="check"><input id="exLoop" type="checkbox" checked /> Loop forever</label>
+          <p class="hint">
+            Uses each frame's duration. GIF supports 256 colours and on/off transparency.
+          </p>
+        </section>
+
+        <p class="export-info" id="exInfo" role="status"></p>
+      </div>
+      <div class="dialog-footer">
+        <button id="exCancel">Cancel</button>
+        <button id="exRun" class="primary">Export</button>
+      </div>
+    </dialog>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

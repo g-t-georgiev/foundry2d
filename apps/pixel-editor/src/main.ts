@@ -2,12 +2,18 @@ import "@foundry2d/ui";
 import { openStorage } from "@foundry2d/core";
 import Application from "./Application";
 
+const $ = <T extends Element>(selector: string) => document.querySelector<T>(selector)!;
+
 const app = new Application(
   {
-    viewport: document.querySelector<HTMLElement>("#viewport")!,
-    canvas: document.querySelector<HTMLCanvasElement>("#paintCanvas")!,
-    layersPanel: document.querySelector("layers-panel")!,
-    projectBrowser: document.querySelector("project-browser")!,
+    viewport: $<HTMLElement>("#viewport"),
+    canvas: $<HTMLCanvasElement>("#paintCanvas"),
+    layersPanel: $("layers-panel"),
+    projectBrowser: $("project-browser"),
+    timeline: $<HTMLElement>("#timeline"),
+    previewCanvas: $<HTMLCanvasElement>("#previewCanvas"),
+    previewToggle: document.querySelector<HTMLButtonElement>("#previewPlay"),
+    exportDialog: $<HTMLDialogElement>("#exportDialog"),
   },
   await openStorage()
 );

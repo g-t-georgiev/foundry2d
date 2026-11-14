@@ -172,20 +172,22 @@ _Done: defects fixed, open tool registry, history events/limit/composite, full l
 
 **Not done yet:** a "Save as" choice between file and library naming, project duplication in the library, and storage quota and usage display.
 
-### Phase 6: Pixel Editor, exports, frames and spritesheets
+### Phase 6: Pixel Editor, exports, frames and spritesheets ✅ (2026-11-14)
 
-1. **Export controller** (a pixel editor module that replaces the single `exportPng` function):
-   - image formats: PNG, WebP (lossless and lossy), JPEG with a background color (it has no alpha), and BMP;
-   - options: scale (1–32×), current layer or the flattened image, a crop to content (trim), and a filename pattern;
-   - one `ExportOptions` → `Blob` pipeline, so the export dialog, the keyboard shortcut and tests share a single path.
-2. **Frames and timeline:** frames share the layer structure (Piskel model). Add onion skin, an animated preview with FPS, and per-frame duration.
-3. **Spritesheet export (TexturePacker-style):**
-   - Image: frames packed as a grid (rows or columns) or bin-packed, with padding, extrusion and trimming.
-   - JSON data: the TexturePacker "JSON Hash" and "JSON Array" formats, the ones Phaser, PixiJS and Aseprite read. Each frame has `frame`, `rotated`, `trimmed`, `spriteSourceSize`, `sourceSize` and `duration`; `meta` has `app`, `version`, `image`, `format`, `size`, `scale` and `frameTags`.
-   - Output is a single ZIP download, or PNG and JSON as two files.
-4. **GIF export** for animations.
-5. **More drawing:** line, rectangle and ellipse tools, selection/move, mirror drawing, and palettes.
-6. **Bridge to the level designer:** a sprite or spritesheet made here can be imported as a tileset.
+1. **Frames (Piskel model):** a `Sprite` holds frames that each own a `GridDocument` and share one layer structure. Layer edits and resizes are composites of the core commands applied to every frame, so undo covers all frames together. Frame add, duplicate, delete, move and duration changes are undo steps in the same history.
+2. **Timeline** under the canvas: frame thumbnails, the frame actions, per-frame duration (empty means "use the FPS"), FPS, and an onion-skin toggle. `,` and `.` switch frames; Shift+N adds a frame and Shift+D duplicates one. **Onion skin** draws the previous and next frames faintly under the current one, through new `LayerStackPass.getAlpha` and `GridDocumentScene.underlayPasses` hooks. An **animated preview** in the side panel plays each frame for its duration, with play/pause.
+3. **Project file v2:** `frames[]` (each with `duration` and `document`) plus `fps`. Version 1 files open as one frame, and frames must share size and layers.
+4. **Export controller** (`src/export/`) and an **export dialog** (Ctrl+E) with three tabs.
+   - **Image:** PNG, WebP (lossless or lossy), JPEG (with a background colour) and 32-bit BMP. Scale 1–32×, all visible layers or the active layer only, trim, current frame or all frames as a ZIP, and a file name pattern (`{name} {frame} {w} {h}`).
+   - **Spritesheet:** horizontal, vertical, grid or packed (shelf) layouts, with padding, extrusion and trimming. Data is TexturePacker "JSON Hash" or "JSON Array" (with `frame`, `trimmed`, `spriteSourceSize`, `sourceSize`, `duration` and `meta.frameTags`). Download as one ZIP or as separate PNG and JSON files.
+   - **GIF:** animated, using each frame's duration, looping or played once. It has one global palette (exact up to 255 colours) and 1-bit transparency.
+   - **How it works:** pixels are composited in software, so exports are exact and testable. BMP, GIF and ZIP have their own small encoders; only PNG, WebP and JPEG use the browser's canvas encoder.
+5. **Drawing:** line (L), rectangle (R) and ellipse (C) tools built on a new core `ShapeTool` base, with a live preview and one undo step per shape.
+
+### Phase 6b: More pixel tools (next)
+
+- Selection, move, copy and paste; mirror drawing; editable palettes (import and export `.hex` and `.gpl`); filled shape variants (Shift).
+- Bridge to the level designer: import a sprite or spritesheet as a tileset.
 
 ### Phase 7: Entities and custom data
 

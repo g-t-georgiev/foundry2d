@@ -7,6 +7,7 @@ import {
   setPenSizeAction,
   gridToggleAction,
   previewToggleAction,
+  onionToggleAction,
   documentResizeAction,
 } from "./actions";
 
@@ -28,6 +29,7 @@ const initialState: ApplicationState = {
   preferences: {
     grid: { enabled: true },
     preview: { enabled: false },
+    onionSkin: { enabled: true },
   },
 };
 
@@ -39,6 +41,7 @@ export const applicationStore = new Store<ApplicationState, ApplicationStateActi
     setPenSizeAction,
     gridToggleAction,
     previewToggleAction,
+    onionToggleAction,
     documentResizeAction,
   ],
 });

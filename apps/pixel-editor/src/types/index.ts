@@ -6,7 +6,8 @@ export interface ApplicationContext {
   /** Renames the sprite (used for the library, file names and exports). */
   rename(name: string): void;
   saveAs(): Promise<void>;
-  exportPNG(scale: number): Promise<void>;
+  /** Opens the export dialog (images, spritesheets, GIF). */
+  openExport(): void;
   clearLayer(): void;
   resizeDocument(width: number, height: number): void;
   undo(): void;

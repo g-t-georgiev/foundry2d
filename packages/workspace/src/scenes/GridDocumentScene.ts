@@ -54,6 +54,8 @@ export interface GridDocumentSceneOptions<Buffer extends CellBuffer> {
   showGrid?: () => boolean;
   /** Grid lines drawn every N cells with the major color (e.g. 8 for pixel art blocks). */
   majorGridEvery?: number;
+  /** Extra world passes drawn under the layers (e.g. onion skins of other frames). */
+  underlayPasses?: RenderPass[];
   /** Draw the transparency checkerboard (default `true`). */
   checkerboard?: boolean;
 }
@@ -96,6 +98,7 @@ export class GridDocumentScene<Buffer extends CellBuffer = CellBuffer> implement
       ...(options.checkerboard === false
         ? []
         : [new CheckerboardPass({ getBounds, squareSize: Math.max(1, this.cellSize.width / 2) })]),
+      ...(options.underlayPasses ?? []),
       this.layerPass,
       this.gridPass,
       new BoundsPass({ getBounds }),

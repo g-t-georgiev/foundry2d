@@ -6,6 +6,7 @@ export enum ApplicationStateActions {
   EditPen = "store:pen:edit",
   ToggleGrid = "store:grid:toggle",
   TogglePreview = "store:preview:toggle",
+  ToggleOnionSkin = "store:onion:toggle",
   ResizeDocument = "store:document:resize",
 }
 
@@ -15,6 +16,7 @@ export type ApplicationStateActionsMap = {
   [ApplicationStateActions.EditPen]: { size: number };
   [ApplicationStateActions.ToggleGrid]: { enabled: boolean };
   [ApplicationStateActions.TogglePreview]: { enabled: boolean };
+  [ApplicationStateActions.ToggleOnionSkin]: { enabled: boolean };
   [ApplicationStateActions.ResizeDocument]: { width: number; height: number };
 };
 
@@ -38,6 +40,10 @@ export interface ApplicationState {
       enabled: boolean;
     };
     /** Read-only composite view: no grid, no dimming, no editing. */
+    /** Show the previous and next frames faintly under the current one. */
+    onionSkin: {
+      enabled: boolean;
+    };
     preview: {
       enabled: boolean;
     };

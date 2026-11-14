@@ -42,6 +42,8 @@ export interface LayerStackPassOptions {
    * palette). Takes precedence over `colorize`.
    */
   getColorizer?: (layer: GridLayer<CellBuffer>) => CellColorizer | undefined;
+  /** Overall alpha multiplier for the whole stack (e.g. onion skins). */
+  getAlpha?: () => number;
   /** Custom per-layer drawing; takes precedence over the bitmap path. */
   getLayerRenderer?: (layer: GridLayer<CellBuffer>) => LayerRenderer | undefined;
   /** Bump when the colorize mapping changes so cached bitmaps refresh. */
@@ -72,13 +74,16 @@ export class LayerStackPass implements RenderPass {
     const dimming = this.options.dimming ?? 0.25;
     const paletteVersion = this.options.getPaletteVersion?.() ?? 0;
     const origin = this.options.getOrigin?.() ?? { x: 0, y: 0 };
+    const stackAlpha = this.options.getAlpha?.() ?? 1;
+    if (stackAlpha <= 0) return;
 
     ctx.imageSmoothingEnabled = false;
 
     for (const layer of source.layers) {
       if (!layer.visible || layer.opacity <= 0) continue;
       const isActive = layer.id === source.activeLayerId;
-      const alpha = mode === "focus" && !isActive ? layer.opacity * dimming : layer.opacity;
+      const alpha =
+        stackAlpha * (mode === "focus" && !isActive ? layer.opacity * dimming : layer.opacity);
 
       const dest = {
         x: origin.x,
