@@ -21,13 +21,24 @@ import type {
   FieldDef,
   FieldType,
   FieldValue,
+  EntityRef,
   IntGridValueDef,
   LayerDef,
   ProjectDefs,
   TilesetDef,
   WorldLayout,
 } from "./types";
-import { cloneInstance, initialDefault, newIid, validateFieldValue } from "./entities";
+import {
+  cloneInstance,
+  defaultFor,
+  initialDefault,
+  isEntityRef,
+  isPoint,
+  mapScalars,
+  newIid,
+  validateFieldValue,
+  valueList,
+} from "./entities";
 
 /** IntGrid cells use 0 for "empty", like LDtk. */
 export const EMPTY_CELL = 0;
@@ -318,9 +329,26 @@ export class LevelProject {
     doc.setActiveLayer(source.doc.activeLayerId);
     const identifier = this.uniqueLevelIdentifier(`${source.identifier}_copy`);
     const copy = new Level(this.allocateUid(), identifier, worldX, worldY, doc);
-    copy.entities = source.entities.map((e) => cloneInstance(e, newIid()));
+    const iids = new Map<string, string>();
+    copy.entities = source.entities.map((e) => {
+      const clone = cloneInstance(e, newIid());
+      iids.set(e.iid, clone.iid);
+      return clone;
+    });
     copy.bgColor = source.bgColor;
     copy.fields = structuredClone(source.fields);
+    // References between entities of the source level point inside the copy.
+    const remap = (fields: Record<string, FieldValue>) => {
+      for (const key of Object.keys(fields)) {
+        fields[key] = mapScalars(fields[key], (v) =>
+          isEntityRef(v) && v.levelUid === source.uid && iids.has(v.entityIid)
+            ? { entityIid: iids.get(v.entityIid)!, levelUid: copy.uid }
+            : v
+        );
+      }
+    };
+    for (const e of copy.entities) remap(e.fields);
+    remap(copy.fields);
     return copy;
   }
 
@@ -971,6 +999,9 @@ export class LevelProject {
     if (index === -1) return;
     this.defs.entities.splice(index, 1);
     for (const level of this.levels) this.dropEntities(level, (e) => e.defUid === uid);
+    for (const fields of [this.defs.levelFields, ...this.defs.entities.map((d) => d.fields)]) {
+      for (const field of fields) if (field.refDefUid === uid) field.refDefUid = null;
+    }
     this.defsChanged();
   }
 
@@ -1060,6 +1091,7 @@ export class LevelProject {
       defaultValue: initialDefault(type, enumDef),
       ...(type === "Enum" ? { enumUid: enumDef?.uid ?? null } : {}),
       ...(type === "Int" || type === "Float" ? { min: null, max: null } : {}),
+      ...(type === "EntityRef" ? { refDefUid: null } : {}),
     };
     fields.push(field);
     this.defsChanged();
@@ -1079,7 +1111,11 @@ export class LevelProject {
     const field = fields?.find((f) => f.uid === fieldUid);
     if (!field || !fields) return;
     const { identifier, ...rest } = patch;
+    const wasArray = field.isArray === true;
     Object.assign(field, rest);
+    if ("isArray" in patch && wasArray !== (field.isArray === true)) {
+      this.convertArrayValues(owner, field);
+    }
     if (identifier !== undefined && identifier.trim()) {
       field.identifier = this.uniqueName(
         fields.filter((f) => f.uid !== fieldUid).map((f) => f.identifier),
@@ -1090,9 +1126,56 @@ export class LevelProject {
       field.defaultValue = initialDefault("Enum", this.getEnum(field.enumUid));
     }
     const valid = validateFieldValue(field, field.defaultValue, this.defs.enums);
-    field.defaultValue = valid === undefined ? initialDefault(field.type) : valid;
+    field.defaultValue = valid === undefined ? defaultFor(field) : valid;
     this.pruneFieldValues(owner, field);
+    if ("refDefUid" in patch) this.dropMismatchedRefs(owner, field);
     this.defsChanged();
+  }
+
+  /**
+   * After a field switched between one value and a list: a value becomes a
+   * one-entry list, a list keeps its first entry.
+   */
+  private convertArrayValues(owner: FieldOwner, field: FieldDef): void {
+    const key = String(field.uid);
+    const convert = (value: FieldValue): FieldValue | undefined => {
+      const list = valueList(value);
+      if (field.isArray) return list;
+      return list[0] ?? undefined;
+    };
+    for (const holder of this.holdersOf(owner)) {
+      if (!(key in holder.fields)) continue;
+      const next = convert(holder.fields[key]);
+      if (next === undefined) delete holder.fields[key];
+      else holder.fields[key] = next;
+    }
+    field.defaultValue = field.isArray
+      ? []
+      : initialDefault(field.type, this.getEnum(field.enumUid));
+  }
+
+  /** Drops references to entities of another type than the field allows. */
+  private dropMismatchedRefs(owner: FieldOwner, field: FieldDef): void {
+    if (field.type !== "EntityRef" || field.refDefUid == null) return;
+    const allowed = (v: unknown) => {
+      if (!isEntityRef(v)) return true;
+      const target = this.findEntity(v);
+      return !target || target.instance.defUid === field.refDefUid;
+    };
+    const key = String(field.uid);
+    for (const holder of this.holdersOf(owner)) {
+      const value = holder.fields[key];
+      if (value === undefined) continue;
+      if (Array.isArray(value)) holder.fields[key] = value.filter(allowed);
+      else if (!allowed(value)) delete holder.fields[key];
+    }
+  }
+
+  /** The entity a reference points at, with its level; null when it no longer exists. */
+  findEntity(ref: EntityRef): { level: Level; instance: EntityInstance } | null {
+    const level = this.getLevel(ref.levelUid);
+    const instance = level?.entities.find((e) => e.iid === ref.entityIid);
+    return level && instance ? { level, instance } : null;
   }
 
   private removeFieldOf(owner: FieldOwner, fieldUid: number): void {
@@ -1137,7 +1220,7 @@ export class LevelProject {
     this.defs.enums.splice(index, 1);
     this.forEachEnumField(uid, (field, owner) => {
       field.enumUid = null;
-      field.defaultValue = null;
+      field.defaultValue = defaultFor(field);
       this.pruneFieldValues(owner, field);
     });
     this.defsChanged();
@@ -1170,8 +1253,10 @@ export class LevelProject {
       );
       this.forEachEnumField(uid, (field, owner) => {
         if (field.defaultValue === id) field.defaultValue = entry.id;
+        const key = String(field.uid);
         for (const holder of this.holdersOf(owner)) {
-          if (holder.fields[String(field.uid)] === id) holder.fields[String(field.uid)] = entry.id;
+          if (holder.fields[key] === undefined) continue;
+          holder.fields[key] = mapScalars(holder.fields[key], (v) => (v === id ? entry.id : v));
         }
       });
     }
@@ -1221,14 +1306,20 @@ export class LevelProject {
     for (const e of level.entities) {
       e.x += cellsX * this.gridSize;
       e.y += cellsY * this.gridSize;
-      for (const field of this.getEntityDef(e.defUid)?.fields ?? []) {
-        const value = e.fields[String(field.uid)];
-        if (field.type === "Point" && value && typeof value === "object") {
-          e.fields[String(field.uid)] = { x: value.x + cellsX, y: value.y + cellsY };
-        }
+      shiftPoints(this.getEntityDef(e.defUid)?.fields ?? [], e.fields);
+    }
+    shiftPoints(this.defs.levelFields, level.fields);
+    this.events.emit("entities:changed", level.uid);
+
+    function shiftPoints(fields: readonly FieldDef[], values: Record<string, FieldValue>) {
+      for (const field of fields) {
+        const key = String(field.uid);
+        if (field.type !== "Point" || values[key] === undefined) continue;
+        values[key] = mapScalars(values[key], (v) =>
+          isPoint(v) ? { x: v.x + cellsX, y: v.y + cellsY } : v
+        );
       }
     }
-    this.events.emit("entities:changed", level.uid);
   }
 
   // ------------------------------------------------------------------ definition history

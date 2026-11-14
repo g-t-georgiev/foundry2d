@@ -257,7 +257,7 @@ describe("EntityController", () => {
     expect(level.entities.map((e) => e.x)).toEqual([4, 12]);
     ctl.nudge(1, 0, true);
     expect(ctl.selected?.x).toBe(13);
-    ctl.startPointPick(ctl.selected!.iid, target.uid);
+    ctl.startPick(ctl.selected!.iid, target.uid);
     click(17, 25);
     expect(ctl.selected?.fields[target.uid]).toEqual({ x: 2, y: 3 });
     click(4, 4, { button: 2 });

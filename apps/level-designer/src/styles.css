@@ -1290,3 +1290,47 @@ body {
   flex-direction: column;
   gap: 10px;
 }
+
+/* ------------------------------------------------------------------ list fields */
+
+.array-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.array-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.array-entry .input {
+  min-width: 0;
+  flex: 1;
+}
+
+.array-index {
+  min-width: 1.6em;
+  color: var(--theme-text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.array-index::after {
+  content: ".";
+}
+
+.entity-ref-select {
+  min-width: 0;
+  flex: 1;
+}
+
+.field-array-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--theme-text-muted);
+}

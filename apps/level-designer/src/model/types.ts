@@ -65,7 +65,15 @@ export interface ProjectDefs {
 // ------------------------------------------------------------------ entities
 
 /** Value types an entity field can hold. */
-export type FieldType = "Int" | "Float" | "Bool" | "String" | "Color" | "Enum" | "Point";
+export type FieldType =
+  | "Int"
+  | "Float"
+  | "Bool"
+  | "String"
+  | "Color"
+  | "Enum"
+  | "Point"
+  | "EntityRef";
 export const FIELD_TYPES: readonly FieldType[] = [
   "Int",
   "Float",
@@ -74,6 +82,7 @@ export const FIELD_TYPES: readonly FieldType[] = [
   "Color",
   "Enum",
   "Point",
+  "EntityRef",
 ];
 
 /** A level cell, used by Point fields. */
@@ -82,12 +91,24 @@ export interface GridPoint {
   y: number;
 }
 
+/** An entity instance, used by EntityRef fields. It may live in another level. */
+export interface EntityRef {
+  entityIid: string;
+  levelUid: number;
+}
+
 /**
- * Field value by type: numbers for Int/Float, booleans, strings for
- * String/Color (CSS hex) and Enum (the value id), a cell for Point.
- * `null` means "not set" (allowed for Enum and Point).
+ * One value by type: numbers for Int/Float, booleans, strings for
+ * String/Color (CSS hex) and Enum (the value id), a cell for Point, an
+ * entity for EntityRef.
  */
-export type FieldValue = number | boolean | string | GridPoint | null;
+export type FieldScalar = number | boolean | string | GridPoint | EntityRef;
+
+/**
+ * A field's value: one scalar, `null` for "not set" (Enum, Point and
+ * EntityRef), or a list of scalars for array fields.
+ */
+export type FieldValue = FieldScalar | null | FieldScalar[];
 
 export interface FieldDef {
   uid: number;
@@ -101,6 +122,10 @@ export interface FieldDef {
   /** Bounds for Int and Float fields. */
   min?: number | null;
   max?: number | null;
+  /** EntityRef fields: the entity type they may point at (`null`: any). */
+  refDefUid?: number | null;
+  /** Holds a list of values (empty by default) instead of one. */
+  isArray?: boolean;
 }
 
 export type EntityShape = "rectangle" | "ellipse" | "tile";

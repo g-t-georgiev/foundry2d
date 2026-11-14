@@ -415,7 +415,7 @@ export default class Application {
 
     this.level = level;
     this.entities.select(null);
-    this.entities.cancelPointPick();
+    this.entities.cancelPick();
     const { doc } = level;
     const refreshLayerUi = () => {
       this.renderPalette();
@@ -1213,6 +1213,7 @@ export default class Application {
         fieldInput({
           project,
           field,
+          level,
           value: fieldValue(level, field, project.defs.enums),
           set: (next) =>
             this.setLevelProperties(

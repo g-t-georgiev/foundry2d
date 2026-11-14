@@ -2,8 +2,49 @@ import { LevelProject, layerIdFor, type Level } from "../model/LevelProject";
 import { createProjectFromPreset } from "../model/presets";
 import { ProjectFormatError } from "./projectFile";
 import { tilesetGrid } from "../model/tiles";
-import { entityRect, fieldValue, namedFieldValues } from "../model/entities";
-import type { FieldValue } from "../model/types";
+import { entityRect, fieldValue, isEntityRef } from "../model/entities";
+import type { EntityDef, EntityInstance, FieldDef, FieldScalar, FieldValue } from "../model/types";
+
+/** An EntityRef value in a game export: the instance id and its level's identifier. */
+export interface GameEntityRef {
+  iid: string;
+  level: string;
+}
+
+/** A field value in a game export (EntityRef values resolved, missing ones dropped). */
+export type GameFieldValue =
+  | Exclude<FieldScalar, { entityIid: string }>
+  | GameEntityRef
+  | null
+  | GameFieldValue[];
+
+/** A field value for export: references carry the level identifier. */
+function exportValue(project: LevelProject, value: FieldValue): GameFieldValue {
+  const one = (v: FieldScalar): GameFieldValue => {
+    if (!isEntityRef(v)) return v;
+    const target = project.findEntity(v);
+    return target ? { iid: v.entityIid, level: target.level.identifier } : null;
+  };
+  if (Array.isArray(value)) return value.map(one).filter((v) => v !== null);
+  return value === null ? null : one(value);
+}
+
+/** Field values by identifier for export, defaults filled in. */
+export function exportFields(
+  project: LevelProject,
+  fields: readonly FieldDef[],
+  holder: Pick<EntityInstance, "fields">
+): Record<string, GameFieldValue> {
+  return Object.fromEntries(
+    fields.map((f) => [
+      f.identifier,
+      exportValue(project, fieldValue(holder, f, project.defs.enums)),
+    ])
+  );
+}
+
+const entityFields = (project: LevelProject, def: EntityDef, instance: EntityInstance) =>
+  exportFields(project, def.fields, instance);
 
 /** One placed entity in a game export. */
 export interface GameEntity {
@@ -22,8 +63,11 @@ export interface GameEntity {
   top: number;
   width: number;
   height: number;
-  /** Field values by field identifier (Point fields are cells: `{ x, y }`). */
-  fields: Record<string, FieldValue>;
+  /**
+   * Field values by field identifier. Point fields are cells (`{ x, y }`),
+   * EntityRef fields are `{ iid, level }`, array fields are lists.
+   */
+  fields: Record<string, GameFieldValue>;
 }
 
 /**
@@ -40,7 +84,7 @@ export interface GameLevelFile {
     bgColor: string;
   };
   /** Level field values by field identifier (present when the project defines level fields). */
-  fields?: Record<string, FieldValue>;
+  fields?: Record<string, GameFieldValue>;
   layers: Record<string, number[]>;
   /**
    * Present when the level has Tiles layers. Their cells hold
@@ -84,7 +128,7 @@ export function entitiesForLayer(
         top: box.y,
         width: box.width,
         height: box.height,
-        fields: namedFieldValues(def, instance, project.defs.enums),
+        fields: entityFields(project, def, instance),
       },
     ];
   });
@@ -125,12 +169,7 @@ export function toGameFormat(project: LevelProject, level: Level): GameLevelFile
     },
     ...(project.defs.levelFields.length
       ? {
-          fields: Object.fromEntries(
-            project.defs.levelFields.map((f) => [
-              f.identifier,
-              fieldValue(level, f, project.defs.enums),
-            ])
-          ),
+          fields: exportFields(project, project.defs.levelFields, level),
         }
       : {}),
     layers,
@@ -217,14 +256,21 @@ export function fromGameFormat(json: unknown): LevelProject {
 
 // ------------------------------------------------------------------ CSV
 
+/** A value as CSV text: Points as `x;y`, references as the iid, lists joined by `|`. */
+function csvText(value: unknown): string {
+  if (Array.isArray(value)) return value.map(csvText).join("|");
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (value && typeof value === "object") {
+    if ("x" in value && "y" in value) return `${Number(value.x)};${Number(value.y)}`;
+    if ("iid" in value) return String(value.iid);
+  }
+  return "";
+}
+
 /** Quotes a CSV field when needed (RFC 4180). */
 function csvField(value: unknown): string {
-  let text = "";
-  if (typeof value === "string") text = value;
-  else if (typeof value === "number" || typeof value === "boolean") text = String(value);
-  else if (value && typeof value === "object" && "x" in value && "y" in value) {
-    text = `${Number(value.x)};${Number(value.y)}`; // Point fields
-  }
+  const text = csvText(value);
   const needsQuotes = /[",\r\n]/.test(text);
   return needsQuotes ? `"${text.replace(/"/g, '""')}"` : text;
 }

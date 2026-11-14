@@ -155,10 +155,12 @@ export default class EntityPanel {
     instance: EntityInstance,
     field: FieldDef
   ): HTMLElement {
-    const picking = this.controller.pickingPoint;
+    const picking = this.controller.picking;
     return fieldInput({
       project,
       field,
+      level: this.controller.level,
+      selfIid: instance.iid,
       value: fieldValue(instance, field, project.defs.enums),
       set: (next) =>
         this.controller.update(
@@ -166,10 +168,11 @@ export default class EntityPanel {
           { fields: { ...instance.fields, [field.uid]: next } },
           `Set ${def.identifier}.${field.identifier}`
         ),
-      pickPoint: {
-        active: picking?.iid === instance.iid && picking.fieldUid === field.uid,
-        start: () => this.controller.startPointPick(instance.iid, field.uid),
-        cancel: () => this.controller.cancelPointPick(),
+      pick: {
+        activeIndex:
+          picking?.iid === instance.iid && picking.fieldUid === field.uid ? picking.index : null,
+        start: (index) => this.controller.startPick(instance.iid, field.uid, index),
+        cancel: () => this.controller.cancelPick(),
       },
     });
   }

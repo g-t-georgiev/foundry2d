@@ -2,13 +2,38 @@ import { EventEmitter, type HistoryManager, type Position } from "@foundry2d/cor
 import type { RenderContext, RenderPass } from "@foundry2d/render";
 import type { ScenePointerDelegate, ScenePointerEvent } from "@foundry2d/workspace";
 import { defUidOf, type Level, type LevelProject } from "../model/LevelProject";
-import { cloneInstance, entityRect, fieldValue, newIid, snapToCell } from "../model/entities";
+import {
+  cloneInstance,
+  entityRect,
+  fieldValue,
+  isEntityRef,
+  isPoint,
+  newIid,
+  snapToCell,
+  valueList,
+  withEntry,
+} from "../model/entities";
 import {
   AddEntityCommand,
   RemoveEntityCommand,
   UpdateEntityCommand,
 } from "../model/entityCommands";
-import type { EntityDef, EntityInstance, GridPoint, LayerDef } from "../model/types";
+import type {
+  EntityDef,
+  EntityInstance,
+  FieldDef,
+  FieldScalar,
+  GridPoint,
+  LayerDef,
+} from "../model/types";
+
+/** A canvas pick in progress: which field (and array entry) the next click sets. */
+export interface FieldPick {
+  iid: string;
+  fieldUid: number;
+  /** Array entry to set (the array length appends); 0 for single values. */
+  index: number;
+}
 
 export interface EntityControllerHooks {
   getProject: () => LevelProject;
@@ -55,8 +80,8 @@ export class EntityController implements ScenePointerDelegate {
   private selectedIid: string | null = null;
   private hoverIid: string | null = null;
   private drag: Drag | null = null;
-  /** Set while the next click picks a cell for a Point field. */
-  private pointPick: { iid: string; fieldUid: number } | null = null;
+  /** Set while the next click picks a cell (Point) or an entity (EntityRef) for a field. */
+  private pick: FieldPick | null = null;
 
   constructor(private readonly hooks: EntityControllerHooks) {
     this.overlay = new EntityOverlayPass(this);
@@ -187,29 +212,85 @@ export class EntityController implements ScenePointerDelegate {
     );
   }
 
-  /** The next click on the level sets this Point field (Escape cancels). */
-  startPointPick(iid: string, fieldUid: number): void {
-    this.pointPick = { iid, fieldUid };
-    this.hooks.notify("Click a cell to set the point. Esc cancels.", 4000);
+  /**
+   * The next click on the level sets this field: a cell for Point fields,
+   * an entity for EntityRef fields (Escape cancels).
+   */
+  startPick(iid: string, fieldUid: number, index = 0): void {
+    this.pick = { iid, fieldUid, index };
+    const field = this.pickField();
+    this.hooks.notify(
+      field?.type === "EntityRef"
+        ? "Click an entity to point at. Esc cancels."
+        : "Click a cell to set the point. Esc cancels.",
+      4000
+    );
     this.hooks.refreshCursor();
     this.emit();
   }
 
-  get pickingPoint(): { iid: string; fieldUid: number } | null {
-    return this.pointPick;
+  get picking(): FieldPick | null {
+    return this.pick;
   }
 
-  cancelPointPick(): boolean {
-    if (!this.pointPick) return false;
-    this.pointPick = null;
+  cancelPick(): boolean {
+    if (!this.pick) return false;
+    this.pick = null;
     this.hooks.refreshCursor();
     this.emit();
     return true;
   }
 
+  /** The field being picked, if its instance and definition still exist. */
+  private pickField(): FieldDef | undefined {
+    if (!this.pick) return undefined;
+    const { iid, fieldUid } = this.pick;
+    const instance = this.hooks.getLevel().entities.find((e) => e.iid === iid);
+    const def = instance && this.hooks.getProject().getEntityDef(instance.defUid);
+    return def?.fields.find((f) => f.uid === fieldUid);
+  }
+
+  /** Finishes a pick with a click; returns false to keep picking (a miss). */
+  private completePick(ev: ScenePointerEvent): boolean {
+    const { iid, fieldUid, index } = this.pick!;
+    const project = this.hooks.getProject();
+    const level = this.hooks.getLevel();
+    const instance = level.entities.find((e) => e.iid === iid);
+    const field = this.pickField();
+    if (!instance || !field || ev.button !== 0) return true;
+    let picked: FieldScalar;
+    if (field.type === "EntityRef") {
+      const hit = this.hitTest(ev.world, true);
+      if (!hit) {
+        this.hooks.notify("Click an entity to point at. Esc cancels.", 3000);
+        return false;
+      }
+      const wanted = field.refDefUid == null ? undefined : project.getEntityDef(field.refDefUid);
+      if (wanted && hit.defUid !== wanted.uid) {
+        this.hooks.notify(
+          `${field.identifier} points at a ${wanted.identifier}. Esc cancels.`,
+          3000
+        );
+        return false;
+      }
+      picked = { entityIid: hit.iid, levelUid: level.uid };
+    } else {
+      if (!this.insideLevel(ev.world)) return true;
+      const { gridSize } = project;
+      picked = { x: Math.floor(ev.world.x / gridSize), y: Math.floor(ev.world.y / gridSize) };
+    }
+    const current = fieldValue(instance, field, project.defs.enums);
+    this.update(
+      iid,
+      { fields: { ...instance.fields, [fieldUid]: withEntry(field, current, index, picked) } },
+      field.type === "EntityRef" ? `Set ${field.identifier}` : "Set point"
+    );
+    return true;
+  }
+
   /** Esc: cancel a point pick, else clear the selection. False when there was nothing to do. */
   escape(): boolean {
-    if (this.cancelPointPick()) return true;
+    if (this.cancelPick()) return true;
     if (!this.selectedIid) return false;
     this.select(null);
     return true;
@@ -218,7 +299,7 @@ export class EntityController implements ScenePointerDelegate {
   // ------------------------------------------------------------------ pointer delegate
 
   getCursor(): string {
-    if (this.pointPick) return "cell";
+    if (this.pick) return this.pickField()?.type === "EntityRef" ? "alias" : "cell";
     if (this.drag) return "grabbing";
     if (this.hooks.isPicking()) return "copy";
     if (this.blockedReason) return this.hoverIid ? "pointer" : "not-allowed";
@@ -226,18 +307,8 @@ export class EntityController implements ScenePointerDelegate {
   }
 
   onPointerDown(ev: ScenePointerEvent): void {
-    if (this.pointPick) {
-      const { iid, fieldUid } = this.pointPick;
-      this.pointPick = null;
-      const instance = this.hooks.getLevel().entities.find((e) => e.iid === iid);
-      if (instance && ev.button === 0 && this.insideLevel(ev.world)) {
-        const { gridSize } = this.hooks.getProject();
-        const point = {
-          x: Math.floor(ev.world.x / gridSize),
-          y: Math.floor(ev.world.y / gridSize),
-        };
-        this.update(iid, { fields: { ...instance.fields, [fieldUid]: point } }, "Set point");
-      }
+    if (this.pick) {
+      if (this.completePick(ev)) this.pick = null;
       this.hooks.refreshCursor();
       this.emit();
       return;
@@ -428,16 +499,16 @@ export class EntityController implements ScenePointerDelegate {
     };
   }
 
-  /** Topmost instance on the active layer under a level-pixel point. */
-  hitTest(p: Position): EntityInstance | undefined {
+  /** Topmost instance on the active layer (or on any layer) under a level-pixel point. */
+  hitTest(p: Position, anyLayer = false): EntityInstance | undefined {
     const layerDef = this.activeLayerDef();
-    if (!layerDef) return undefined;
+    if (!layerDef && !anyLayer) return undefined;
     const project = this.hooks.getProject();
     const slack = 3 / Math.max(this.hooks.getZoom(), 0.0001);
     const entities = this.hooks.getLevel().entities;
     for (let i = entities.length - 1; i >= 0; i--) {
       const e = entities[i];
-      if (e.layerUid !== layerDef.uid) continue;
+      if (!anyLayer && e.layerUid !== layerDef?.uid) continue;
       const def = project.getEntityDef(e.defUid);
       if (!def) continue;
       const r = entityRect(def, e);
@@ -453,20 +524,42 @@ export class EntityController implements ScenePointerDelegate {
     return undefined;
   }
 
-  /** Point-field targets of an instance, for the overlay. */
+  /** Point-field targets of an instance, for the overlay (array entries labelled by index). */
   pointTargets(instance: EntityInstance): { label: string; point: GridPoint }[] {
+    return this.fieldTargets(instance, "Point").flatMap(({ label, value }) =>
+      isPoint(value) ? [{ label, point: value }] : []
+    );
+  }
+
+  /** Entities in this level that an instance's EntityRef fields point at, for the overlay. */
+  refTargets(instance: EntityInstance): { label: string; target: EntityInstance }[] {
+    const level = this.hooks.getLevel();
+    return this.fieldTargets(instance, "EntityRef").flatMap(({ label, value }) => {
+      if (!isEntityRef(value) || value.levelUid !== level.uid) return [];
+      const target = level.entities.find((e) => e.iid === value.entityIid);
+      return target ? [{ label, target }] : [];
+    });
+  }
+
+  private fieldTargets(instance: EntityInstance, type: "Point" | "EntityRef") {
     const project = this.hooks.getProject();
     const def = project.getEntityDef(instance.defUid);
-    if (!def) return [];
-    return def.fields.flatMap((field) => {
-      if (field.type !== "Point") return [];
-      const value = fieldValue(instance, field, project.defs.enums);
-      return value && typeof value === "object" ? [{ label: field.identifier, point: value }] : [];
+    return (def?.fields ?? []).flatMap((field) => {
+      if (field.type !== type) return [];
+      const values = valueList(fieldValue(instance, field, project.defs.enums));
+      return values.map((value, i) => ({
+        label: field.isArray ? `${field.identifier}[${i}]` : field.identifier,
+        value,
+      }));
     });
   }
 
   get project(): LevelProject {
     return this.hooks.getProject();
+  }
+
+  get level(): Level {
+    return this.hooks.getLevel();
   }
 
   /** Layer uid of a document layer id, for views. */
@@ -547,11 +640,45 @@ class EntityOverlayPass implements RenderPass {
       }
     };
 
+    const refs = (instance: EntityInstance) => {
+      const from = camera.worldToLocal(instance.x, instance.y);
+      ctx.font = `11px ${rc.theme.font}`;
+      ctx.textBaseline = "bottom";
+      const color = "rgba(96, 205, 255, 0.95)";
+      for (const { label, target } of controller.refTargets(instance)) {
+        const def = project.getEntityDef(target.defUid);
+        if (!def) continue;
+        const r = entityRect(def, target);
+        const to = camera.worldToLocal(r.x + r.width / 2, r.y + r.height / 2);
+        const angle = Math.atan2(to.y - from.y, to.x - from.x);
+        // Stop at the target's box so the arrowhead stays visible.
+        const half = (Math.min(r.width, r.height) / 2) * camera.zoom;
+        const tip = { x: to.x - Math.cos(angle) * half, y: to.y - Math.sin(angle) * half };
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(tip.x, tip.y);
+        ctx.stroke();
+        const head = 8;
+        ctx.beginPath();
+        ctx.moveTo(tip.x, tip.y);
+        ctx.lineTo(tip.x - head * Math.cos(angle - 0.45), tip.y - head * Math.sin(angle - 0.45));
+        ctx.lineTo(tip.x - head * Math.cos(angle + 0.45), tip.y - head * Math.sin(angle + 0.45));
+        ctx.closePath();
+        ctx.fill();
+        ctx.lineWidth = 1;
+        ctx.fillText(label, (from.x + tip.x) / 2 + 4, (from.y + tip.y) / 2 - 2);
+      }
+    };
+
     const hovered = controller.hovered;
     const selected = controller.selected;
     if (hovered && hovered !== selected) outline(hovered, false);
     if (selected) {
       links(selected);
+      refs(selected);
       outline(selected, true);
     }
   }

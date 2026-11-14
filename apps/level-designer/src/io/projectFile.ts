@@ -16,12 +16,15 @@ import {
   type TilesetDef,
   type WorldLayout,
 } from "../model/types";
-import { initialDefault, isHexColor, newIid, validateFieldValue } from "../model/entities";
+import { defaultFor, isHexColor, newIid, validateFieldValue } from "../model/entities";
 import { AUTO_RULE_SIZES, type AutoRule, type AutoRuleSize } from "../model/autoRules";
 
 export const PROJECT_FORMAT = "foundry2d.level";
-/** 2 added entity definitions, enums and entity instances. */
-export const PROJECT_VERSION = 2;
+/**
+ * 2 added entity definitions, enums and entity instances; 3 added level
+ * fields, level backgrounds, EntityRef fields and array fields.
+ */
+export const PROJECT_VERSION = 3;
 /** Branded work-file extension; the content is JSON. */
 export const PROJECT_EXTENSION = ".f2dlevel";
 /**
@@ -211,10 +214,13 @@ function parseField(raw: unknown, where: string, enums: EnumDef[]): FieldDef {
     field.min = typeof raw.min === "number" ? raw.min : null;
     field.max = typeof raw.max === "number" ? raw.max : null;
   }
+  // Checked against the entity types once they are all read.
+  if (type === "EntityRef") field.refDefUid = isInt(raw.refDefUid) ? raw.refDefUid : null;
+  if (raw.isArray === true) field.isArray = true;
   field.defaultValue =
     validateFieldValue(field, raw.defaultValue, enums) ??
-    initialDefault(
-      type,
+    defaultFor(
+      field,
       enums.find((e) => e.uid === field.enumUid)
     );
   return field;
@@ -370,6 +376,12 @@ export function deserializeProject(json: unknown): LevelProject {
     project.defs.entities.push(def);
     project.reserveUid(def.uid);
     for (const field of def.fields) project.reserveUid(field.uid);
+  }
+  // EntityRef fields restricted to an entity type that does not exist allow any.
+  for (const fields of [project.defs.levelFields, ...project.defs.entities.map((d) => d.fields)]) {
+    for (const field of fields) {
+      if (field.refDefUid != null && !project.getEntityDef(field.refDefUid)) field.refDefUid = null;
+    }
   }
 
   for (const [i, raw] of defs.entries()) {

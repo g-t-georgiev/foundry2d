@@ -35,6 +35,9 @@ const atCell = async (page: Page, x: number, y: number) => {
   return toScreen(page, CANVAS, { x: (x + 0.5) * grid, y: (y + 0.5) * grid });
 };
 
+/** A point as mouse.click arguments. */
+const xy = (p: { x: number; y: number }) => [p.x, p.y] as const;
+
 const selectLayer = (page: Page, name: string) =>
   page.locator("#layersPanel .row").filter({ hasText: name }).locator(".name").click();
 
@@ -79,6 +82,48 @@ test.describe("with the Pac-Man preset", () => {
 
     await page.keyboard.press("Control+z");
     await expect.poll(async () => (await entity(page, "pacman-spawn"))?.x).toBe(112);
+  });
+
+  test("picks an entity reference on the canvas and undoes it", async ({ page }) => {
+    // A Ghost "chases" field pointing at any entity.
+    await page.evaluate(() => {
+      const { project } = window.foundry as unknown as {
+        project: {
+          defs: { entities: { uid: number; identifier: string }[] };
+          addField(uid: number, type: string, identifier: string): unknown;
+        };
+      };
+      const ghost = project.defs.entities.find((d) => d.identifier === "Ghost")!;
+      project.addField(ghost.uid, "EntityRef", "chases");
+    });
+    await selectLayer(page, "entities");
+    const blinky = (await entity(page, "ghost-blinky"))!;
+    await page.mouse.click(...xy(await toScreen(page, CANVAS, blinky)));
+    const inspector = page.locator("#entityInspector");
+    await expect(inspector).toContainText("chases");
+
+    await inspector
+      .locator(".field", { hasText: "chases" })
+      .getByRole("button", { name: "Pick" })
+      .click();
+    await page.mouse.click(...xy(await toScreen(page, CANVAS, { x: 112, y: 212 })));
+    const chases = () =>
+      page.evaluate(() => {
+        const app = window.foundry as unknown as {
+          level: { entities: { iid: string; fields: Record<string, unknown> }[] };
+        };
+        const ghost = app.level.entities.find((e) => e.iid === "ghost-blinky")!;
+        return (
+          Object.values(ghost.fields).find(
+            (v) => typeof v === "object" && v !== null && "entityIid" in v
+          ) ?? null
+        );
+      });
+    await expect.poll(chases).toMatchObject({ entityIid: "pacman-spawn" });
+    await expect(inspector.getByRole("combobox", { name: "chases" })).toHaveValue(/:pacman-spawn$/);
+
+    await page.keyboard.press("Control+z");
+    await expect.poll(chases).toBeNull();
   });
 
   test("keeps entity edits across a reload", async ({ page }) => {

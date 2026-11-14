@@ -69,6 +69,19 @@ export function fieldDefsTable(
       );
       extras.push(enumSelect);
     }
+    if (f.type === "EntityRef") {
+      const target = el("select", { className: "input" });
+      target.append(new Option("any entity", ""));
+      for (const d of project.defs.entities) {
+        target.append(new Option(d.identifier, String(d.uid), false, d.uid === f.refDefUid));
+      }
+      target.setAttribute("aria-label", "Points at");
+      target.title = "Entity type the field points at";
+      target.addEventListener("change", () =>
+        update({ refDefUid: target.value ? Number(target.value) : null })
+      );
+      extras.push(target);
+    }
     if (f.type === "Int" || f.type === "Float") {
       const bound = (key: "min" | "max") => {
         const input = el("input", {
@@ -86,6 +99,27 @@ export function fieldDefsTable(
       };
       extras.push(bound("min"), bound("max"));
     }
+
+    const array = el("input", { type: "checkbox", checked: f.isArray === true });
+    array.setAttribute("aria-label", `${f.identifier} is a list`);
+    array.addEventListener("change", () => {
+      if (
+        !array.checked &&
+        !hooks.confirm(`Make "${f.identifier}" a single value? Lists keep only their first entry.`)
+      ) {
+        array.checked = true;
+        return;
+      }
+      update({ isArray: array.checked });
+    });
+    extras.push(
+      el(
+        "label",
+        { className: "inline field-array-toggle", title: "Hold a list of values" },
+        array,
+        el("span", { textContent: "List" })
+      )
+    );
 
     const remove = el("button", {
       className: "btn btn-icon btn-danger",
@@ -123,6 +157,7 @@ function defaultEditor(
   onChange: (value: FieldValue) => void
 ): HTMLElement {
   const value = f.defaultValue;
+  if (f.isArray) return el("span", { className: "hint", textContent: "default: empty list" });
   switch (f.type) {
     case "Int":
     case "Float": {
@@ -165,6 +200,7 @@ function defaultEditor(
       return select;
     }
     case "Point":
+    case "EntityRef":
       return el("span", { className: "hint", textContent: "default: not set" });
   }
 }
