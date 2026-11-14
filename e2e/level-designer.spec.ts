@@ -264,6 +264,32 @@ test.describe("with the Pac-Man preset", () => {
       .toBeCloseTo(zoom, 5);
   });
 
+  test("imports an exported game JSON back as a new level with its entities", async ({ page }) => {
+    const download = page.waitForEvent("download");
+    await page.locator("#exportButton").getByRole("button", { name: "Export (JSON)" }).click();
+    const { readFile } = await import("node:fs/promises");
+    const buffer = await readFile(await (await download).path());
+
+    await page.locator('[data-view="world"]').click();
+    const chooser = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Import level from game JSON" }).click();
+    await (await chooser).setFiles({ name: "maze 2.json", mimeType: "application/json", buffer });
+
+    await expect(page.locator("#statMessage")).toContainText("Imported maze_2");
+    await expect(page.locator("#levelsList")).toContainText("maze_2");
+    const counts = await page.evaluate(() => {
+      const app = window.foundry as unknown as {
+        project: { levels: { identifier: string; entities: unknown[] }[] };
+      };
+      return app.project.levels.map((l) => [l.identifier, l.entities.length]);
+    });
+    expect(counts).toHaveLength(2);
+    expect(counts[1]).toEqual(["maze_2", counts[0][1]]);
+
+    await page.keyboard.press("Control+z");
+    await expect(page.locator("#levelsList")).not.toContainText("maze_2");
+  });
+
   test("the export split button runs JSON by default and remembers CSV", async ({ page }) => {
     const exportButton = page.locator("#exportButton");
     const json = page.waitForEvent("download");

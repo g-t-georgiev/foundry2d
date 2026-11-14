@@ -1,4 +1,6 @@
 import type { HistoryManager } from "@foundry2d/core";
+import { importGameLevel } from "../io/gameImport";
+import { ProjectFormatError } from "../io/projectFile";
 import type { Level, LevelProject } from "../model/LevelProject";
 import {
   AddLevelCommand,
@@ -46,6 +48,32 @@ export class LevelOperations {
     hooks.history.record(new AddLevelCommand(project, level, project.indexOfLevel(level.uid)));
     hooks.select(level.uid, x === undefined);
     hooks.notify(`Added ${level.identifier}`);
+  }
+
+  /**
+   * Adds a level from a game JSON export, matched to this project's layers,
+   * entity types and fields by name. Unmatched parts are reported.
+   */
+  importFromGame(json: unknown, fileName: string): void {
+    const { project, hooks } = this;
+    const base = fileName.replace(/\.json$/i, "").replace(/[^A-Za-z0-9_]+/g, "_") || "level";
+    let result;
+    try {
+      result = importGameLevel(project, json, base);
+    } catch (error) {
+      if (!(error instanceof ProjectFormatError)) throw error;
+      hooks.notify(`Could not import ${fileName}: ${error.message}`, 5000);
+      return;
+    }
+    const { level, warnings } = result;
+    hooks.history.record(new AddLevelCommand(project, level, project.indexOfLevel(level.uid)));
+    hooks.select(level.uid, true);
+    hooks.notify(
+      warnings.length
+        ? `Imported ${level.identifier}. ${warnings.join(" ")}`
+        : `Imported ${level.identifier}`,
+      warnings.length ? 8000 : 3000
+    );
   }
 
   duplicate(uid: number): void {

@@ -4,6 +4,8 @@ export interface LevelsListHooks {
   select: (uid: number) => void;
   open: (uid: number) => void;
   add: () => void;
+  /** Adds a level from a game JSON file. */
+  importLevel: () => void;
   duplicate: (uid: number) => void;
   remove: (uid: number) => void;
   move: (uid: number, direction: "up" | "down") => void;
@@ -32,6 +34,9 @@ export default class LevelsListView {
       switch (button.dataset.levelAction) {
         case "add":
           hooks.add();
+          break;
+        case "import":
+          hooks.importLevel();
           break;
         case "duplicate":
           if (uid !== null) hooks.duplicate(uid);

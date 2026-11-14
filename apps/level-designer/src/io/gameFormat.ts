@@ -1,6 +1,5 @@
-import { LevelProject, layerIdFor, type Level } from "../model/LevelProject";
-import { createProjectFromPreset } from "../model/presets";
-import { ProjectFormatError } from "./projectFile";
+import type { LevelProject } from "../model/LevelProject";
+import { layerIdFor, type Level } from "../model/LevelProject";
 import { tilesetGrid } from "../model/tiles";
 import { entityRect, fieldValue, isEntityRef } from "../model/entities";
 import type { EntityDef, EntityInstance, FieldDef, FieldScalar, FieldValue } from "../model/types";
@@ -186,73 +185,7 @@ export function formatLayerAsArray(data: ArrayLike<number>, columns: number, row
   return `[\n${lines.join(",\n")}\n]`;
 }
 
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
-
-export function isGameFormat(json: unknown): json is GameLevelFile {
-  return isRecord(json) && isRecord(json.metadata) && isRecord(json.layers);
-}
-
-/**
- * Value names of layers the original Pac-Man editor exported that the current
- * presets no longer have (the `spawns` layer became entities in Phase 7).
- */
-const LEGACY_LAYER_VALUES: Record<string, { value: number; identifier: string; color: string }[]> =
-  {
-    spawns: [
-      { value: 1, identifier: "pacman", color: "#ffff00" },
-      { value: 2, identifier: "blinky", color: "#ff0000" },
-      { value: 3, identifier: "inky", color: "#00eeff" },
-      { value: 4, identifier: "pinky", color: "#ff00ea" },
-      { value: 5, identifier: "clyde", color: "#ff7300" },
-    ],
-  };
-
-/**
- * Imports a game-format file. Layers whose keys match the Pac-Man seed keep
- * its value names and colors (as do legacy keys such as `spawns`); other keys get a generated IntGrid def with
- * one entry per distinct value found.
- */
-export function fromGameFormat(json: unknown): LevelProject {
-  if (!isGameFormat(json)) throw new ProjectFormatError("Not a game level file.");
-  const { metadata, layers } = json;
-  const columns = Number(metadata.columns);
-  const rows = Number(metadata.rows);
-  if (!Number.isInteger(columns) || !Number.isInteger(rows) || columns < 1 || rows < 1) {
-    throw new ProjectFormatError("Game file has invalid columns/rows.");
-  }
-
-  const seed = createProjectFromPreset("pacman");
-  const project = new LevelProject(
-    typeof metadata.name === "string" && metadata.name ? metadata.name : "level",
-    Number.isInteger(metadata.tileSize) && metadata.tileSize > 0 ? metadata.tileSize : seed.gridSize
-  );
-
-  const entries = Object.entries(layers);
-  if (entries.length === 0) throw new ProjectFormatError("Game file has no layers.");
-
-  for (const [key, data] of entries) {
-    if (!Array.isArray(data) || data.length !== columns * rows) {
-      throw new ProjectFormatError(`Layer "${key}" should have ${columns * rows} cells.`);
-    }
-    const known = seed.defs.layers.find((d) => d.identifier === key);
-    const values =
-      known?.intGridValues ??
-      LEGACY_LAYER_VALUES[key] ??
-      [...new Set(data.filter((v): v is number => Number.isInteger(v) && v > 0))]
-        .sort((a, b) => a - b)
-        .map((value) => ({ value, identifier: `value_${value}`, color: "#ff00ff" }));
-    project.addIntGridLayer(key, values);
-  }
-
-  const level = project.createLevel("level_0", columns, rows);
-  for (const [i, [, data]] of entries.entries()) {
-    const layer = level.doc.getLayer(layerIdFor(project.defs.layers[i].uid))!;
-    layer.data.set(data.map((v) => (Number.isInteger(v) ? v : 0)));
-    layer.version++;
-  }
-  level.doc.setActiveLayer(level.doc.layers[0]?.id ?? null);
-  return project;
-}
+export { fromGameFormat, importGameLevel, isGameFormat } from "./gameImport";
 
 // ------------------------------------------------------------------ CSV
 

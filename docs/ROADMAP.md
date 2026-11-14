@@ -319,6 +319,11 @@ Issues, improvements and polish candidates collected along the way, including ev
     - **List fields:** any field type can be switched to a list ("List" in the field table). Entries are added, edited and removed one by one; Point and EntityRef entries are picked on the canvas. Switching back to a single value keeps the first entry.
     - **Integrity:** a duplicated level's references between its own entities point at the copies. Restricting the target type drops references to other types; removing an entity type frees the fields restricted to it. References to deleted entities stay, show as "missing" and export as `null` (dropped from lists). Edge resizes move listed points too.
     - **Files:** work file version 3. Game JSON writes references as `{ iid, level }` (the level identifier) and lists as arrays; CSV writes the iid and joins list entries with `|`.
+  - ✅ **Game JSON import with entities (20):**
+    - **Into an open project:** the Levels list has an "Import level from game JSON" button (⤓). The file becomes a new level (one undo step), matched to the project by identifier: grid and tile layers by layer name, entities by type name onto the Entities layer of the same name (or the first one), field values by field name. Auto-layers are regenerated from their sources. References between the file's entities point at the new copies, others at the project level of the exported name. Anything without a match is skipped and listed in the status message.
+    - **Opened on its own:** entity layers and types come back, with fields inferred from the exported values (Int or Float, Bool, Color, String, Point, EntityRef, and lists of these); types the Pac-Man seed knows keep its colour and shape. Level fields and the background colour come back too. Tile layers become Tiles layers without a tileset, because the file only names the image.
+    - Imported entities keep their iids unless the project already uses them.
+    - Separately, the Level panel now links to the level field definitions ("Add level fields…").
   - ⏭ **Packaged project format (6) moved to 8.7.** It is a third file format next to `.f2dsprite` and `.f2dlevel`, so the choice of replacing or adding to them belongs with the OS file association and installable app (34, 38). The Sprite Packer (Phase 9) will need the same machinery: reading ZIPs, including compressed ones from other tools, folder input and asset files. Today only files saved to disk embed tileset images; library and recovery copies already keep them in the asset store.
   - **8.4 is done** apart from item 6 (moved). Items 36–37 are decisions to take with a target engine.
 - **8.5 Features** (in progress): items 9 ✅, 23 ✅, 12 ✅, 13 (partly), 14 ✅, 15 ✅, then 17–20, 30 and 31, roughly in that order.
@@ -375,7 +380,7 @@ Issues, improvements and polish candidates collected along the way, including ev
 17. Per-layer grid sizes (LDtk allows them). Today one grid size covers every layer.
 18. Level background colour and level custom fields (LDtk has both). This reuses the Phase 7 field editor. ✅ Done in 8.5 (see the 8.5 status).
 19. Entity reference fields (a door pointing at a switch) and array fields. Deferred from Phase 7 to keep its scope. ✅ Done in 8.5.
-20. Game JSON import cannot recreate entities (the file has no definitions). Map known identifiers when importing over an existing project.
+20. Game JSON import cannot recreate entities (the file has no definitions). Map known identifiers when importing over an existing project. ✅ Done in 8.5.
 21. Project settings has grown to five sections in one scrolling dialog. Split it into tabs (General, Layers, Tilesets, Entities, Enums), so the header and close button stay in view.
 22. Entity tiles are chosen by numeric tile id. Reuse the tileset picker for a visual choice.
 23. Auto-layers regenerate the whole layer on every source change, because `cells:changed` carries no region. Add dirty rectangles to the event and regenerate only the area around them (pattern radius). This matters on 256×256 levels with many rules.

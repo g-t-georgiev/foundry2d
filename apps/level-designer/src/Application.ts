@@ -199,6 +199,7 @@ export default class Application {
       select: (uid) => this.selectLevel(uid, true),
       open: (uid) => void this.enterLevel(uid),
       add: () => this.levelOps.add(),
+      importLevel: () => this.importGameLevel(),
       duplicate: (uid) => this.levelOps.duplicate(uid),
       remove: (uid) => this.levelOps.remove(uid),
       move: (uid, direction) => this.levelOps.reorder(uid, direction),
@@ -1230,6 +1231,29 @@ export default class Application {
         })
       )
     );
+  }
+
+  /** Picks a game JSON file and adds it as a new level of this project. */
+  private importGameLevel(): void {
+    const input = Object.assign(document.createElement("input"), {
+      type: "file",
+      accept: ".json,application/json",
+    });
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      void file.text().then((text) => {
+        let json: unknown;
+        try {
+          json = JSON.parse(text);
+        } catch {
+          this.showMessage(`${file.name} is not valid JSON.`, 4000);
+          return;
+        }
+        this.levelOps.importFromGame(json, file.name);
+      });
+    });
+    input.click();
   }
 
   /** Changes the open level's background or field values as one undo step. */
