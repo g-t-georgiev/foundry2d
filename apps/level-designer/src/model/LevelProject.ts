@@ -1,6 +1,18 @@
 import { EventEmitter, GridDocument, PixelUtils, type Rect } from "@foundry2d/core";
 import type { CellColorizer } from "@foundry2d/render";
-import type { IntGridValueDef, LayerDef, ProjectDefs, TilesetDef, WorldLayout } from "./types";
+import type {
+  EntityDef,
+  EntityInstance,
+  EnumDef,
+  FieldDef,
+  FieldType,
+  IntGridValueDef,
+  LayerDef,
+  ProjectDefs,
+  TilesetDef,
+  WorldLayout,
+} from "./types";
+import { cloneInstance, initialDefault, newIid, validateFieldValue } from "./entities";
 
 /** IntGrid cells use 0 for "empty", like LDtk. */
 export const EMPTY_CELL = 0;
@@ -8,6 +20,9 @@ export const EMPTY_CELL = 0;
 export type LevelDocument = GridDocument<Int32Array>;
 
 export class Level {
+  /** Placed entities on every Entities layer, in draw order. */
+  public entities: EntityInstance[] = [];
+
   constructor(
     public readonly uid: number,
     public identifier: string,
@@ -44,6 +59,8 @@ export type ProjectEventMap = {
   "levels:changed": () => void;
   /** Project-wide settings (name, grid size) changed. */
   "settings:changed": () => void;
+  /** Entity instances of a level were added, removed, moved or edited. */
+  "entities:changed": (levelUid: number) => void;
 };
 
 const DEFAULT_COLORS = [
@@ -75,7 +92,7 @@ export const defUidOf = (layerId: string): number | null => {
  */
 export class LevelProject {
   public readonly events = new EventEmitter<ProjectEventMap>();
-  public readonly defs: ProjectDefs = { layers: [], tilesets: [] };
+  public readonly defs: ProjectDefs = { layers: [], tilesets: [], entities: [], enums: [] };
   public readonly levels: Level[] = [];
   /** Bumped whenever colors change so cached layer bitmaps are refreshed. */
   public paletteVersion = 0;
@@ -232,7 +249,9 @@ export class LevelProject {
     }
     doc.setActiveLayer(source.doc.activeLayerId);
     const identifier = this.uniqueLevelIdentifier(`${source.identifier}_copy`);
-    return new Level(this.allocateUid(), identifier, worldX, worldY, doc);
+    const copy = new Level(this.allocateUid(), identifier, worldX, worldY, doc);
+    copy.entities = source.entities.map((e) => cloneInstance(e, newIid()));
+    return copy;
   }
 
   moveLevel(uid: number, worldX: number, worldY: number): void {
@@ -381,6 +400,22 @@ export class LevelProject {
     return def;
   }
 
+  /** Adds an Entities layer definition on top of the stack, in every level. */
+  addEntitiesLayer(identifier: string): LayerDef {
+    const def: LayerDef = {
+      uid: this.allocateUid(),
+      identifier: this.uniqueIdentifier(identifier),
+      type: "Entities",
+      intGridValues: [],
+    };
+    this.defs.layers.push(def);
+    for (const level of this.levels) {
+      level.doc.addLayer({ id: layerIdFor(def.uid), name: def.identifier, activate: false });
+    }
+    this.defsChanged();
+    return def;
+  }
+
   setLayerTileset(uid: number, tilesetUid: number | null): void {
     const def = this.getLayerDef(uid);
     if (!def || def.type !== "Tiles" || def.tilesetUid === tilesetUid) return;
@@ -430,6 +465,12 @@ export class LevelProject {
     for (const def of this.defs.layers) {
       if (def.tilesetUid === uid) def.tilesetUid = null;
     }
+    for (const entity of this.defs.entities) {
+      if (entity.tile?.tilesetUid === uid) {
+        entity.tile = null;
+        if (entity.shape === "tile") entity.shape = "rectangle";
+      }
+    }
     this.tilesetImages.delete(uid);
     this.defsChanged();
   }
@@ -458,8 +499,13 @@ export class LevelProject {
   removeLayerDef(uid: number): boolean {
     const index = this.defs.layers.findIndex((d) => d.uid === uid);
     if (index === -1 || this.defs.layers.length <= 1) return false;
-    this.defs.layers.splice(index, 1);
-    for (const level of this.levels) level.doc.removeLayer(layerIdFor(uid));
+    const [removed] = this.defs.layers.splice(index, 1);
+    for (const level of this.levels) {
+      level.doc.removeLayer(layerIdFor(uid));
+      if (removed.type === "Entities") {
+        this.dropEntities(level, (e) => e.layerUid === uid);
+      }
+    }
     this.defsChanged();
     return true;
   }
@@ -540,6 +586,273 @@ export class LevelProject {
     this.defsChanged();
   }
 
+  // ------------------------------------------------------------------ entity defs
+
+  getEntityDef(uid: number): EntityDef | undefined {
+    return this.defs.entities.find((d) => d.uid === uid);
+  }
+
+  getEnum(uid: number | null | undefined): EnumDef | undefined {
+    return uid === null || uid === undefined
+      ? undefined
+      : this.defs.enums.find((e) => e.uid === uid);
+  }
+
+  addEntityDef(identifier = "Entity", patch: Partial<Omit<EntityDef, "uid">> = {}): EntityDef {
+    const def: EntityDef = {
+      identifier: "",
+      color: DEFAULT_COLORS[this.defs.entities.length % DEFAULT_COLORS.length],
+      width: this.gridSize,
+      height: this.gridSize,
+      pivotX: 0.5,
+      pivotY: 0.5,
+      shape: "rectangle",
+      tile: null,
+      maxPerLevel: 0,
+      fields: [],
+      ...structuredClone(patch),
+      uid: this.allocateUid(),
+    };
+    def.identifier = this.uniqueName(
+      this.defs.entities.map((d) => d.identifier),
+      identifier
+    );
+    for (const field of def.fields) this.reserveUid(field.uid);
+    this.defs.entities.push(def);
+    this.defsChanged();
+    return def;
+  }
+
+  updateEntityDef(uid: number, patch: Partial<Omit<EntityDef, "uid" | "fields">>): void {
+    const def = this.getEntityDef(uid);
+    if (!def) return;
+    const { identifier, ...rest } = patch;
+    Object.assign(def, rest);
+    if (identifier !== undefined && identifier.trim()) {
+      def.identifier = this.uniqueName(
+        this.defs.entities.filter((d) => d.uid !== uid).map((d) => d.identifier),
+        identifier.trim()
+      );
+    }
+    def.width = Math.max(1, Math.round(def.width));
+    def.height = Math.max(1, Math.round(def.height));
+    def.pivotX = Math.min(1, Math.max(0, def.pivotX));
+    def.pivotY = Math.min(1, Math.max(0, def.pivotY));
+    def.maxPerLevel = Math.max(0, Math.round(def.maxPerLevel));
+    this.defsChanged();
+  }
+
+  /** Removes an entity definition and all its instances (not undoable). */
+  removeEntityDef(uid: number): void {
+    const index = this.defs.entities.findIndex((d) => d.uid === uid);
+    if (index === -1) return;
+    this.defs.entities.splice(index, 1);
+    for (const level of this.levels) this.dropEntities(level, (e) => e.defUid === uid);
+    this.defsChanged();
+  }
+
+  /** Number of instances of a definition (in one level, or in the project). */
+  countEntities(defUid: number, level?: Level): number {
+    const levels = level ? [level] : this.levels;
+    return levels.reduce((n, l) => n + l.entities.filter((e) => e.defUid === defUid).length, 0);
+  }
+
+  addField(entityUid: number, type: FieldType, identifier = type.toLowerCase()): FieldDef | null {
+    const def = this.getEntityDef(entityUid);
+    if (!def) return null;
+    const enumDef = type === "Enum" ? this.defs.enums[0] : undefined;
+    const field: FieldDef = {
+      uid: this.allocateUid(),
+      identifier: this.uniqueName(
+        def.fields.map((f) => f.identifier),
+        identifier
+      ),
+      type,
+      defaultValue: initialDefault(type, enumDef),
+      ...(type === "Enum" ? { enumUid: enumDef?.uid ?? null } : {}),
+      ...(type === "Int" || type === "Float" ? { min: null, max: null } : {}),
+    };
+    def.fields.push(field);
+    this.defsChanged();
+    return field;
+  }
+
+  /**
+   * Updates a field definition. Stored values that are no longer valid (an
+   * enum change, a new min/max) are dropped or clamped.
+   */
+  updateField(
+    entityUid: number,
+    fieldUid: number,
+    patch: Partial<Omit<FieldDef, "uid" | "type">>
+  ): void {
+    const def = this.getEntityDef(entityUid);
+    const field = def?.fields.find((f) => f.uid === fieldUid);
+    if (!field || !def) return;
+    const { identifier, ...rest } = patch;
+    Object.assign(field, rest);
+    if (identifier !== undefined && identifier.trim()) {
+      field.identifier = this.uniqueName(
+        def.fields.filter((f) => f.uid !== fieldUid).map((f) => f.identifier),
+        identifier.trim()
+      );
+    }
+    if ("enumUid" in patch && !("defaultValue" in patch)) {
+      field.defaultValue = initialDefault("Enum", this.getEnum(field.enumUid));
+    }
+    const valid = validateFieldValue(field, field.defaultValue, this.defs.enums);
+    field.defaultValue = valid === undefined ? initialDefault(field.type) : valid;
+    this.pruneFieldValues(entityUid, field);
+    this.defsChanged();
+  }
+
+  removeField(entityUid: number, fieldUid: number): void {
+    const def = this.getEntityDef(entityUid);
+    if (!def) return;
+    def.fields = def.fields.filter((f) => f.uid !== fieldUid);
+    for (const level of this.levels) {
+      for (const e of level.entities) {
+        if (e.defUid === entityUid) delete e.fields[String(fieldUid)];
+      }
+    }
+    this.defsChanged();
+  }
+
+  // ------------------------------------------------------------------ enums
+
+  addEnum(identifier = "Enum"): EnumDef {
+    const def: EnumDef = {
+      uid: this.allocateUid(),
+      identifier: this.uniqueName(
+        this.defs.enums.map((e) => e.identifier),
+        identifier
+      ),
+      values: [],
+    };
+    this.defs.enums.push(def);
+    this.defsChanged();
+    return def;
+  }
+
+  renameEnum(uid: number, identifier: string): void {
+    const def = this.getEnum(uid);
+    if (!def || !identifier.trim()) return;
+    def.identifier = this.uniqueName(
+      this.defs.enums.filter((e) => e.uid !== uid).map((e) => e.identifier),
+      identifier.trim()
+    );
+    this.defsChanged();
+  }
+
+  /** Removes an enum; fields using it become unbound and lose their values. */
+  removeEnum(uid: number): void {
+    const index = this.defs.enums.findIndex((e) => e.uid === uid);
+    if (index === -1) return;
+    this.defs.enums.splice(index, 1);
+    for (const def of this.defs.entities) {
+      for (const field of def.fields) {
+        if (field.type === "Enum" && field.enumUid === uid) {
+          field.enumUid = null;
+          field.defaultValue = null;
+          this.pruneFieldValues(def.uid, field);
+        }
+      }
+    }
+    this.defsChanged();
+  }
+
+  addEnumValue(uid: number, id?: string): void {
+    const def = this.getEnum(uid);
+    if (!def) return;
+    def.values.push({
+      id: this.uniqueName(
+        def.values.map((v) => v.id),
+        id ?? `value_${def.values.length + 1}`
+      ),
+      color: DEFAULT_COLORS[def.values.length % DEFAULT_COLORS.length],
+    });
+    this.defsChanged();
+  }
+
+  /** Renames or recolours an enum value; a rename carries over to stored values. */
+  updateEnumValue(uid: number, id: string, patch: { id?: string; color?: string }): void {
+    const def = this.getEnum(uid);
+    const entry = def?.values.find((v) => v.id === id);
+    if (!def || !entry) return;
+    if (patch.color) entry.color = patch.color;
+    const nextId = patch.id?.trim();
+    if (nextId && nextId !== id) {
+      entry.id = this.uniqueName(
+        def.values.filter((v) => v !== entry).map((v) => v.id),
+        nextId
+      );
+      this.forEachEnumField(uid, (field, entity) => {
+        if (field.defaultValue === id) field.defaultValue = entry.id;
+        for (const level of this.levels) {
+          for (const e of level.entities) {
+            if (e.defUid === entity.uid && e.fields[String(field.uid)] === id) {
+              e.fields[String(field.uid)] = entry.id;
+            }
+          }
+        }
+      });
+    }
+    this.defsChanged();
+  }
+
+  /** Removes an enum value; instances using it fall back to the field default. */
+  removeEnumValue(uid: number, id: string): void {
+    const def = this.getEnum(uid);
+    if (!def) return;
+    def.values = def.values.filter((v) => v.id !== id);
+    this.forEachEnumField(uid, (field, entity) => {
+      if (field.defaultValue === id) field.defaultValue = def.values[0]?.id ?? null;
+      this.pruneFieldValues(entity.uid, field);
+    });
+    this.defsChanged();
+  }
+
+  // ------------------------------------------------------------------ entity instances
+  // Low-level mutations; the entity commands wrap them as undo steps.
+
+  insertEntity(level: Level, instance: EntityInstance, index = level.entities.length): void {
+    level.entities.splice(Math.max(0, Math.min(index, level.entities.length)), 0, instance);
+    this.events.emit("entities:changed", level.uid);
+  }
+
+  /** Removes an instance; returns its old index, or -1. */
+  removeEntity(level: Level, iid: string): number {
+    const index = level.entities.findIndex((e) => e.iid === iid);
+    if (index === -1) return -1;
+    level.entities.splice(index, 1);
+    this.events.emit("entities:changed", level.uid);
+    return index;
+  }
+
+  /** Replaces an instance's state (position and fields) with a copy of `next`. */
+  replaceEntity(level: Level, next: EntityInstance): void {
+    const index = level.entities.findIndex((e) => e.iid === next.iid);
+    if (index === -1) return;
+    level.entities[index] = cloneInstance(next);
+    this.events.emit("entities:changed", level.uid);
+  }
+
+  /** Moves every instance of a level by whole cells (used by edge resizes). */
+  shiftEntities(level: Level, cellsX: number, cellsY: number): void {
+    if (cellsX === 0 && cellsY === 0) return;
+    for (const e of level.entities) {
+      e.x += cellsX * this.gridSize;
+      e.y += cellsY * this.gridSize;
+      for (const field of this.getEntityDef(e.defUid)?.fields ?? []) {
+        const value = e.fields[String(field.uid)];
+        if (field.type === "Point" && value && typeof value === "object") {
+          e.fields[String(field.uid)] = { x: value.x + cellsX, y: value.y + cellsY };
+        }
+      }
+    }
+    this.events.emit("entities:changed", level.uid);
+  }
+
   // ------------------------------------------------------------------ rendering
 
   /** Value → packed color for a document layer, cached per definition. */
@@ -571,6 +884,41 @@ export class LevelProject {
     let n = 2;
     while (taken.has(`${base}_${n}`)) n++;
     return `${base}_${n}`;
+  }
+
+  private uniqueName(taken: readonly string[], base: string): string {
+    const set = new Set(taken);
+    if (!set.has(base)) return base;
+    let n = 2;
+    while (set.has(`${base}_${n}`)) n++;
+    return `${base}_${n}`;
+  }
+
+  private dropEntities(level: Level, predicate: (e: EntityInstance) => boolean): void {
+    const before = level.entities.length;
+    level.entities = level.entities.filter((e) => !predicate(e));
+    if (level.entities.length !== before) this.events.emit("entities:changed", level.uid);
+  }
+
+  /** Drops stored values of `field` that are no longer valid. */
+  private pruneFieldValues(entityUid: number, field: FieldDef): void {
+    const key = String(field.uid);
+    for (const level of this.levels) {
+      for (const e of level.entities) {
+        if (e.defUid !== entityUid || !(key in e.fields)) continue;
+        const valid = validateFieldValue(field, e.fields[key], this.defs.enums);
+        if (valid === undefined) delete e.fields[key];
+        else e.fields[key] = valid;
+      }
+    }
+  }
+
+  private forEachEnumField(enumUid: number, fn: (field: FieldDef, entity: EntityDef) => void) {
+    for (const entity of this.defs.entities) {
+      for (const field of entity.fields) {
+        if (field.type === "Enum" && field.enumUid === enumUid) fn(field, entity);
+      }
+    }
   }
 
   private defsChanged(): void {

@@ -2,6 +2,29 @@ import { LevelProject, layerIdFor, type Level } from "../model/LevelProject";
 import { createProjectFromPreset } from "../model/presets";
 import { ProjectFormatError } from "./projectFile";
 import { tilesetGrid } from "../model/tiles";
+import { entityRect, namedFieldValues } from "../model/entities";
+import type { FieldValue } from "../model/types";
+
+/** One placed entity in a game export. */
+export interface GameEntity {
+  /** Entity definition identifier, e.g. "Ghost". */
+  id: string;
+  /** Stable instance id. */
+  iid: string;
+  /** Pivot position in pixels. */
+  x: number;
+  y: number;
+  /** Cell containing the pivot. */
+  cx: number;
+  cy: number;
+  /** Top-left corner and size of the entity box, in pixels. */
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  /** Field values by field identifier (Point fields are cells: `{ x, y }`). */
+  fields: Record<string, FieldValue>;
+}
 
 /**
  * The flat format the Pac-Man game reads (same shape the original level
@@ -23,11 +46,47 @@ export interface GameLevelFile {
     string,
     { tileset: string; tileSize: number; columns: number; image: string | null }
   >;
+  /** Present when the project has Entities layers: instances keyed by layer identifier. */
+  entities?: Record<string, GameEntity[]>;
+}
+
+/** The entities of one layer in export shape. */
+export function entitiesForLayer(
+  project: LevelProject,
+  level: Level,
+  layerUid: number
+): GameEntity[] {
+  const { gridSize } = project;
+  return level.entities.flatMap((instance) => {
+    const def = project.getEntityDef(instance.defUid);
+    if (!def || instance.layerUid !== layerUid) return [];
+    const box = entityRect(def, instance);
+    return [
+      {
+        id: def.identifier,
+        iid: instance.iid,
+        x: instance.x,
+        y: instance.y,
+        cx: Math.floor(instance.x / gridSize),
+        cy: Math.floor(instance.y / gridSize),
+        left: box.x,
+        top: box.y,
+        width: box.width,
+        height: box.height,
+        fields: namedFieldValues(def, instance, project.defs.enums),
+      },
+    ];
+  });
 }
 
 export function toGameFormat(project: LevelProject, level: Level): GameLevelFile {
   const layers: Record<string, number[]> = {};
+  const entities: NonNullable<GameLevelFile["entities"]> = {};
   for (const def of project.defs.layers) {
+    if (def.type === "Entities") {
+      entities[def.identifier] = entitiesForLayer(project, level, def.uid);
+      continue;
+    }
     const layer = level.doc.getLayer(layerIdFor(def.uid));
     if (layer) layers[def.identifier] = Array.from(layer.data);
   }
@@ -44,6 +103,7 @@ export function toGameFormat(project: LevelProject, level: Level): GameLevelFile
   }
   return {
     ...(Object.keys(tileLayers).length ? { tileLayers } : {}),
+    ...(Object.keys(entities).length ? { entities } : {}),
     metadata: {
       name: project.name,
       columns: level.width,

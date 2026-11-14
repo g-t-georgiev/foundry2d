@@ -1,9 +1,9 @@
 {
   "format": "foundry2d.level",
-  "version": 1,
+  "version": 2,
   "preset": {
     "label": "Pac-Man (arcade)",
-    "description": "28×36 tile maze with collision, collectibles and spawn layers.",
+    "description": "28×36 tile maze with collision, collectibles, spawn layers and Pac-Man, ghost and fruit entities.",
     "order": 0
   },
   "name": "pacman",
@@ -13,7 +13,7 @@
     "width": 224,
     "height": 288
   },
-  "nextUid": 5,
+  "nextUid": 13,
   "defs": {
     "layers": [
       {
@@ -96,9 +96,103 @@
             "color": "#ff7300"
           }
         ]
+      },
+      {
+        "uid": 12,
+        "identifier": "entities",
+        "type": "Entities",
+        "intGridValues": []
       }
     ],
-    "tilesets": []
+    "tilesets": [],
+    "enums": [
+      {
+        "uid": 5,
+        "identifier": "ghost",
+        "values": [
+          {
+            "id": "blinky",
+            "color": "#ff0000"
+          },
+          {
+            "id": "pinky",
+            "color": "#ffb8ff"
+          },
+          {
+            "id": "inky",
+            "color": "#00ffff"
+          },
+          {
+            "id": "clyde",
+            "color": "#ffb852"
+          }
+        ]
+      }
+    ],
+    "entities": [
+      {
+        "uid": 6,
+        "identifier": "PacMan",
+        "color": "#ffff00",
+        "width": 16,
+        "height": 16,
+        "pivotX": 0.5,
+        "pivotY": 0.5,
+        "shape": "ellipse",
+        "tile": null,
+        "maxPerLevel": 1,
+        "fields": []
+      },
+      {
+        "uid": 7,
+        "identifier": "Ghost",
+        "color": "#ff0000",
+        "width": 16,
+        "height": 16,
+        "pivotX": 0.5,
+        "pivotY": 0.5,
+        "shape": "rectangle",
+        "tile": null,
+        "maxPerLevel": 4,
+        "fields": [
+          {
+            "uid": 8,
+            "identifier": "kind",
+            "type": "Enum",
+            "defaultValue": "blinky",
+            "enumUid": 5
+          },
+          {
+            "uid": 9,
+            "identifier": "scatterTarget",
+            "type": "Point",
+            "defaultValue": null
+          }
+        ]
+      },
+      {
+        "uid": 10,
+        "identifier": "Fruit",
+        "color": "#e5484d",
+        "width": 12,
+        "height": 12,
+        "pivotX": 0.5,
+        "pivotY": 0.5,
+        "shape": "ellipse",
+        "tile": null,
+        "maxPerLevel": 1,
+        "fields": [
+          {
+            "uid": 11,
+            "identifier": "points",
+            "type": "Int",
+            "defaultValue": 100,
+            "min": 0,
+            "max": null
+          }
+        ]
+      }
+    ]
   },
   "levels": [
     {
@@ -127,6 +221,88 @@
           "visible": true,
           "opacity": 1,
           "data": [1008, 0]
+        },
+        {
+          "defUid": 12,
+          "visible": true,
+          "opacity": 1,
+          "data": [1008, 0]
+        }
+      ],
+      "entities": [
+        {
+          "iid": "pacman-spawn",
+          "defUid": 6,
+          "layerUid": 12,
+          "x": 112,
+          "y": 212,
+          "fields": {}
+        },
+        {
+          "iid": "ghost-blinky",
+          "defUid": 7,
+          "layerUid": 12,
+          "x": 112,
+          "y": 116,
+          "fields": {
+            "8": "blinky",
+            "9": {
+              "x": 25,
+              "y": 0
+            }
+          }
+        },
+        {
+          "iid": "ghost-pinky",
+          "defUid": 7,
+          "layerUid": 12,
+          "x": 112,
+          "y": 140,
+          "fields": {
+            "8": "pinky",
+            "9": {
+              "x": 2,
+              "y": 0
+            }
+          }
+        },
+        {
+          "iid": "ghost-inky",
+          "defUid": 7,
+          "layerUid": 12,
+          "x": 96,
+          "y": 140,
+          "fields": {
+            "8": "inky",
+            "9": {
+              "x": 27,
+              "y": 35
+            }
+          }
+        },
+        {
+          "iid": "ghost-clyde",
+          "defUid": 7,
+          "layerUid": 12,
+          "x": 128,
+          "y": 140,
+          "fields": {
+            "8": "clyde",
+            "9": {
+              "x": 0,
+              "y": 35
+            }
+          }
+        },
+        {
+          "iid": "fruit-spawn",
+          "defUid": 10,
+          "layerUid": 12,
+          "x": 112,
+          "y": 164,
+          "fields": {
+            "11": 100
+          }
         }
       ]
     }

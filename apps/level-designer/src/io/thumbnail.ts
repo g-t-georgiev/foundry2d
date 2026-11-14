@@ -1,6 +1,6 @@
 import { LayerBitmapCache } from "@foundry2d/render";
 import type { LevelProject } from "../model/LevelProject";
-import { tileLayerRendererFor } from "../render/tileLayerRenderer";
+import { levelLayerRendererFor } from "../render/entityRenderer";
 
 /**
  * Small PNG preview of the whole world (all levels) for the project
@@ -18,7 +18,7 @@ export function renderProjectThumbnail(project: LevelProject, maxSize = 160): st
 
   ctx.imageSmoothingEnabled = false;
   ctx.setTransform(scale, 0, 0, scale, -bounds.x * scale, -bounds.y * scale);
-  const tiles = tileLayerRendererFor(project);
+  const renderers = levelLayerRendererFor(project, { labels: false });
   const cache = new LayerBitmapCache();
   for (const level of project.levels) {
     const rect = level.worldRect(project.gridSize);
@@ -28,7 +28,7 @@ export function renderProjectThumbnail(project: LevelProject, maxSize = 160): st
     for (const layer of level.doc.layers) {
       if (!layer.visible || layer.opacity <= 0) continue;
       ctx.globalAlpha = layer.opacity;
-      const custom = tiles(layer);
+      const custom = renderers(layer, level);
       if (custom) {
         custom(ctx, layer, rect, rect);
         continue;

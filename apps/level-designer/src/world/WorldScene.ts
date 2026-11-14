@@ -2,7 +2,7 @@ import type { Dimensions, Rect, Unsubscribe } from "@foundry2d/core";
 import { LayerBitmapCache, type RenderContext, type RenderPass } from "@foundry2d/render";
 import type { ScenePointerEvent, Workspace, WorkspaceScene } from "@foundry2d/workspace";
 import type { Level, LevelProject } from "../model/LevelProject";
-import { tileLayerRendererFor } from "../render/tileLayerRenderer";
+import { levelLayerRendererFor } from "../render/entityRenderer";
 
 export interface WorldSceneHooks {
   getSelectedUid: () => number | null;
@@ -36,14 +36,14 @@ export class WorldScene implements WorkspaceScene {
     moved: boolean;
   } | null = null;
   private readonly passes: RenderPass[];
-  private readonly tileRenderer: ReturnType<typeof tileLayerRendererFor>;
+  private readonly layerRenderer: ReturnType<typeof levelLayerRendererFor>;
 
   constructor(
     private readonly project: LevelProject,
     private readonly hooks: WorldSceneHooks
   ) {
     this.cellSize = { width: project.gridSize, height: project.gridSize };
-    this.tileRenderer = tileLayerRendererFor(project);
+    this.layerRenderer = levelLayerRendererFor(project);
     this.passes = [
       {
         id: "world-grid",
@@ -258,7 +258,7 @@ export class WorldScene implements WorkspaceScene {
       for (const layer of level.doc.layers) {
         if (!layer.visible || layer.opacity <= 0) continue;
         ctx.globalAlpha = layer.opacity;
-        const custom = this.tileRenderer(layer);
+        const custom = this.layerRenderer(layer, level);
         if (custom) {
           custom(ctx, layer, r, visible);
           continue;

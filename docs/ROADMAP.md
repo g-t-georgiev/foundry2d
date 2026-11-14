@@ -184,7 +184,7 @@ _Done: defects fixed, open tool registry, history events/limit/composite, full l
    - **How it works:** pixels are composited in software, so exports are exact and testable. BMP, GIF and ZIP have their own small encoders; only PNG, WebP and JPEG use the browser's canvas encoder.
 5. **Drawing:** line (L), rectangle (R) and ellipse (C) tools built on a new core `ShapeTool` base, with a live preview and one undo step per shape.
 
-### Phase 6b: More pixel tools ✅ (2026-11-15)
+### Phase 6b: More pixel tools ✅ (2026-11-14)
 
 1. **Selection** (core `Selection` and `SelectTool`, select tool on M):
    - Drag to select; drag inside the selection to move the pixels. The move previews live and undoes in one step, and undo also restores the selection.
@@ -201,9 +201,96 @@ _Done: defects fixed, open tool registry, history events/limit/composite, full l
 
 **Not done:** pasting images from the system clipboard, and non-rectangular selections (lasso, magic wand).
 
-### Phase 7: Entities and custom data
+### Phase 7: Entities and custom data ✅ (2026-11-14)
 
-- Entity definitions with typed fields, placement and move tools, a property grid, and enums (LDtk model). Pac-Man spawns could move here from the IntGrid `spawns` layer.
+LDtk's entity model, kept small enough to stay readable.
+
+1. **Definitions** (project-wide, in Project settings):
+   - **Entity definitions:** identifier, colour, size in pixels, pivot, shape (rectangle, ellipse, or a tile from a tileset), an optional limit per level, and a list of **fields**.
+   - **Field types:** Int, Float, Bool, String, Color, Enum and Point (a cell in the level). Each field has a default; numbers can have a min and max.
+   - **Enums:** named value lists with a colour per value, used by Enum fields.
+   - **Entities layer type:** sits next to IntGrid and Tiles in the layer stack, so ordering, visibility and opacity work as for other layers.
+2. **Instances** belong to a level and an Entities layer. Each has a stable id, a pixel position (the pivot point) and its field values.
+3. **Editing** on an Entities layer (the side panel swaps the IntGrid palette for an entity list and an inspector):
+   - click to place the entity chosen in the list (keys 1–9 choose), snapped to the grid; Shift places freely;
+   - click to select, drag to move (whole cells, or pixels with Shift), arrow keys nudge (Shift+arrow by 1px);
+   - Delete or right-click removes, Ctrl+D duplicates, and Alt+click picks an entity's type for placing;
+   - at the per-level limit, placing moves the most recent instance instead (LDtk behaviour);
+   - the **inspector** edits position and field values. **Pick** sets a Point field by clicking a cell, and the selected entity shows its points as dashed links.
+   - Every instance edit is an undo step in the shared history; definition edits are not, as before. Edge resizes shift entities and their points with the content.
+   - The world view and library thumbnails draw entities too. Labels show Enum values (a ghost reads "blinky"), the shape takes the Enum value's colour, and labels shorten or hide when they would overlap.
+4. **Files:** the project file gains `defs.entities`, `defs.enums` and per-level `entities`. Older files still open. The game export gains an `entities` object keyed by layer identifier, with field values keyed by field identifier.
+5. **Pac-Man preset:** an `entities` layer with Pac-Man, Ghost (enum `ghost`: blinky, pinky, inky, clyde, plus a scatter-target Point field) and Fruit. The empty IntGrid `spawns` layer stays until the game reads entities.
+6. **Pulled forward from the polish backlog:** entity code lives in its own modules (`model/entities.ts`, `model/entityCommands.ts`, `entities/EntityController.ts`, `entities/EntityPanel.ts`, `ui/EntityDefsEditor.ts`, `render/entityRenderer.ts`) instead of growing `Application.ts`, which is already 1,200 lines. This is the pattern Phase 8 applies to the rest.
+7. **Workspace additions:** `GridDocumentScene` accepts a `getPointerDelegate` that takes over pointer input from the grid tools. This is how object layers plug in.
+8. **Fix:** `InputController` no longer gets stuck when `setPointerCapture` throws for a pointer that is no longer active. Before, all further canvas input was ignored until reload.
+
+### Phase 7b: Auto-layers (deferred from Phase 4)
+
+Rules that paint a Tiles layer from IntGrid values (LDtk's signature feature): a rule is a pattern of required or forbidden neighbour values plus the tiles to place, evaluated per cell, re-run on changes to the source layer, with random variants and flips. This is a feature rather than polish, so it gets its own phase and can be swapped with Phase 8.
+
+### Phase 8: Refactor and polish
+
+Issues, improvements and polish candidates collected along the way. Items marked **earlier** are cheap enough, or annoying enough, to fold into whichever phase touches that code first.
+
+**Architecture**
+
+1. Split the composition roots. The level designer `Application.ts` (1,200 lines) and pixel editor `Application.ts` (825) mix file handling, key bindings, tool syncing, status bar and rendering glue. Move these into controllers (files and session, keys, tools, status, export, clipboard), and keep `Application` as wiring only.
+2. Extract the app shell both apps duplicate: project session wiring, start-screen handling, `showMessage` and the status bar, undo/redo button state, and zoom readouts. Move it into `@foundry2d/workspace` (an `AppShell` helper) or `@foundry2d/ui`.
+3. Share the theme. Both apps carry their own copy of the design tokens and panel CSS; move them into one stylesheet in `@foundry2d/ui`.
+4. Review the store. The pixel editor keeps preferences in the Ajv/Immer store but the sprite outside it; the level designer is similar. Document the rule (the store holds UI state only, never cell data) and remove leftover actions.
+5. `compositeRgba` and the layer bitmaps read `Uint32Array` pixels as RGBA bytes, which assumes a little-endian host. That holds for every browser today; add a startup assertion and a note.
+
+**Files and storage**
+
+6. Saved level files embed tileset images as data URLs. Big tilesets make big JSON. Offer an optional packaged format (a `.f2dproj` ZIP with `project.json` plus images), reusing the ZIP writer from the exporter.
+7. Tilesets imported from a pixel-editor sprite are one-time copies. Remember the source file (handle or library id) and offer **Re-import**.
+8. Not done in Phase 5: a choice between file and library when using "Save as", duplicating a project in the library, and showing storage quota and usage.
+9. Definition edits are not undoable (by design, like LDtk). Consider snapshot-based undo for them, since the project JSON is cheap to serialize.
+
+**Pixel editor**
+
+10. The mirror guide is 1px and easy to miss at low zoom. Draw it thicker and label the axis (**earlier**, one line).
+11. Moving a selection on a locked or hidden layer silently does nothing. Show the not-allowed cursor and a status message (**earlier**).
+12. Decide what happens to the selection when switching layer or frame. It is kept today, which is useful but surprising when the new layer is empty there.
+13. Selection handles for resizing, plus flip and rotate of the selected pixels.
+14. From Phase 6b: paste images from the system clipboard (and copy as PNG), lasso and magic wand selections.
+15. The GIF encoder is exact up to 255 colours. Above that it needs a proper quantizer (median cut or octree), with optional dithering.
+16. The export dialog was tested through unit tests and the dialog UI, but no download was clicked in a real browser session. Do one manual pass per format.
+
+**Level designer**
+
+17. Per-layer grid sizes (LDtk allows them). Today one grid size covers every layer.
+18. Level background colour and level custom fields (LDtk has both). This reuses the Phase 7 field editor.
+19. Entity reference fields (a door pointing at a switch) and array fields. Deferred from Phase 7 to keep its scope.
+20. Game JSON import cannot recreate entities (the file has no definitions). Map known identifiers when importing over an existing project.
+21. Project settings has grown to five sections in one scrolling dialog. Split it into tabs (General, Layers, Tilesets, Entities, Enums), so the header and close button stay in view.
+22. Entity tiles are chosen by numeric tile id. Reuse the tileset picker for a visual choice.
+
+**Quality**
+
+23. Add browser end-to-end smoke tests for both apps: open, draw, undo, save, reload, recover. Use Vitest browser mode or Playwright, so regressions like the stale zoom readout get caught. Canvas tests need real pointer events (synthetic ones were what exposed the pointer-capture bug in Phase 7).
+24. Accessibility pass: focus order, visible focus rings, `aria` labels on canvas-adjacent controls, and keyboard access to every panel action.
+25. Performance check on big levels (256×256 with several layers) and long animations (100+ frames): thumbnails, onion skin and autosave serialization.
+
+### Phase 9: Documentation, manual and onboarding
+
+1. **Markdown sources** in `docs/`, the single source of truth:
+   - `README.md` at the root: what foundry2d is, screenshots, quick start (`vp install`, `vp dev`), and the repository layout.
+   - **Architecture:** packages and their boundaries, the document, command and history model, the render pipeline, workspace and scenes, storage, and the project file formats.
+   - **Technologies:** Vite+ (`vp`), TypeScript, Vitest, Ajv and Immer, Canvas 2D, Web Components, IndexedDB and the File System Access API.
+   - **API reference** for `@foundry2d/core`, `render`, `workspace`, `store` and `ui`, generated from TSDoc comments (TypeDoc with its Markdown plugin) and kept in sync by a `vp run docs` task.
+   - **User manuals** for the pixel editor and the level designer: every tool, panel and dialog with what it does and why, workflows (draw a sprite and export a spritesheet; build a Pac-Man maze; import a sprite as a tileset; place entities), file formats for game developers, and hotkey tables.
+   - Hotkey tables are generated from the apps' keymaps, so the docs can't drift from the code.
+2. **Manual site** (`apps/docs`, built with Vite+ from the same Markdown):
+   - Left: a chapter and article tree, collapsible and clickable, with search.
+   - Right: all articles in one continuous scroll, like a PDF reader, starting at the first chapter.
+   - Scrolling highlights the current article in the tree and expands its chapter (scroll-spy with `IntersectionObserver`). Clicking an entry scrolls to it, and the URL hash keeps the place, so links can be shared.
+   - Light and dark themes from the shared tokens, a print stylesheet, and "Open in app" links from the manual into the editors.
+3. **First-run guide** in both apps: a `<guided-tour>` web component in `@foundry2d/ui`.
+   - Steps are anchored to UI elements (spotlight plus a message card with Back, Next and Skip). They are defined per app as data.
+   - It starts on first launch, can be replayed from a Help menu, and has links into the matching manual articles.
+   - Completion is stored per app, so updates can add a "What's new" tour for new features.
 
 ---
 

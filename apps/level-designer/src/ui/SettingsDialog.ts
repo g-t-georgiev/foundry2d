@@ -2,6 +2,7 @@ import type { LevelProject } from "../model/LevelProject";
 import { tilesetGrid } from "../model/tiles";
 import type { LayerDef, TilesetDef } from "../model/types";
 import { isPixelSpriteFile, sheetToDataUrl, spriteToSheet } from "../io/spriteImport";
+import EntityDefsEditor from "./EntityDefsEditor";
 
 export interface SettingsDialogHooks {
   /** Called after edits that make existing undo steps unsafe (removing data). */
@@ -63,6 +64,7 @@ export default class SettingsDialog {
   private readonly tilesetsList: HTMLElement;
   private readonly tilesetEditor: HTMLElement;
   private readonly fileInput: HTMLInputElement;
+  private readonly entityDefs: EntityDefsEditor;
 
   constructor(
     private readonly dialog: HTMLDialogElement,
@@ -75,6 +77,17 @@ export default class SettingsDialog {
     this.tilesetsList = $("#tilesetsList");
     this.tilesetEditor = $("#tilesetEditor");
     this.fileInput = $("#tilesetFileInput");
+    this.entityDefs = new EntityDefsEditor(
+      {
+        entitiesList: $("#entityDefsList"),
+        entityEditor: $("#entityDefEditor"),
+        enumsList: $("#enumsList"),
+        enumEditor: $("#enumEditor"),
+        addEntity: $("#addEntityDef"),
+        addEnum: $("#addEnumDef"),
+      },
+      hooks
+    );
 
     this.gridSizeInput.addEventListener("change", () => {
       const size = Number(this.gridSizeInput.value);
@@ -94,6 +107,11 @@ export default class SettingsDialog {
       if (!this.project) return;
       const tileset = this.project.defs.tilesets[0];
       this.selectedLayerUid = this.project.addTilesLayer("tiles", tileset?.uid ?? null).uid;
+      this.render();
+    });
+    $("#addEntitiesLayerDef").addEventListener("click", () => {
+      if (!this.project) return;
+      this.selectedLayerUid = this.project.addEntitiesLayer("entities").uid;
       this.render();
     });
     $("#importTileset").addEventListener("click", () => this.fileInput.click());
@@ -122,6 +140,7 @@ export default class SettingsDialog {
     this.selectedLayerUid = layerDefUid ?? project.defs.layers.at(-1)?.uid ?? null;
     this.selectedTilesetUid = project.defs.tilesets[0]?.uid ?? null;
     this.render();
+    this.entityDefs.open(project);
     if (!this.dialog.open) this.dialog.showModal();
   }
 
@@ -183,7 +202,9 @@ export default class SettingsDialog {
         const meta =
           def.type === "IntGrid"
             ? `IntGrid · ${def.intGridValues.length}`
-            : `Tiles · ${project.getTileset(def.tilesetUid)?.identifier ?? "no tileset"}`;
+            : def.type === "Entities"
+              ? "Entities"
+              : `Tiles · ${project.getTileset(def.tilesetUid)?.identifier ?? "no tileset"}`;
         const li = el("li", { textContent: def.identifier }, el("small", { textContent: meta }));
         li.dataset.uid = String(def.uid);
         li.setAttribute("role", "option");
@@ -217,6 +238,8 @@ export default class SettingsDialog {
     this.tilesetEditor.replaceChildren(
       ...(tileset ? this.renderTilesetEditor(project, tileset) : [])
     );
+    // Tilesets feed the entity tile picker, so keep that section in step.
+    this.entityDefs.render();
   }
 
   private renderLayerEditor(project: LevelProject, def: LayerDef): HTMLElement[] {
@@ -241,6 +264,22 @@ export default class SettingsDialog {
     });
 
     const parts: HTMLElement[] = [field("Identifier (used as the export key)", nameInput)];
+
+    if (def.type === "Entities") {
+      const placed = project.levels.reduce(
+        (n, level) => n + level.entities.filter((e) => e.layerUid === def.uid).length,
+        0
+      );
+      parts.push(
+        el("p", {
+          className: "hint",
+          textContent: `Holds entity instances (${placed} placed). Entity types are defined under Entities below.`,
+        })
+      );
+      footer.append(el("span"), deleteLayer);
+      parts.push(footer);
+      return parts;
+    }
 
     if (def.type === "Tiles") {
       const select = el("select", { className: "input" });

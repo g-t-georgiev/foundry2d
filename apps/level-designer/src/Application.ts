@@ -27,7 +27,10 @@ import {
 import { LevelActions, levelStore, type EditorView, type LevelTool } from "./state";
 import PaletteView from "./ui/PaletteView";
 import TilesetPickerView from "./ui/TilesetPickerView";
-import { tileLayerRendererFor } from "./render/tileLayerRenderer";
+import { levelLayerRendererFor } from "./render/entityRenderer";
+import { EntityController } from "./entities/EntityController";
+import EntityPanel from "./entities/EntityPanel";
+import { ShiftEntitiesCommand } from "./model/entityCommands";
 import { decodeTile, selectionToPattern, tilesetGrid } from "./model/tiles";
 import LevelLayersController from "./ui/LevelLayersController";
 import LevelsListView from "./ui/LevelsListView";
@@ -40,7 +43,13 @@ import {
   isProjectFile,
   serializeProject,
 } from "./io/projectFile";
-import { formatLayerAsArray, fromGameFormat, isGameFormat, toGameFormat } from "./io/gameFormat";
+import {
+  entitiesForLayer,
+  formatLayerAsArray,
+  fromGameFormat,
+  isGameFormat,
+  toGameFormat,
+} from "./io/gameFormat";
 import { collectAssetRefs, externalizeAssets, internalizeAssets } from "./io/assets";
 import { renderProjectThumbnail } from "./io/thumbnail";
 
@@ -84,6 +93,8 @@ export default class Application {
   private readonly tilePicker: TilesetPickerView;
   private readonly levelsList: LevelsListView;
   private readonly settings: SettingsDialog;
+  readonly entities: EntityController;
+  private readonly entityPanel: EntityPanel;
   readonly session: ProjectSession;
   private readonly browser: ProjectBrowser;
   /** True while a project is being loaded, so load-time events don't mark it dirty. */
@@ -164,6 +175,21 @@ export default class Application {
       }
     });
 
+    this.entities = new EntityController({
+      getProject: () => this.project,
+      getLevel: () => this.level,
+      history: this.history,
+      getZoom: () => this.workspace.zoom,
+      isPicking: () => levelStore.getState().currentTool === "eyedropper",
+      requestRender: () => this.workspace.requestRender(),
+      refreshCursor: () => this.workspace.refreshCursor(),
+      notify: (message, timeout) => this.showMessage(message, timeout),
+    });
+    this.entityPanel = new EntityPanel($("#entityList"), $("#entityInspector"), this.entities, () =>
+      this.settings.open(this.project, this.activeDef()?.uid ?? null)
+    );
+    this.entities.events.on("changed", () => this.renderEntityPanel());
+
     this.bindStore();
     this.bindDom();
     this.bindKeys();
@@ -225,6 +251,15 @@ export default class Application {
         this.renderWorldSettings();
         persist();
       }),
+      project.events.on("entities:changed", (levelUid) => {
+        if (levelUid === this.level.uid) {
+          this.entities.refresh();
+          this.levelScene.invalidate();
+        } else {
+          this.workspace.requestRender();
+        }
+        persist();
+      }),
       project.events.on("levels:changed", () => {
         // The open level may have been deleted (e.g. undo of "add level").
         if (!project.getLevel(this.level.uid)) {
@@ -262,6 +297,8 @@ export default class Application {
     this.levelSession?.unsubscribe.forEach((unsubscribe) => unsubscribe());
 
     this.level = level;
+    this.entities.select(null);
+    this.entities.cancelPointPick();
     const { doc } = level;
     const refreshLayerUi = () => {
       this.renderPalette();
@@ -286,6 +323,7 @@ export default class Application {
   private createLevelScene(level: Level): GridDocumentScene<Int32Array> {
     const project = this.project;
     const { gridSize } = project;
+    const renderers = levelLayerRendererFor(project);
     return new GridDocumentScene<Int32Array>({
       doc: level.doc,
       tools: this.tools,
@@ -293,7 +331,9 @@ export default class Application {
       cellSize: { width: gridSize, height: gridSize },
       getValue: () => this.currentValue(),
       getColorizer: (layer) => project.colorizerFor(layer.id),
-      getLayerRenderer: tileLayerRendererFor(project),
+      getLayerRenderer: (layer) => renderers(layer, level),
+      getPointerDelegate: () => (this.entities.isActive ? this.entities : null),
+      overlayPasses: [this.entities.overlay],
       getPaletteVersion: () => project.paletteVersion,
       getCursorFill: () => {
         if (this.activeDef()?.type === "Tiles") return "rgba(56, 189, 248, 0.25)";
@@ -700,7 +740,11 @@ export default class Application {
   async copyActiveLayer(): Promise<void> {
     const layer = this.level.doc.getActiveLayer();
     if (!layer) return;
-    const text = formatLayerAsArray(layer.data, layer.width, layer.height);
+    const def = this.activeDef();
+    const text =
+      def?.type === "Entities"
+        ? JSON.stringify(entitiesForLayer(this.project, this.level, def.uid), null, 2)
+        : formatLayerAsArray(layer.data, layer.width, layer.height);
     try {
       await navigator.clipboard.writeText(text);
       this.showMessage(`Copied "${layer.name}" as array`);
@@ -728,6 +772,9 @@ export default class Application {
     const steps: ICommand[] = [
       new ResizeCommand(doc, { width, height }, { x: edges.left, y: edges.top }),
     ];
+    if ((edges.left !== 0 || edges.top !== 0) && this.level.entities.length > 0) {
+      steps.push(new ShiftEntitiesCommand(this.project, this.level, edges.left, edges.top));
+    }
     if ((edges.left !== 0 || edges.top !== 0) && this.project.canDragLevels) {
       const { gridSize } = this.project;
       const from = { x: this.level.worldX, y: this.level.worldY };
@@ -1038,13 +1085,56 @@ export default class Application {
       keymap.bind(
         String(i),
         inLevel(() => {
+          if (this.entities.isActive) {
+            const def = this.project.defs.entities[i - 1];
+            if (def) this.entities.setPlaceDef(def.uid);
+            return;
+          }
           const entry = this.activeDef()?.intGridValues[i - 1];
           if (entry) this.selectValue(entry.value);
         })
       );
     }
 
-    // View navigation.
+    // Entities (only while an Entities layer is active in the level view).
+    const onEntities = (fn: () => boolean) => () =>
+      this.view === "level" && this.entities.isActive ? fn() : false;
+    keymap.bind(
+      "delete",
+      onEntities(() => this.entities.deleteSelected())
+    );
+    keymap.bind(
+      "backspace",
+      onEntities(() => this.entities.deleteSelected())
+    );
+    keymap.bind(
+      "mod+d",
+      onEntities(() => this.entities.duplicateSelected())
+    );
+    const arrows: [string, number, number][] = [
+      ["arrowleft", -1, 0],
+      ["arrowright", 1, 0],
+      ["arrowup", 0, -1],
+      ["arrowdown", 0, 1],
+    ];
+    for (const [key, dx, dy] of arrows) {
+      keymap.bind(
+        key,
+        onEntities(() => this.entities.nudge(dx, dy, false)),
+        { repeat: true }
+      );
+      keymap.bind(
+        `shift+${key}`,
+        onEntities(() => this.entities.nudge(dx, dy, true)),
+        { repeat: true }
+      );
+    }
+
+    // View navigation. Escape first cancels entity picking or selection.
+    keymap.bind(
+      "escape",
+      onEntities(() => this.entities.escape())
+    );
     keymap.bind(
       "escape",
       inLevel(() => void this.showWorld())
@@ -1106,6 +1196,12 @@ export default class Application {
         return;
       }
       cell.textContent = `${grid.x}, ${grid.y}`;
+      if (this.entities.isActive) {
+        const hit = this.entities.hitTest(world);
+        const def = hit ? this.project.getEntityDef(hit.defUid) : undefined;
+        value.textContent = def && hit ? `${def.identifier} @ ${hit.x}, ${hit.y} px` : "—";
+        return;
+      }
       const layer = doc.getActiveLayer();
       const v = layer?.get(grid.x, grid.y) ?? 0;
       const def = layer ? this.project.getLayerDefForLayer(layer.id) : undefined;
@@ -1151,12 +1247,24 @@ export default class Application {
     }
   }
 
+  private renderEntityPanel(): void {
+    if (!this.entities.isActive) return;
+    this.entityPanel.render(this.project, this.level);
+  }
+
   private renderPalette(): void {
     const def = this.activeDef();
     const isTiles = def?.type === "Tiles";
-    $("#palette").hidden = isTiles;
-    $("#paletteHint").hidden = isTiles;
+    const isEntities = def?.type === "Entities";
+    $("#palette").hidden = isTiles || isEntities;
+    $("#paletteHint").hidden = isTiles || isEntities;
     $("#tilePicker").hidden = !isTiles;
+    $("#entityPanel").hidden = !isEntities;
+    if (isEntities) {
+      $("#paletteLayer").textContent = `${def.identifier} · entities`;
+      this.renderEntityPanel();
+      return;
+    }
     if (!isTiles) {
       this.palette.render(def, this.currentValue());
       return;

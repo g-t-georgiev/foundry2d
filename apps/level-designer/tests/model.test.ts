@@ -24,15 +24,16 @@ describe("presets", () => {
 });
 
 describe("LevelProject definitions", () => {
-  it("seeds the Pac-Man project with three IntGrid layers on a 28x36 level", () => {
+  it("seeds the Pac-Man project with three IntGrid layers and an entities layer on a 28x36 level", () => {
     const project = createPacmanProject();
     expect(project.gridSize).toBe(8);
     expect(project.defs.layers.map((d) => d.identifier)).toEqual([
       "collision",
       "collectibles",
       "spawns",
+      "entities",
     ]);
-    expect(names(project)).toEqual(["collision", "collectibles", "spawns"]);
+    expect(names(project)).toEqual(["collision", "collectibles", "spawns", "entities"]);
     const level = project.levels[0];
     expect([level.width, level.height]).toEqual([28, 36]);
   });
@@ -47,6 +48,7 @@ describe("LevelProject definitions", () => {
         "collision",
         "collectibles",
         "spawns",
+        "entities",
         "collision_2",
       ]);
     }
@@ -56,12 +58,13 @@ describe("LevelProject definitions", () => {
       expect(level.doc.layers.map((l) => l.name)).toEqual([
         "collision",
         "collectibles",
-        "hazards",
         "spawns",
+        "hazards",
+        "entities",
       ]);
     }
     project.removeLayerDef(def.uid);
-    expect(project.levels[1].doc.layers).toHaveLength(3);
+    expect(project.levels[1].doc.layers).toHaveLength(4);
   });
 
   it("clears cells when a value is removed and colors per layer", () => {

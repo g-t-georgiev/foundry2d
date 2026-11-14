@@ -75,6 +75,19 @@ export class InputController {
     window.addEventListener("blur", () => this.onBlur(), { signal });
   }
 
+  /**
+   * Pointer capture throws for pointers that are no longer active (e.g. a pen
+   * lifted between events). Losing capture is harmless; a throw here would
+   * leave the stroke state stuck and block all further input.
+   */
+  private capture(pointerId: number): void {
+    try {
+      this.canvas.setPointerCapture(pointerId);
+    } catch {
+      // Ignored: see above.
+    }
+  }
+
   private localPosition(ev: { clientX: number; clientY: number }): Position {
     const rect = this.canvas.getBoundingClientRect();
     return { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
@@ -90,7 +103,7 @@ export class InputController {
     if (pan) {
       ev.preventDefault();
       this.panning = { pointerId: ev.pointerId, last: { x: ev.clientX, y: ev.clientY } };
-      this.canvas.setPointerCapture(ev.pointerId);
+      this.capture(ev.pointerId);
       this.workspace.refreshCursor();
       return;
     }
@@ -100,7 +113,7 @@ export class InputController {
     if (ev.button !== MouseButton.Primary && ev.button !== MouseButton.Secondary) return;
 
     this.scenePointerId = ev.pointerId;
-    this.canvas.setPointerCapture(ev.pointerId);
+    this.capture(ev.pointerId);
     this.workspace.scene?.onPointerDown?.(this.workspace.toScenePointer(ev, local));
   }
 

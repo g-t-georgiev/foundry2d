@@ -306,6 +306,16 @@
             <p class="hint" id="tilePickerHint"></p>
           </div>
           <p class="hint" id="paletteHint">Keys 1–9 pick a value. Right mouse erases.</p>
+          <div id="entityPanel" class="entity-panel" hidden>
+            <div
+              id="entityList"
+              class="entity-list"
+              role="toolbar"
+              aria-label="Entity to place"
+            ></div>
+            <h3 class="section-title">Inspector</h3>
+            <div id="entityInspector" class="entity-inspector"></div>
+          </div>
         </section>
       </aside>
     </div>
@@ -348,6 +358,7 @@
               <span class="button-row">
                 <button class="btn btn-small" id="addLayerDef">+ IntGrid</button>
                 <button class="btn btn-small" id="addTilesLayerDef">+ Tiles</button>
+                <button class="btn btn-small" id="addEntitiesLayerDef">+ Entities</button>
               </span>
             </div>
             <ul id="defsList" class="defs-list" role="listbox" aria-label="Layer definitions"></ul>
@@ -369,6 +380,31 @@
             <ul id="tilesetsList" class="defs-list" role="listbox" aria-label="Tilesets"></ul>
           </div>
           <div class="def-editor" id="tilesetEditor"></div>
+        </section>
+        <section class="dialog-columns">
+          <div class="defs-list-column">
+            <div class="column-header">
+              <span class="label">Entities</span>
+              <button class="btn btn-small" id="addEntityDef">+ Entity</button>
+            </div>
+            <ul
+              id="entityDefsList"
+              class="defs-list"
+              role="listbox"
+              aria-label="Entity definitions"
+            ></ul>
+          </div>
+          <div class="def-editor" id="entityDefEditor"></div>
+        </section>
+        <section class="dialog-columns">
+          <div class="defs-list-column">
+            <div class="column-header">
+              <span class="label">Enums</span>
+              <button class="btn btn-small" id="addEnumDef">+ Enum</button>
+            </div>
+            <ul id="enumsList" class="defs-list" role="listbox" aria-label="Enums"></ul>
+          </div>
+          <div class="def-editor" id="enumEditor"></div>
         </section>
         <input
           type="file"

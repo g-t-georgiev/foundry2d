@@ -1,15 +1,26 @@
 import { decodeRLE, encodeRLE } from "@foundry2d/core";
 import { LevelProject, layerIdFor } from "../model/LevelProject";
 import {
+  ENTITY_SHAPES,
+  FIELD_TYPES,
   WORLD_LAYOUTS,
+  type EntityDef,
+  type EntityInstance,
+  type EntityShape,
+  type EnumDef,
+  type FieldDef,
+  type FieldType,
+  type FieldValue,
   type IntGridValueDef,
   type LayerDef,
   type TilesetDef,
   type WorldLayout,
 } from "../model/types";
+import { initialDefault, isHexColor, newIid, validateFieldValue } from "../model/entities";
 
 export const PROJECT_FORMAT = "foundry2d.level";
-export const PROJECT_VERSION = 1;
+/** 2 added entity definitions, enums and entity instances. */
+export const PROJECT_VERSION = 2;
 export const PROJECT_EXTENSION = ".f2dlevel.json";
 
 export interface SerializedLevelLayer {
@@ -29,6 +40,8 @@ export interface SerializedLevel {
   height: number;
   activeDefUid: number | null;
   layers: SerializedLevelLayer[];
+  /** Entity instances (version 2+). */
+  entities?: EntityInstance[];
 }
 
 export interface LevelProjectFile {
@@ -39,7 +52,12 @@ export interface LevelProjectFile {
   worldLayout: WorldLayout;
   worldGrid: { width: number; height: number };
   nextUid: number;
-  defs: { layers: LayerDef[]; tilesets: TilesetDef[] };
+  defs: {
+    layers: LayerDef[];
+    tilesets: TilesetDef[];
+    entities?: EntityDef[];
+    enums?: EnumDef[];
+  };
   levels: SerializedLevel[];
 }
 
@@ -59,6 +77,8 @@ export function serializeProject(project: LevelProject): LevelProjectFile {
     defs: {
       layers: structuredClone(project.defs.layers),
       tilesets: structuredClone(project.defs.tilesets),
+      entities: structuredClone(project.defs.entities),
+      enums: structuredClone(project.defs.enums),
     },
     levels: project.levels.map((level) => {
       const active = level.doc.activeLayerId;
@@ -79,6 +99,7 @@ export function serializeProject(project: LevelProject): LevelProjectFile {
             data: encodeRLE(layer.data),
           };
         }),
+        entities: structuredClone(level.entities),
       };
     }),
   };
@@ -132,6 +153,115 @@ function parseTileset(raw: unknown, index: number): TilesetDef {
   };
 }
 
+const num = (v: unknown, fallback: number) =>
+  typeof v === "number" && Number.isFinite(v) ? v : fallback;
+
+function parseEnum(raw: unknown, index: number): EnumDef {
+  if (!isRecord(raw) || !isInt(raw.uid) || typeof raw.identifier !== "string") {
+    throw new ProjectFormatError(`Enum #${index} is invalid.`);
+  }
+  const seen = new Set<string>();
+  const values = (Array.isArray(raw.values) ? raw.values : []).flatMap((v) => {
+    if (!isRecord(v) || typeof v.id !== "string" || !v.id || seen.has(v.id)) return [];
+    seen.add(v.id);
+    return [{ id: v.id, color: isHexColor(v.color) ? v.color : "#888888" }];
+  });
+  return { uid: raw.uid, identifier: raw.identifier, values };
+}
+
+function parseField(raw: unknown, where: string, enums: EnumDef[]): FieldDef {
+  if (
+    !isRecord(raw) ||
+    !isInt(raw.uid) ||
+    typeof raw.identifier !== "string" ||
+    !FIELD_TYPES.includes(raw.type as FieldType)
+  ) {
+    throw new ProjectFormatError(`${where}: a field is invalid.`);
+  }
+  const type = raw.type as FieldType;
+  const field: FieldDef = { uid: raw.uid, identifier: raw.identifier, type, defaultValue: null };
+  if (type === "Enum") {
+    field.enumUid =
+      isInt(raw.enumUid) && enums.some((e) => e.uid === raw.enumUid) ? raw.enumUid : null;
+  }
+  if (type === "Int" || type === "Float") {
+    field.min = typeof raw.min === "number" ? raw.min : null;
+    field.max = typeof raw.max === "number" ? raw.max : null;
+  }
+  field.defaultValue =
+    validateFieldValue(field, raw.defaultValue, enums) ??
+    initialDefault(
+      type,
+      enums.find((e) => e.uid === field.enumUid)
+    );
+  return field;
+}
+
+function parseEntityDef(raw: unknown, index: number, project: LevelProject): EntityDef {
+  if (!isRecord(raw) || !isInt(raw.uid) || typeof raw.identifier !== "string") {
+    throw new ProjectFormatError(`Entity definition #${index} is invalid.`);
+  }
+  const where = `Entity "${raw.identifier}"`;
+  const tile =
+    isRecord(raw.tile) &&
+    isInt(raw.tile.tilesetUid) &&
+    isInt(raw.tile.tileId) &&
+    project.getTileset(raw.tile.tilesetUid)
+      ? { tilesetUid: raw.tile.tilesetUid, tileId: raw.tile.tileId }
+      : null;
+  let shape: EntityShape = ENTITY_SHAPES.includes(raw.shape as EntityShape)
+    ? (raw.shape as EntityShape)
+    : "rectangle";
+  if (shape === "tile" && !tile) shape = "rectangle";
+  const fields = (Array.isArray(raw.fields) ? raw.fields : []).map((f) =>
+    parseField(f, where, project.defs.enums)
+  );
+  const clamp01 = (v: unknown) => Math.min(1, Math.max(0, num(v, 0.5)));
+  return {
+    uid: raw.uid,
+    identifier: raw.identifier,
+    color: isHexColor(raw.color) ? raw.color : "#4c9ffe",
+    width: Math.max(1, Math.round(num(raw.width, project.gridSize))),
+    height: Math.max(1, Math.round(num(raw.height, project.gridSize))),
+    pivotX: clamp01(raw.pivotX),
+    pivotY: clamp01(raw.pivotY),
+    shape,
+    tile,
+    maxPerLevel: Math.max(0, Math.round(num(raw.maxPerLevel, 0))),
+    fields,
+  };
+}
+
+/** Keeps instances whose definition and layer exist; drops invalid field values. */
+function parseEntities(raw: unknown, project: LevelProject): EntityInstance[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const result: EntityInstance[] = [];
+  for (const entry of raw) {
+    if (!isRecord(entry) || !isInt(entry.defUid) || !isInt(entry.layerUid)) continue;
+    const def = project.getEntityDef(entry.defUid);
+    if (!def || project.getLayerDef(entry.layerUid)?.type !== "Entities") continue;
+    let iid = typeof entry.iid === "string" && entry.iid ? entry.iid : newIid();
+    if (seen.has(iid)) iid = newIid();
+    seen.add(iid);
+    const fields: Record<string, FieldValue> = {};
+    const stored = isRecord(entry.fields) ? entry.fields : {};
+    for (const field of def.fields) {
+      const value = validateFieldValue(field, stored[String(field.uid)], project.defs.enums);
+      if (value !== undefined) fields[String(field.uid)] = value;
+    }
+    result.push({
+      iid,
+      defUid: def.uid,
+      layerUid: entry.layerUid,
+      x: num(entry.x, 0),
+      y: num(entry.y, 0),
+      fields,
+    });
+  }
+  return result;
+}
+
 export function isProjectFile(json: unknown): boolean {
   return isRecord(json) && json.format === PROJECT_FORMAT;
 }
@@ -170,6 +300,20 @@ export function deserializeProject(json: unknown): LevelProject {
     project.reserveUid(tileset.uid);
   }
 
+  const rawEnums = isRecord(json.defs) ? json.defs.enums : undefined;
+  for (const [i, raw] of (Array.isArray(rawEnums) ? rawEnums : []).entries()) {
+    const def = parseEnum(raw, i);
+    project.defs.enums.push(def);
+    project.reserveUid(def.uid);
+  }
+  const rawEntities = isRecord(json.defs) ? json.defs.entities : undefined;
+  for (const [i, raw] of (Array.isArray(rawEntities) ? rawEntities : []).entries()) {
+    const def = parseEntityDef(raw, i, project);
+    project.defs.entities.push(def);
+    project.reserveUid(def.uid);
+    for (const field of def.fields) project.reserveUid(field.uid);
+  }
+
   for (const [i, raw] of defs.entries()) {
     if (!isRecord(raw) || !isInt(raw.uid) || typeof raw.identifier !== "string") {
       throw new ProjectFormatError(`Layer definition #${i} is invalid.`);
@@ -190,6 +334,13 @@ export function deserializeProject(json: unknown): LevelProject {
         type: "Tiles",
         intGridValues: [],
         tilesetUid,
+      });
+    } else if (raw.type === "Entities") {
+      project.defs.layers.push({
+        uid: raw.uid,
+        identifier: raw.identifier,
+        type: "Entities",
+        intGridValues: [],
       });
     } else {
       throw new ProjectFormatError(
@@ -257,6 +408,7 @@ export function deserializeProject(json: unknown): LevelProject {
       if (typeof entry.opacity === "number")
         layer.opacity = Math.min(1, Math.max(0, entry.opacity));
     }
+    level.entities = parseEntities(raw.entities, project);
     if (isInt(raw.activeDefUid)) level.doc.setActiveLayer(layerIdFor(raw.activeDefUid));
   }
 

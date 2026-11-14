@@ -25,6 +25,18 @@ import {
 import type { ScenePointerEvent, WorkspaceScene } from "../types";
 import type { Workspace } from "../Workspace";
 
+/**
+ * Takes over pointer input from the grid tools, e.g. for object layers
+ * (entities) whose editing is not cell-based. Receives hover moves too.
+ */
+export interface ScenePointerDelegate {
+  onPointerDown(ev: ScenePointerEvent): void;
+  onPointerMove(ev: ScenePointerEvent): void;
+  onPointerUp(ev: ScenePointerEvent): void;
+  onPointerCancel(): void;
+  getCursor(): string;
+}
+
 export interface GridDocumentSceneOptions<Buffer extends CellBuffer> {
   doc: GridDocument<Buffer>;
   tools: ToolManager<Buffer>;
@@ -62,6 +74,8 @@ export interface GridDocumentSceneOptions<Buffer extends CellBuffer> {
   underlayPasses?: RenderPass[];
   /** Draw the transparency checkerboard (default `true`). */
   checkerboard?: boolean;
+  /** Returns a delegate while pointer input should bypass the grid tools. */
+  getPointerDelegate?: () => ScenePointerDelegate | null;
 }
 
 /**
@@ -73,6 +87,8 @@ export class GridDocumentScene<Buffer extends CellBuffer = CellBuffer> implement
   private workspace: Workspace | null = null;
   private subscriptions: Unsubscribe[] = [];
   private isDrawing = false;
+  /** Delegate that received the current press, so it also gets the release. */
+  private pressDelegate: ScenePointerDelegate | null = null;
   private readonly passes: RenderPass[];
 
   readonly layerPass: LayerStackPass;
@@ -135,6 +151,8 @@ export class GridDocumentScene<Buffer extends CellBuffer = CellBuffer> implement
 
   getCursor(): string {
     if (this.isPreview) return "default";
+    const delegate = this.options.getPointerDelegate?.();
+    if (delegate) return delegate.getCursor();
     const tool = this.options.tools.getActiveTool();
     if (tool?.modifiesLayer && !this.options.doc.getPolicy().canDraw) return "not-allowed";
     return tool?.cursor ?? "crosshair";
@@ -167,6 +185,7 @@ export class GridDocumentScene<Buffer extends CellBuffer = CellBuffer> implement
     this.subscriptions = [];
     this.workspace = null;
     this.isDrawing = false;
+    this.pressDelegate = null;
   }
 
   /** Call when an external setting (grid toggle, preview, palette) changes. */
@@ -177,6 +196,12 @@ export class GridDocumentScene<Buffer extends CellBuffer = CellBuffer> implement
 
   onPointerDown(ev: ScenePointerEvent): void {
     if (this.isPreview) return;
+    const delegate = this.options.getPointerDelegate?.();
+    if (delegate) {
+      this.pressDelegate = delegate;
+      delegate.onPointerDown(ev);
+      return;
+    }
     const ctx = this.buildContext(ev.button === 2, ev);
     if (!ctx) return;
     this.isDrawing = true;
@@ -185,6 +210,11 @@ export class GridDocumentScene<Buffer extends CellBuffer = CellBuffer> implement
   }
 
   onPointerMove(ev: ScenePointerEvent): void {
+    const delegate = this.pressDelegate ?? this.options.getPointerDelegate?.();
+    if (delegate && !this.isPreview) {
+      delegate.onPointerMove(ev);
+      return;
+    }
     if (!this.isDrawing) return;
     const ctx = this.buildContext(ev.native.buttons === 2, ev);
     if (!ctx) return;
@@ -192,6 +222,12 @@ export class GridDocumentScene<Buffer extends CellBuffer = CellBuffer> implement
   }
 
   onPointerUp(ev: ScenePointerEvent): void {
+    if (this.pressDelegate) {
+      const delegate = this.pressDelegate;
+      this.pressDelegate = null;
+      delegate.onPointerUp(ev);
+      return;
+    }
     if (!this.isDrawing) return;
     this.isDrawing = false;
     const ctx = this.buildContext(ev.button === 2, ev);
@@ -200,6 +236,12 @@ export class GridDocumentScene<Buffer extends CellBuffer = CellBuffer> implement
   }
 
   onPointerCancel(): void {
+    if (this.pressDelegate) {
+      const delegate = this.pressDelegate;
+      this.pressDelegate = null;
+      delegate.onPointerCancel();
+      return;
+    }
     if (!this.isDrawing) return;
     this.isDrawing = false;
     const ctx = this.buildContext(false);
@@ -229,7 +271,7 @@ export class GridDocumentScene<Buffer extends CellBuffer = CellBuffer> implement
   }
 
   private getCursorShape(rc: RenderContext): CursorShape | null {
-    if (this.isPreview || !rc.pointer) return null;
+    if (this.isPreview || !rc.pointer || this.options.getPointerDelegate?.()) return null;
     const { doc, tools } = this.options;
     const tool = tools.activeTool;
     const { grid } = rc.pointer;
