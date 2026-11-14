@@ -54,6 +54,10 @@ export interface GridDocumentSceneOptions<Buffer extends CellBuffer> {
   showGrid?: () => boolean;
   /** Grid lines drawn every N cells with the major color (e.g. 8 for pixel art blocks). */
   majorGridEvery?: number;
+  /** Mirror drawing flags passed to tools (see `ToolContext.mirror`). */
+  getMirror?: () => { x: boolean; y: boolean };
+  /** Extra passes drawn above everything else in the scene (selection, guides). */
+  overlayPasses?: RenderPass[];
   /** Extra world passes drawn under the layers (e.g. onion skins of other frames). */
   underlayPasses?: RenderPass[];
   /** Draw the transparency checkerboard (default `true`). */
@@ -103,6 +107,7 @@ export class GridDocumentScene<Buffer extends CellBuffer = CellBuffer> implement
       this.gridPass,
       new BoundsPass({ getBounds }),
       new CursorPass({ getShape: (rc) => this.getCursorShape(rc) }),
+      ...(options.overlayPasses ?? []),
     ];
   }
 
@@ -172,7 +177,7 @@ export class GridDocumentScene<Buffer extends CellBuffer = CellBuffer> implement
 
   onPointerDown(ev: ScenePointerEvent): void {
     if (this.isPreview) return;
-    const ctx = this.buildContext(ev.button === 2);
+    const ctx = this.buildContext(ev.button === 2, ev);
     if (!ctx) return;
     this.isDrawing = true;
     ctx.isDrawing = true;
@@ -181,7 +186,7 @@ export class GridDocumentScene<Buffer extends CellBuffer = CellBuffer> implement
 
   onPointerMove(ev: ScenePointerEvent): void {
     if (!this.isDrawing) return;
-    const ctx = this.buildContext(ev.native.buttons === 2);
+    const ctx = this.buildContext(ev.native.buttons === 2, ev);
     if (!ctx) return;
     this.options.tools.executePointerAction("move", ev.grid, ctx);
   }
@@ -189,7 +194,7 @@ export class GridDocumentScene<Buffer extends CellBuffer = CellBuffer> implement
   onPointerUp(ev: ScenePointerEvent): void {
     if (!this.isDrawing) return;
     this.isDrawing = false;
-    const ctx = this.buildContext(ev.button === 2);
+    const ctx = this.buildContext(ev.button === 2, ev);
     if (!ctx) return;
     this.options.tools.executePointerAction("up", ev.grid, ctx);
   }
@@ -201,7 +206,7 @@ export class GridDocumentScene<Buffer extends CellBuffer = CellBuffer> implement
     if (ctx) this.options.tools.cancelStroke(ctx);
   }
 
-  private buildContext(secondary: boolean): ToolContext<Buffer> | null {
+  private buildContext(secondary: boolean, ev?: ScenePointerEvent): ToolContext<Buffer> | null {
     const { doc, history } = this.options;
     const layer = doc.getActiveLayer();
     if (!layer) return null;
@@ -216,6 +221,10 @@ export class GridDocumentScene<Buffer extends CellBuffer = CellBuffer> implement
       size: this.options.getBrushSize?.() ?? 1,
       isDrawing: this.isDrawing,
       onPickValue: this.options.onPickValue,
+      mirror: this.options.getMirror?.(),
+      modifiers: ev
+        ? { shift: ev.shiftKey, alt: ev.altKey, mod: ev.ctrlKey || ev.metaKey }
+        : undefined,
     };
   }
 

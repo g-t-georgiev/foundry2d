@@ -2,7 +2,7 @@ import type { ToolType } from "@foundry2d/core";
 
 export const setToolSchema = {
   type: "string",
-  enum: ["pen", "eraser", "bucket", "eyedropper", "line", "rect", "ellipse"],
+  enum: ["pen", "eraser", "bucket", "eyedropper", "line", "rect", "ellipse", "select"],
 } as const satisfies { type: string; enum: ToolType[] };
 
 export const setColorSchema = {
@@ -59,3 +59,10 @@ export const documentResizeSchema = {
 export const previewToggleSchema = gridToggleSchema;
 
 export const onionToggleSchema = gridToggleSchema;
+
+export const setMirrorSchema = {
+  type: "object",
+  properties: { x: { type: "boolean" }, y: { type: "boolean" } },
+  required: ["x", "y"],
+  additionalProperties: false,
+} as const;

@@ -184,10 +184,22 @@ _Done: defects fixed, open tool registry, history events/limit/composite, full l
    - **How it works:** pixels are composited in software, so exports are exact and testable. BMP, GIF and ZIP have their own small encoders; only PNG, WebP and JPEG use the browser's canvas encoder.
 5. **Drawing:** line (L), rectangle (R) and ellipse (C) tools built on a new core `ShapeTool` base, with a live preview and one undo step per shape.
 
-### Phase 6b: More pixel tools (next)
+### Phase 6b: More pixel tools ✅ (2026-11-15)
 
-- Selection, move, copy and paste; mirror drawing; editable palettes (import and export `.hex` and `.gpl`); filled shape variants (Shift).
-- Bridge to the level designer: import a sprite or spritesheet as a tileset.
+1. **Selection** (core `Selection` and `SelectTool`, select tool on M):
+   - Drag to select; drag inside the selection to move the pixels. The move previews live and undoes in one step, and undo also restores the selection.
+   - Ctrl+A selects all, Ctrl+D or Esc deselects, and Delete clears only the selection.
+   - Ctrl+C, Ctrl+X and Ctrl+V copy, cut and paste. Paste lands at the selection, selects the pasted block and switches to the select tool so you can drag it.
+   - Transparent pixels never erase what is underneath when moving or pasting.
+2. **Mirror drawing:** ⇆ (Shift+X) and ⇅ (Shift+Y) mirror pen and eraser strokes across the sprite's centre lines, shown as dashed guides.
+3. **Filled shapes:** hold Shift with the rectangle or ellipse tool. Tools now receive the modifier keys through `ToolContext.modifiers`.
+4. **Editable palette**, saved with the sprite (an optional `palette` field in v2 files):
+   - add the current colour; remove a colour with right-click or Delete;
+   - import `.hex` (Lospec) or `.gpl` (GIMP, Aseprite, Krita), and export either format.
+5. **Bridge to the level designer:** Project settings, then Tilesets, then Import… now also accepts a pixel-editor sprite (`.f2d.json`). Its frames are laid side by side, and square frames become one tile each. The compositing it uses moved to core as `compositeRgba`, and the pixel exporter uses the same function.
+6. **Fix:** the workspace's first automatic fit now announces the camera change, so the zoom readout is right from the start.
+
+**Not done:** pasting images from the system clipboard, and non-rectangular selections (lasso, magic wand).
 
 ### Phase 7: Entities and custom data
 

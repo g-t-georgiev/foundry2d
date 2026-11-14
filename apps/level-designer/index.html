@@ -358,13 +358,24 @@
           <div class="defs-list-column">
             <div class="column-header">
               <span class="label">Tilesets</span>
-              <button class="btn btn-small" id="importTileset">Import PNG…</button>
+              <button
+                class="btn btn-small"
+                id="importTileset"
+                title="A PNG sheet, or a sprite saved by the pixel editor (.f2d.json)"
+              >
+                Import…
+              </button>
             </div>
             <ul id="tilesetsList" class="defs-list" role="listbox" aria-label="Tilesets"></ul>
           </div>
           <div class="def-editor" id="tilesetEditor"></div>
         </section>
-        <input type="file" id="tilesetFileInput" accept="image/png,image/webp,image/gif" hidden />
+        <input
+          type="file"
+          id="tilesetFileInput"
+          accept="image/png,image/webp,image/gif,.json"
+          hidden
+        />
       </div>
     </dialog>
 

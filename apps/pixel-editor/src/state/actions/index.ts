@@ -8,6 +8,7 @@ import {
   gridToggleSchema,
   previewToggleSchema,
   onionToggleSchema,
+  setMirrorSchema,
   documentResizeSchema,
 } from "../schemas";
 
@@ -96,5 +97,16 @@ export const onionToggleAction = defineAction<
   schema: onionToggleSchema,
   reducer(state, payload) {
     state.preferences.onionSkin.enabled = payload.enabled;
+  },
+});
+
+export const setMirrorAction = defineAction<
+  ApplicationState,
+  ApplicationStateActions.SetMirror,
+  typeof setMirrorSchema
+>(ApplicationStateActions.SetMirror, {
+  schema: setMirrorSchema,
+  reducer(state, payload) {
+    state.preferences.mirror = payload;
   },
 });

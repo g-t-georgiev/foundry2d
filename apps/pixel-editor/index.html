@@ -112,6 +112,40 @@
               />
             </svg>
           </button>
+          <button
+            class="tool"
+            data-tool="select"
+            title="Select / move (M)"
+            aria-label="Select and move"
+          >
+            <svg viewBox="0 0 24 24">
+              <path
+                d="M4 4h4v2H6v2H4V4m6 0h4v2h-4V4m6 0h4v4h-2V6h-2V4M4 10h2v4H4v-4m14 0h2v4h-2v-4M4 16h2v2h2v2H4v-4m14 0h2v4h-4v-2h2v-2m-8 2h4v2h-4v-2z"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <div class="section">
+          <span class="label">Mirror</span>
+          <div class="size-grid" role="group" aria-label="Mirror drawing">
+            <button
+              class="size"
+              data-mirror="x"
+              title="Mirror left/right (Shift+X)"
+              aria-pressed="false"
+            >
+              ⇆
+            </button>
+            <button
+              class="size"
+              data-mirror="y"
+              title="Mirror top/bottom (Shift+Y)"
+              aria-pressed="false"
+            >
+              ⇅
+            </button>
+          </div>
         </div>
 
         <div class="section">
@@ -131,56 +165,19 @@
             id="colorPicker"
             value="#ffee00"
           ></color-picker-button>
-          <div class="palette" aria-label="Palette">
-            <button
-              class="swatch"
-              style="--c: #ffee00"
-              data-color="#ffee00"
-              title="#ffee00"
-            ></button>
-            <button
-              class="swatch"
-              style="--c: #2121ff"
-              data-color="#2121ff"
-              title="#2121ff"
-            ></button>
-            <button
-              class="swatch"
-              style="--c: #ff0000"
-              data-color="#ff0000"
-              title="#ff0000"
-            ></button>
-            <button
-              class="swatch"
-              style="--c: #ffb8ff"
-              data-color="#ffb8ff"
-              title="#ffb8ff"
-            ></button>
-            <button
-              class="swatch"
-              style="--c: #00ffff"
-              data-color="#00ffff"
-              title="#00ffff"
-            ></button>
-            <button
-              class="swatch"
-              style="--c: #ffb851"
-              data-color="#ffb851"
-              title="#ffb851"
-            ></button>
-            <button
-              class="swatch"
-              style="--c: #ffffff"
-              data-color="#ffffff"
-              title="#ffffff"
-            ></button>
-            <button
-              class="swatch"
-              style="--c: #000000"
-              data-color="#000000"
-              title="#000000"
-            ></button>
+          <div class="palette" aria-label="Palette"></div>
+          <div class="palette-actions">
+            <button id="paletteAdd" title="Add the current colour" aria-label="Add colour">
+              +
+            </button>
+            <button id="paletteImport" title="Import a .hex or .gpl palette">Import</button>
+            <select id="paletteExport" title="Export the palette" aria-label="Export palette">
+              <option value="" selected>Export</option>
+              <option value="hex">.hex (Lospec)</option>
+              <option value="gpl">.gpl (GIMP)</option>
+            </select>
           </div>
+          <input type="file" id="paletteFile" accept=".hex,.gpl,.txt" hidden />
         </div>
       </aside>
 

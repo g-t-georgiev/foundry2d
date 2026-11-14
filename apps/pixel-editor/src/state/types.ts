@@ -7,6 +7,7 @@ export enum ApplicationStateActions {
   ToggleGrid = "store:grid:toggle",
   TogglePreview = "store:preview:toggle",
   ToggleOnionSkin = "store:onion:toggle",
+  SetMirror = "store:mirror:set",
   ResizeDocument = "store:document:resize",
 }
 
@@ -17,6 +18,7 @@ export type ApplicationStateActionsMap = {
   [ApplicationStateActions.ToggleGrid]: { enabled: boolean };
   [ApplicationStateActions.TogglePreview]: { enabled: boolean };
   [ApplicationStateActions.ToggleOnionSkin]: { enabled: boolean };
+  [ApplicationStateActions.SetMirror]: { x: boolean; y: boolean };
   [ApplicationStateActions.ResizeDocument]: { width: number; height: number };
 };
 
@@ -40,6 +42,8 @@ export interface ApplicationState {
       enabled: boolean;
     };
     /** Read-only composite view: no grid, no dimming, no editing. */
+    /** Mirror pen and eraser strokes across the vertical (x) / horizontal (y) centre. */
+    mirror: { x: boolean; y: boolean };
     /** Show the previous and next frames faintly under the current one. */
     onionSkin: {
       enabled: boolean;

@@ -8,6 +8,7 @@ import {
   gridToggleAction,
   previewToggleAction,
   onionToggleAction,
+  setMirrorAction,
   documentResizeAction,
 } from "./actions";
 
@@ -30,6 +31,7 @@ const initialState: ApplicationState = {
     grid: { enabled: true },
     preview: { enabled: false },
     onionSkin: { enabled: true },
+    mirror: { x: false, y: false },
   },
 };
 
@@ -42,6 +44,7 @@ export const applicationStore = new Store<ApplicationState, ApplicationStateActi
     gridToggleAction,
     previewToggleAction,
     onionToggleAction,
+    setMirrorAction,
     documentResizeAction,
   ],
 });

@@ -68,23 +68,32 @@ export class PenTool<Buffer extends CellBuffer = CellBuffer> extends Tool<Buffer
   protected drawPoint(coords: Position, ctx: ToolContext<Buffer>, value: number): void {
     const size = Math.max(1, ctx.size);
     const half = Math.floor(size / 2);
+    const { width, height } = ctx.layer;
+    const mirrorX = ctx.mirror?.x ?? false;
+    const mirrorY = ctx.mirror?.y ?? false;
 
     for (let dy = 0; dy < size; dy++) {
       for (let dx = 0; dx < size; dx++) {
-        const px = coords.x - half + dx;
-        const py = coords.y - half + dy;
-        if (!ctx.layer.isWithinBounds(px, py)) continue;
-
-        const oldValue = ctx.layer.get(px, py);
-        if (oldValue === value) continue;
-
-        const index = ctx.layer.getIndex(px, py);
-        if (!this.touched.has(index)) {
-          this.touched.add(index);
-          this.currentStroke.push({ x: px, y: py, oldValue, newValue: value });
-        }
-        ctx.layer.set(px, py, value);
+        const x = coords.x - half + dx;
+        const y = coords.y - half + dy;
+        this.drawCell(x, y, ctx, value);
+        if (mirrorX) this.drawCell(width - 1 - x, y, ctx, value);
+        if (mirrorY) this.drawCell(x, height - 1 - y, ctx, value);
+        if (mirrorX && mirrorY) this.drawCell(width - 1 - x, height - 1 - y, ctx, value);
       }
     }
+  }
+
+  /** Sets one cell, recording its original value the first time it is touched in a stroke. */
+  private drawCell(px: number, py: number, ctx: ToolContext<Buffer>, value: number): void {
+    if (!ctx.layer.isWithinBounds(px, py)) return;
+    const oldValue = ctx.layer.get(px, py);
+    if (oldValue === value) return;
+    const index = ctx.layer.getIndex(px, py);
+    if (!this.touched.has(index)) {
+      this.touched.add(index);
+      this.currentStroke.push({ x: px, y: py, oldValue, newValue: value });
+    }
+    ctx.layer.set(px, py, value);
   }
 }

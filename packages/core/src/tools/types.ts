@@ -13,6 +13,20 @@ export interface ToolContext<Buffer extends CellBuffer = CellBuffer> {
   isDrawing: boolean;
   /** Invoked by inspection tools such as the eyedropper. */
   onPickValue?: (value: number) => void;
+  /** Modifier keys held during the pointer event. */
+  modifiers?: ToolModifiers;
+  /**
+   * Mirror drawing: `x` mirrors across the vertical centre line (left/right),
+   * `y` across the horizontal one (top/bottom).
+   */
+  mirror?: { x: boolean; y: boolean };
+}
+
+export interface ToolModifiers {
+  shift: boolean;
+  alt: boolean;
+  /** Ctrl, or Cmd on macOS. */
+  mod: boolean;
 }
 
 /** Built-in tool names. Apps can register tools with any other string name. */

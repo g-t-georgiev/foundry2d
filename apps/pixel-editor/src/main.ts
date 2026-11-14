@@ -14,6 +14,7 @@ const app = new Application(
     previewCanvas: $<HTMLCanvasElement>("#previewCanvas"),
     previewToggle: document.querySelector<HTMLButtonElement>("#previewPlay"),
     exportDialog: $<HTMLDialogElement>("#exportDialog"),
+    paletteRoot: $<HTMLElement>(".palette").parentElement!,
   },
   await openStorage()
 );

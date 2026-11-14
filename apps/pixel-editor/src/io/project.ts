@@ -1,5 +1,6 @@
 import { deserializeDocument, serializeDocument, type SerializedDocument } from "@foundry2d/core";
 import { DEFAULT_FPS, Sprite, type PixelDocument } from "../model/Sprite";
+import { normalizeColor } from "./palette";
 
 export const PROJECT_FORMAT = "foundry2d.pixel";
 /**
@@ -14,6 +15,8 @@ export interface PixelProjectFile {
   version: number;
   name: string;
   fps: number;
+  /** Optional in v2 files; `#rrggbb` strings. */
+  palette?: string[];
   frames: { duration: number | null; document: SerializedDocument }[];
 }
 
@@ -23,6 +26,7 @@ export function toProjectFile(sprite: Sprite, name: string): PixelProjectFile {
     version: PROJECT_VERSION,
     name,
     fps: sprite.fps,
+    palette: [...sprite.palette],
     frames: sprite.frames.map((frame) => ({
       duration: frame.duration,
       document: serializeDocument(frame.doc),
@@ -99,5 +103,12 @@ export function fromProjectFile(json: unknown): { name: string; sprite: Sprite }
     typeof json.fps === "number" && json.fps >= 1 && json.fps <= 60
       ? Math.round(json.fps)
       : DEFAULT_FPS;
-  return { name, sprite: Sprite.fromFrames(frames, fps) };
+  const sprite = Sprite.fromFrames(frames, fps);
+  if (Array.isArray(json.palette)) {
+    const colors = json.palette
+      .map((c) => (typeof c === "string" ? normalizeColor(c) : null))
+      .filter((c): c is string => c !== null);
+    if (colors.length > 0) sprite.palette = colors;
+  }
+  return { name, sprite };
 }

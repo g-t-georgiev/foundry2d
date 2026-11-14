@@ -1,6 +1,7 @@
 import type { LevelProject } from "../model/LevelProject";
 import { tilesetGrid } from "../model/tiles";
 import type { LayerDef, TilesetDef } from "../model/types";
+import { isPixelSpriteFile, sheetToDataUrl, spriteToSheet } from "../io/spriteImport";
 
 export interface SettingsDialogHooks {
   /** Called after edits that make existing undo steps unsafe (removing data). */
@@ -132,10 +133,23 @@ export default class SettingsDialog {
     const project = this.project;
     if (!project) return;
     try {
-      const image = await readImageFile(file);
+      const isSprite = /\.json$/i.test(file.name);
+      let image: { dataUrl: string; width: number; height: number };
+      let tileSize = project.gridSize;
+      if (isSprite) {
+        // A pixel-editor sprite: frames side by side. Square frames become
+        // one tile each; otherwise slice by the project grid.
+        const json: unknown = JSON.parse(await file.text());
+        if (!isPixelSpriteFile(json)) throw new Error("Not a Foundry2D sprite file.");
+        const sheet = spriteToSheet(json);
+        image = { dataUrl: sheetToDataUrl(sheet), width: sheet.width, height: sheet.height };
+        if (sheet.frameWidth === sheet.frameHeight) tileSize = sheet.frameWidth;
+      } else {
+        image = await readImageFile(file);
+      }
       const tileset = project.addTileset({
-        identifier: file.name.replace(/\.[^.]+$/, "").replace(/\W+/g, "_") || "tileset",
-        tileSize: project.gridSize,
+        identifier: file.name.replace(/(\.f2d)?\.[^.]+$/, "").replace(/\W+/g, "_") || "tileset",
+        tileSize,
         spacing: 0,
         padding: 0,
         image: { ...image, fileName: file.name },
@@ -147,7 +161,7 @@ export default class SettingsDialog {
       this.render();
     } catch (error) {
       console.error(error);
-      this.hooks.notify(`Could not load "${file.name}" as an image.`);
+      this.hooks.notify(`Could not load "${file.name}" as a tileset: ${(error as Error).message}`);
     }
   }
 

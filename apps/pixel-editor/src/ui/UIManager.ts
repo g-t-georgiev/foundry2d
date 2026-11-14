@@ -29,7 +29,7 @@ export default class UIManager {
     spriteName: $<HTMLInputElement>("#spriteName"),
     tools: $$<HTMLButtonElement>("[data-tool]"),
     sizes: $$<HTMLButtonElement>("[data-size]"),
-    swatches: $$<HTMLButtonElement>("[data-color]"),
+    mirrors: $$<HTMLButtonElement>("[data-mirror]"),
     commands: $$<HTMLButtonElement>("[data-command]"),
   };
   private messageTimer: ReturnType<typeof setTimeout> | null = null;
@@ -63,10 +63,12 @@ export default class UIManager {
       applicationStore.dispatch(ApplicationStateActions.SetColor, { color: ev.detail.hex });
     });
 
-    for (const swatch of el.swatches) {
-      swatch.addEventListener("click", () => {
-        const color = swatch.dataset.color;
-        if (color) applicationStore.dispatch(ApplicationStateActions.SetColor, { color });
+    for (const button of el.mirrors) {
+      button.addEventListener("click", () => {
+        const mirror = { ...applicationStore.getState().preferences.mirror };
+        const axis = button.dataset.mirror === "y" ? "y" : "x";
+        mirror[axis] = !mirror[axis];
+        applicationStore.dispatch(ApplicationStateActions.SetMirror, mirror);
       });
     }
 
@@ -158,6 +160,18 @@ export default class UIManager {
       (s) => s.preferences.preview.enabled,
       (enabled) => this.setChecked(this.elements.previewToggle, enabled)
     );
+    applicationStore.select(
+      (s) => s.preferences.mirror,
+      (mirror) => this.updateMirror(mirror)
+    );
+  }
+
+  private updateMirror(mirror: { x: boolean; y: boolean }): void {
+    for (const button of this.elements.mirrors) {
+      const active = button.dataset.mirror === "y" ? mirror.y : mirror.x;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    }
   }
 
   private reflectAll(): void {
@@ -168,6 +182,7 @@ export default class UIManager {
     this.updateSize(state.doc.size.width, state.doc.size.height);
     this.setChecked(this.elements.gridToggle, state.preferences.grid.enabled);
     this.setChecked(this.elements.previewToggle, state.preferences.preview.enabled);
+    this.updateMirror(state.preferences.mirror);
   }
 
   private setChecked(input: HTMLInputElement | null, checked: boolean): void {
@@ -193,12 +208,6 @@ export default class UIManager {
   private updateColor(color: string): void {
     const picker = this.elements.colorPicker;
     if (picker && picker.value.toLowerCase() !== color.toLowerCase()) picker.value = color;
-    for (const swatch of this.elements.swatches) {
-      swatch.classList.toggle(
-        "active",
-        swatch.dataset.color?.toLowerCase() === color.toLowerCase()
-      );
-    }
   }
 
   private updateSize(width: number, height: number): void {

@@ -18,9 +18,23 @@ export type SpriteEventMap = {
   "settings:changed": () => void;
   /** The whole sprite was replaced (New/Open). */
   replaced: () => void;
+  /** The palette changed. */
+  "palette:changed": () => void;
 };
 
 export const DEFAULT_FPS = 8;
+
+/** Starting palette: the arcade colours the editor has always offered. */
+export const DEFAULT_PALETTE: readonly string[] = [
+  "#ffee00",
+  "#2121ff",
+  "#ff0000",
+  "#ffb8ff",
+  "#00ffff",
+  "#ffb851",
+  "#ffffff",
+  "#000000",
+];
 
 /**
  * An animated sprite: frames that all share the same layer structure (Piskel
@@ -31,6 +45,8 @@ export class Sprite {
   readonly events = new EventEmitter<SpriteEventMap>();
   frames: Frame[] = [];
   fps = DEFAULT_FPS;
+  /** Saved with the sprite, as lowercase `#rrggbb` strings. */
+  palette: string[] = [...DEFAULT_PALETTE];
   private index = 0;
   private frameCounter = 0;
   private layerCounter = 0;
@@ -178,14 +194,23 @@ export class Sprite {
     this.events.emit("settings:changed");
   }
 
+  setPalette(colors: readonly string[]): void {
+    const next = [...new Set(colors.map((c) => c.toLowerCase()))];
+    if (next.length === this.palette.length && next.every((c, i) => c === this.palette[i])) return;
+    this.palette = next;
+    this.events.emit("palette:changed");
+  }
+
   /** Swaps in another sprite's contents, keeping this instance (and listeners). */
   replaceWith(other: Sprite): void {
     this.frames = other.frames;
     this.fps = other.fps;
+    this.palette = [...other.palette];
     this.index = 0;
     this.frameCounter = Math.max(this.frameCounter, other.frameCounter);
     this.layerCounter = Math.max(this.layerCounter, other.layerCounter);
     this.events.emit("replaced");
+    this.events.emit("palette:changed");
     this.events.emit("frames:changed");
     this.events.emit("frame:selected", { index: 0 });
   }

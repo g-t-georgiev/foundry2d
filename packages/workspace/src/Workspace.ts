@@ -405,6 +405,8 @@ export class Workspace {
     }
 
     this.events.emit("resized", { width, height });
+    // The fit/recentre above moved the camera: let zoom displays etc. know.
+    this.events.emit("camera:changed", this.camera.getState());
     this.requestRender();
   }
 }

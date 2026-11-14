@@ -5,12 +5,21 @@ import {
   LineTool,
   PixelUtils,
   RectangleTool,
+  SelectTool,
+  Selection,
+  CompositeCommand,
+  DrawCommand,
+  SetSelectionCommand,
+  clearRegionChanges,
+  pasteRegionChanges,
+  readRegion,
+  type Region,
   ToolManager,
   type Storage,
   type Unsubscribe,
 } from "@foundry2d/core";
 import { LayerStackPass } from "@foundry2d/render";
-import { GridDocumentScene, ProjectSession, Workspace } from "@foundry2d/workspace";
+import { GridDocumentScene, ProjectSession, Workspace, downloadBlob } from "@foundry2d/workspace";
 import { ProjectBrowserEvents, type LayersPanel, type ProjectBrowser } from "@foundry2d/ui";
 import type { ApplicationContext } from "./types";
 import { ApplicationStateActions, applicationStore } from "./state";
@@ -20,6 +29,9 @@ import TimelineView from "./ui/TimelineView";
 import AnimationPreview from "./ui/AnimationPreview";
 import ExportDialog from "./ui/ExportDialog";
 import { ExportController } from "./export/ExportController";
+import PaletteView from "./ui/PaletteView";
+import { MirrorGuidePass, SelectionPass } from "./ui/overlays";
+import { PaletteFormatError, parsePaletteFile, toGplPalette, toHexPalette } from "./io/palette";
 import { Sprite, type PixelDocument } from "./model/Sprite";
 import {
   AddFrameCommand,
@@ -45,6 +57,7 @@ export interface ApplicationElements {
   previewCanvas: HTMLCanvasElement;
   previewToggle: HTMLButtonElement | null;
   exportDialog: HTMLDialogElement;
+  paletteRoot: HTMLElement;
 }
 
 const DEFAULT_NAME = "sprite";
@@ -69,6 +82,11 @@ export default class Application implements ApplicationContext {
   readonly timeline: TimelineView;
   readonly preview: AnimationPreview;
   readonly exporter: ExportController;
+  /** Rectangular selection shared by the select tool and clipboard actions. */
+  readonly selection = new Selection();
+  private readonly palette: PaletteView;
+  /** Internal clipboard (pixels of the active layer). */
+  private clipboard: Region | null = null;
   private readonly exportDialog: ExportDialog;
   readonly session: ProjectSession;
   private readonly browser: ProjectBrowser;
@@ -85,6 +103,7 @@ export default class Application implements ApplicationContext {
     this.tools.registerTool(new LineTool<Uint32Array>("line"));
     this.tools.registerTool(new RectangleTool<Uint32Array>("rect", false));
     this.tools.registerTool(new EllipseTool<Uint32Array>("ellipse", false));
+    this.tools.registerTool(new SelectTool<Uint32Array>(this.selection, "select"));
 
     this.workspace = new Workspace(elements.viewport, { canvas: elements.canvas });
     this.ui = new UIManager(this);
@@ -115,6 +134,14 @@ export default class Application implements ApplicationContext {
     this.exportDialog = new ExportDialog(elements.exportDialog, this.exporter, (message) =>
       this.ui.showMessage(message, 3500)
     );
+    this.palette = new PaletteView(elements.paletteRoot, {
+      pick: (color) => applicationStore.dispatch(ApplicationStateActions.SetColor, { color }),
+      add: () =>
+        this.setPalette([...this.sprite.palette, applicationStore.getState().currentColor]),
+      remove: (color) => this.setPalette(this.sprite.palette.filter((c) => c !== color)),
+      import: (file) => void this.importPalette(file),
+      export: (format) => this.exportPalette(format),
+    });
     this.browser = elements.projectBrowser;
     this.session = new ProjectSession({
       app: "pixel",
@@ -188,6 +215,17 @@ export default class Application implements ApplicationContext {
       showGrid: () => applicationStore.getState().preferences.grid.enabled,
       majorGridEvery: 8,
       underlayPasses: [onion(-1), onion(1)],
+      getMirror: () => applicationStore.getState().preferences.mirror,
+      overlayPasses: [
+        new MirrorGuidePass(
+          () => {
+            const { mirror, preview } = applicationStore.getState().preferences;
+            return preview.enabled ? { x: false, y: false } : mirror;
+          },
+          () => ({ width: this.sprite.width, height: this.sprite.height })
+        ),
+        new SelectionPass(this.selection),
+      ],
     });
     const camera = fit ? undefined : this.workspace.camera.getState();
     void this.workspace.setScene(this.scene, { fit, camera });
@@ -401,9 +439,106 @@ export default class Application implements ApplicationContext {
       this.ui.showMessage("The active layer is hidden or locked.");
       return;
     }
+    const rect = this.selection.rect;
+    if (rect) {
+      const changes = clearRegionChanges(layer, rect);
+      if (changes.length)
+        this.history.execute(new DrawCommand(this.doc, layer.id, changes, "Clear selection"));
+      return;
+    }
     const command = new ClearCommand(this.doc, layer.id);
     command.execute();
     if (!command.isNoop) this.history.record(command);
+  }
+
+  // ------------------------------------------------------------------ clipboard
+
+  selectAll(): void {
+    this.selection.set({ x: 0, y: 0, width: this.sprite.width, height: this.sprite.height });
+  }
+
+  deselect(): void {
+    this.selection.set(null);
+  }
+
+  /** Copies the selection (or the whole layer) of the active layer. */
+  copy(): boolean {
+    const layer = this.doc.getActiveLayer();
+    if (!layer) return false;
+    const rect = this.selection.rect ?? { x: 0, y: 0, width: layer.width, height: layer.height };
+    this.clipboard = readRegion(layer, rect);
+    this.ui.showMessage(`Copied ${rect.width}×${rect.height} px`, 1500);
+    return true;
+  }
+
+  cut(): void {
+    const layer = this.doc.getActiveLayer();
+    if (!layer || !this.copy()) return;
+    if (!this.doc.getPolicy(layer.id).canDraw) return;
+    const rect = this.selection.rect ?? { x: 0, y: 0, width: layer.width, height: layer.height };
+    const changes = clearRegionChanges(layer, rect);
+    if (changes.length) this.history.execute(new DrawCommand(this.doc, layer.id, changes, "Cut"));
+  }
+
+  /**
+   * Pastes at the selection's top-left (or the top-left corner), selects the
+   * pasted block and switches to the select tool so it can be dragged.
+   */
+  paste(): void {
+    const layer = this.doc.getActiveLayer();
+    const region = this.clipboard;
+    if (!layer || !region) {
+      this.ui.showMessage("Nothing to paste.");
+      return;
+    }
+    if (!this.doc.getPolicy(layer.id).canDraw) {
+      this.ui.showMessage("The active layer is hidden or locked.");
+      return;
+    }
+    const at = this.selection.rect
+      ? { x: this.selection.rect.x, y: this.selection.rect.y }
+      : { x: 0, y: 0 };
+    const target = { ...at, width: region.width, height: region.height };
+    this.history.execute(
+      new CompositeCommand(
+        [
+          new DrawCommand(this.doc, layer.id, pasteRegionChanges(layer, region, at), "Paste"),
+          new SetSelectionCommand(this.selection, this.selection.rect, target),
+        ],
+        "Paste"
+      )
+    );
+    applicationStore.dispatch(ApplicationStateActions.SetTool, "select");
+  }
+
+  // ------------------------------------------------------------------ palette
+
+  private setPalette(colors: string[]): void {
+    this.sprite.setPalette(colors);
+  }
+
+  private async importPalette(file: File): Promise<void> {
+    try {
+      const colors = parsePaletteFile(file.name, await file.text());
+      this.setPalette(colors);
+      this.ui.showMessage(`Imported ${colors.length} colours from ${file.name}`);
+    } catch (error) {
+      const message =
+        error instanceof PaletteFormatError ? error.message : "Could not read the palette.";
+      this.ui.showMessage(message, 5000);
+      console.error(error);
+    }
+  }
+
+  private exportPalette(format: "hex" | "gpl"): void {
+    const colors = this.sprite.palette;
+    const text = format === "hex" ? toHexPalette(colors) : toGplPalette(colors, this.name);
+    downloadBlob(new Blob([text], { type: "text/plain" }), `${this.name}.${format}`);
+    this.ui.showMessage(`Exported ${colors.length} colours as .${format}`);
+  }
+
+  private renderPalette(): void {
+    this.palette.render(this.sprite.palette, applicationStore.getState().currentColor);
   }
 
   resizeDocument(width: number, height: number): void {
@@ -434,6 +569,7 @@ export default class Application implements ApplicationContext {
     this.loading = true;
     try {
       this.workspace.input.cancelStroke();
+      this.selection.set(null);
       this.sprite.replaceWith(source);
       this.name = name;
       this.ui.updateName(name);
@@ -505,7 +641,14 @@ export default class Application implements ApplicationContext {
       }
     );
     applicationStore.select((s) => s.penSize, invalidate);
-    applicationStore.select((s) => s.currentColor, invalidate);
+    applicationStore.select(
+      (s) => s.currentColor,
+      () => {
+        invalidate();
+        this.renderPalette();
+      }
+    );
+    applicationStore.select((s) => s.preferences.mirror, invalidate);
   }
 
   /** Sprite (frames) → scene, timeline, preview. */
@@ -526,6 +669,13 @@ export default class Application implements ApplicationContext {
       this.preview.invalidate();
       if (!this.loading) this.session.markDirty();
     });
+
+    sprite.events.on("palette:changed", () => {
+      this.renderPalette();
+      if (!this.loading) this.session.markDirty();
+    });
+    this.selection.events.on("changed", () => this.scene?.invalidate());
+    this.renderPalette();
 
     history.onChange((state) => {
       this.ui.updateHistory(state);
@@ -627,6 +777,23 @@ export default class Application implements ApplicationContext {
     keymap.bind("l", setTool("line"));
     keymap.bind("r", setTool("rect"));
     keymap.bind("c", setTool("ellipse"));
+    keymap.bind("m", setTool("select"));
+    keymap.bind("mod+a", () => this.selectAll());
+    keymap.bind("mod+d", () => this.deselect());
+    keymap.bind("mod+c", () => void this.copy());
+    keymap.bind("mod+x", () => this.cut());
+    keymap.bind("mod+v", () => this.paste());
+    keymap.bind("escape", () => {
+      if (!this.selection.rect) return false;
+      this.deselect();
+    });
+    const toggleMirror = (axis: "x" | "y") => () => {
+      const mirror = { ...applicationStore.getState().preferences.mirror };
+      mirror[axis] = !mirror[axis];
+      applicationStore.dispatch(ApplicationStateActions.SetMirror, mirror);
+    };
+    keymap.bind("shift+x", toggleMirror("x"));
+    keymap.bind("shift+y", toggleMirror("y"));
     keymap.bind("[", penSize(-1), { repeat: true });
     keymap.bind("]", penSize(1), { repeat: true });
     keymap.bind("#", toggle(ApplicationStateActions.ToggleGrid));

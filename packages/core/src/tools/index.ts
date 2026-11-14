@@ -6,4 +6,5 @@ export * from "./BucketTool";
 export * from "./EyedropperTool";
 export * from "./ShapeTool";
 export * from "./StampTool";
+export * from "./SelectTool";
 export * from "./ToolManager";

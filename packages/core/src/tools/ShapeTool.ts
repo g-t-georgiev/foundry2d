@@ -19,9 +19,13 @@ export abstract class ShapeTool<Buffer extends CellBuffer = CellBuffer> extends 
   }
 
   /** Cells covered by the shape; may include cells outside the layer. */
-  protected abstract cells(start: Position, end: Position): Iterable<Position>;
+  protected abstract cells(
+    start: Position,
+    end: Position,
+    ctx: ToolContext<Buffer>
+  ): Iterable<Position>;
 
-  protected abstract get label(): string;
+  protected abstract label(ctx: ToolContext<Buffer>): string;
 
   onMouseDown(coords: Position, ctx: ToolContext<Buffer>): void {
     this.start = coords;
@@ -38,7 +42,9 @@ export abstract class ShapeTool<Buffer extends CellBuffer = CellBuffer> extends 
     if (!this.start) return;
     this.preview(coords, ctx);
     if (this.applied.length > 0) {
-      ctx.history.record(new DrawCommand<Buffer>(ctx.doc, ctx.layer.id, this.applied, this.label));
+      ctx.history.record(
+        new DrawCommand<Buffer>(ctx.doc, ctx.layer.id, this.applied, this.label(ctx))
+      );
     }
     this.start = null;
     this.applied = [];
@@ -60,7 +66,7 @@ export abstract class ShapeTool<Buffer extends CellBuffer = CellBuffer> extends 
     this.revert(ctx);
     const { layer, value } = ctx;
     const seen = new Set<number>();
-    for (const { x, y } of this.cells(start, end)) {
+    for (const { x, y } of this.cells(start, end, ctx)) {
       if (!layer.isWithinBounds(x, y)) continue;
       const index = layer.getIndex(x, y);
       if (seen.has(index)) continue;
@@ -81,7 +87,11 @@ const bounds = (a: Position, b: Position) => ({
   y1: Math.max(a.y, b.y),
 });
 
-/** Axis-aligned rectangle, filled or outlined. */
+/** Holding Shift flips a shape between outline and filled. */
+const isFilled = (filled: boolean, ctx: ToolContext<CellBuffer>) =>
+  filled !== (ctx.modifiers?.shift ?? false);
+
+/** Axis-aligned rectangle, filled or outlined (Shift toggles). */
 export class RectangleTool<Buffer extends CellBuffer = CellBuffer> extends ShapeTool<Buffer> {
   constructor(
     name: ToolType = "rect",
@@ -91,15 +101,16 @@ export class RectangleTool<Buffer extends CellBuffer = CellBuffer> extends Shape
     super(name);
   }
 
-  protected get label(): string {
-    return this.filled ? "Fill rectangle" : "Rectangle";
+  protected label(ctx: ToolContext<Buffer>): string {
+    return isFilled(this.filled, ctx) ? "Fill rectangle" : "Rectangle";
   }
 
-  protected *cells(start: Position, end: Position): Iterable<Position> {
+  protected *cells(start: Position, end: Position, ctx: ToolContext<Buffer>): Iterable<Position> {
+    const filled = isFilled(this.filled, ctx);
     const { x0, y0, x1, y1 } = bounds(start, end);
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
-        if (this.filled || x === x0 || x === x1 || y === y0 || y === y1) yield { x, y };
+        if (filled || x === x0 || x === x1 || y === y0 || y === y1) yield { x, y };
       }
     }
   }
@@ -111,7 +122,7 @@ export class LineTool<Buffer extends CellBuffer = CellBuffer> extends ShapeTool<
     super(name);
   }
 
-  protected get label(): string {
+  protected label(): string {
     return "Line";
   }
 
@@ -133,11 +144,12 @@ export class EllipseTool<Buffer extends CellBuffer = CellBuffer> extends ShapeTo
     super(name);
   }
 
-  protected get label(): string {
-    return this.filled ? "Fill ellipse" : "Ellipse";
+  protected label(ctx: ToolContext<Buffer>): string {
+    return isFilled(this.filled, ctx) ? "Fill ellipse" : "Ellipse";
   }
 
-  protected *cells(start: Position, end: Position): Iterable<Position> {
+  protected *cells(start: Position, end: Position, ctx: ToolContext<Buffer>): Iterable<Position> {
+    const filled = isFilled(this.filled, ctx);
     const { x0, y0, x1, y1 } = bounds(start, end);
     const cx = (x0 + x1) / 2;
     const cy = (y0 + y1) / 2;
@@ -149,7 +161,7 @@ export class EllipseTool<Buffer extends CellBuffer = CellBuffer> extends ShapeTo
       for (let x = x0; x <= x1; x++) {
         if (!inside(x, y)) continue;
         if (
-          this.filled ||
+          filled ||
           !inside(x - 1, y) ||
           !inside(x + 1, y) ||
           !inside(x, y - 1) ||
