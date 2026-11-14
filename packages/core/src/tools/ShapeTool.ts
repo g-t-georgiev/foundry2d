@@ -1,3 +1,4 @@
+import { boundsOfChanges, unionRects } from "../document/bounds";
 import type { Position } from "../types";
 import type { CellBuffer, CellChange } from "../document";
 import type { ToolContext, ToolType } from "./types";
@@ -51,8 +52,9 @@ export abstract class ShapeTool<Buffer extends CellBuffer = CellBuffer> extends 
   }
 
   cancel(ctx: ToolContext<Buffer>): void {
+    const rect = boundsOfChanges(this.applied);
     this.revert(ctx);
-    ctx.doc.notifyCellsChanged(ctx.layer.id);
+    ctx.doc.notifyCellsChanged(ctx.layer.id, rect);
     this.start = null;
   }
 
@@ -63,6 +65,7 @@ export abstract class ShapeTool<Buffer extends CellBuffer = CellBuffer> extends 
 
   private preview(end: Position, ctx: ToolContext<Buffer>): void {
     const start = this.start!;
+    const previous = boundsOfChanges(this.applied);
     this.revert(ctx);
     const { layer, value } = ctx;
     const seen = new Set<number>();
@@ -76,7 +79,8 @@ export abstract class ShapeTool<Buffer extends CellBuffer = CellBuffer> extends 
       this.applied.push({ x, y, oldValue, newValue: value });
       layer.set(x, y, value);
     }
-    ctx.doc.notifyCellsChanged(layer.id);
+    // The old preview was reverted and the new one drawn: report both areas.
+    ctx.doc.notifyCellsChanged(layer.id, unionRects(previous, boundsOfChanges(this.applied)));
   }
 }
 

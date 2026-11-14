@@ -6,7 +6,11 @@ import {
   clearRegionChanges,
   pasteRegionChanges,
   readRegion,
+  transformRegion,
+  type CellChange,
   type HistoryManager,
+  type ICommand,
+  type RegionTransform,
   type Region,
   type Selection,
 } from "@foundry2d/core";
@@ -101,6 +105,57 @@ export class ClipboardController {
       )
     );
     this.hooks.onPasted();
+  }
+
+  /**
+   * Flips or rotates the selected pixels (or the whole active layer) as one
+   * undo step. Rotation turns around the selection's centre and swaps its
+   * width and height; the selection follows the pixels.
+   */
+  transform(kind: RegionTransform): void {
+    const { selection, history } = this.hooks;
+    const layer = this.doc.getActiveLayer();
+    if (!layer || !this.doc.getPolicy(layer.id).canDraw) {
+      this.hooks.notify("The active layer is hidden or locked.");
+      return;
+    }
+    const rect = this.targetRect();
+    const out = transformRegion(readRegion(layer, rect), kind);
+    // Centre the turned block on the old one, then keep it on the canvas.
+    const clamp = (v: number, size: number, max: number) =>
+      Math.max(0, Math.min(v, Math.max(0, max - size)));
+    const target = {
+      x: clamp(rect.x + Math.floor((rect.width - out.width) / 2), out.width, this.doc.width),
+      y: clamp(rect.y + Math.floor((rect.height - out.height) / 2), out.height, this.doc.height),
+      width: out.width,
+      height: out.height,
+    };
+
+    // One change per cell: clear the old block, then write the new one
+    // (including its transparent cells, unlike a paste).
+    const byIndex = new Map<number, CellChange<number>>();
+    const put = (x: number, y: number, value: number) => {
+      if (!layer.isWithinBounds(x, y)) return;
+      const index = layer.getIndex(x, y);
+      const existing = byIndex.get(index);
+      if (existing) existing.newValue = value;
+      else byIndex.set(index, { x, y, oldValue: layer.get(x, y), newValue: value });
+    };
+    for (let y = rect.y; y < rect.y + rect.height; y++) {
+      for (let x = rect.x; x < rect.x + rect.width; x++) put(x, y, layer.emptyValue);
+    }
+    for (let y = 0; y < out.height; y++) {
+      for (let x = 0; x < out.width; x++) {
+        put(target.x + x, target.y + y, out.values[y * out.width + x]);
+      }
+    }
+    const changes = [...byIndex.values()].filter((c) => c.oldValue !== c.newValue);
+    const label =
+      kind === "flipX" ? "Flip horizontally" : kind === "flipY" ? "Flip vertically" : "Rotate";
+    const steps: ICommand[] = [new DrawCommand(this.doc, layer.id, changes, label)];
+    if (selection.rect) steps.push(new SetSelectionCommand(selection, selection.rect, target));
+    if (changes.length === 0 && !selection.rect) return;
+    history.execute(new CompositeCommand(steps, label));
   }
 
   /** Clears the selection, or the whole active layer, in the current frame. */

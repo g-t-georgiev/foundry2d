@@ -311,7 +311,16 @@ Issues, improvements and polish candidates collected along the way, including ev
     - **Visible changes:** these edits no longer clear the history, their confirmations say "Ctrl+Z undoes it", and open dialogs refresh after undo or redo.
   - ⏭ **Packaged project format (6) moved to 8.7.** It is a third file format next to `.f2dsprite` and `.f2dlevel`, so the choice of replacing or adding to them belongs with the OS file association and installable app (34, 38). The Sprite Packer (Phase 9) will need the same machinery: reading ZIPs, including compressed ones from other tools, folder input and asset files. Today only files saved to disk embed tileset images; library and recovery copies already keep them in the asset store.
   - **8.4 is done** apart from item 6 (moved). Items 36–37 are decisions to take with a target engine.
-- **8.5 Features** (in progress): items 9 ✅, then 23, 12–13, 14–15, 17–20, 30 and 31, roughly in that order.
+- **8.5 Features** (in progress): items 9 ✅, 23 ✅, 12 ✅, 13 (partly), then 14–15, 17–20, 30 and 31, roughly in that order.
+  - ✅ **Incremental auto-layers (23):** `cells:changed` now carries an optional changed rectangle (`GridDocument.notifyCellsChanged(layerId, rect?)`, `boundsOfChanges` and `unionRects` in core).
+    - The draw command and the pen, bucket, shape and stamp tools pass one; without it, listeners assume everything changed.
+    - Auto-layers regenerate only the dirty area, widened by the rules' reach (`generateAutoTilesInto`).
+    - On a 256×256 level, a single-cell edit now costs about 0.014 ms instead of about 21 ms for a full pass. A test checks that incremental results match a full regeneration after random strokes and undos.
+  - ✅ **Selection across layers and frames (12), a decision:** the selection belongs to the canvas, not to a layer, so it is kept when switching layer or frame (as in Aseprite and Photoshop). Workflows like "select, switch layer, copy" rely on it.
+  - ✅ **Flip and rotate (13, partly):** Shift+H and Shift+V flip, and Shift+R rotates 90° clockwise. They act on the selected pixels, or the whole active layer without a selection, and each is one undo step.
+    - Rotation turns around the selection's centre, swaps its width and height, and is kept on the canvas.
+    - There is a Transform section next to Mirror, and `transformRegion` lives in core.
+    - Still open: handles to resize or scale the selection.
 - **8.6 Quality:** items 16, 26–28.
 - **8.7 Engine formats and distribution:** items 38–40, plus item 34 (OS file association) and item 6 (packaged project format). Item 40 is shared with Phase 9, so it can move there if the packer starts first.
 
@@ -335,7 +344,7 @@ Issues, improvements and polish candidates collected along the way, including ev
 10. The mirror guide is 1px and easy to miss at low zoom. Draw it thicker and label the axis (**earlier**, one line).
 11. Moving a selection on a locked or hidden layer silently does nothing. Show the not-allowed cursor and a status message (**earlier**).
 12. Decide what happens to the selection when switching layer or frame. It is kept today, which is useful but surprising when the new layer is empty there.
-13. Selection handles for resizing, plus flip and rotate of the selected pixels.
+13. Selection handles for resizing, plus flip and rotate of the selected pixels. (Flip and rotate ✅ in 8.5; handles still open.)
 14. From Phase 6b: paste images from the system clipboard (and copy as PNG), lasso and magic wand selections.
 15. The GIF encoder is exact up to 255 colours. Above that it needs a proper quantizer (median cut or octree), with optional dithering.
 16. The export dialog was tested through unit tests and the dialog UI, but no download was clicked in a real browser session. Do one manual pass per format.

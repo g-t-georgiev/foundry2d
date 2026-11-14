@@ -169,3 +169,26 @@ describe("pixel byte order", () => {
     expect(() => assertPixelByteOrder()).not.toThrow();
   });
 });
+
+describe("region transforms", () => {
+  it("flips and rotates blocks", async () => {
+    const { transformRegion } = await import("../src");
+    // 3×2:  1 2 3
+    //       4 5 6
+    const r = { width: 3, height: 2, values: [1, 2, 3, 4, 5, 6] };
+    expect(transformRegion(r, "flipX").values).toEqual([3, 2, 1, 6, 5, 4]);
+    expect(transformRegion(r, "flipY").values).toEqual([4, 5, 6, 1, 2, 3]);
+    // Clockwise: 2×3   4 1 / 5 2 / 6 3
+    expect(transformRegion(r, "rotateCW")).toEqual({
+      width: 2,
+      height: 3,
+      values: [4, 1, 5, 2, 6, 3],
+    });
+    // Counter-clockwise: 3 6 / 2 5 / 1 4
+    expect(transformRegion(r, "rotateCCW").values).toEqual([3, 6, 2, 5, 1, 4]);
+    // Four quarter turns are the identity.
+    let t = r;
+    for (let i = 0; i < 4; i++) t = transformRegion(t, "rotateCW");
+    expect(t).toEqual(r);
+  });
+});

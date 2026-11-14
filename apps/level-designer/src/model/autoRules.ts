@@ -80,6 +80,11 @@ export function hashCells(a: number, b: number, c: number, d: number): number {
   return h >>> 0;
 }
 
+/** How far (in cells) any active rule looks from the cell it tiles. */
+export function autoRuleReach(rules: readonly AutoRule[]): number {
+  return rules.reduce((reach, r) => (r.active ? Math.max(reach, (r.size - 1) / 2) : reach), 0);
+}
+
 /**
  * Generates tile cells (`encodeTile` values, 0 = empty) for a whole layer.
  * `seed` varies the random choices (tile variants, chance).
@@ -92,8 +97,45 @@ export function generateAutoTiles(
   seed = 0
 ): Int32Array {
   const out = new Int32Array(width * height);
+  generateAutoTilesInto(out, source, width, height, rules, seed);
+  return out;
+}
+
+/**
+ * Regenerates the cells of `target` inside `region` (default: everything)
+ * from `source`. Cells outside the region are left alone, so callers can
+ * update just the area around an edit. Returns whether any cell changed.
+ */
+export function generateAutoTilesInto(
+  target: Int32Array,
+  source: ArrayLike<number>,
+  width: number,
+  height: number,
+  rules: readonly AutoRule[],
+  seed = 0,
+  region: { x: number; y: number; width: number; height: number } = {
+    x: 0,
+    y: 0,
+    width,
+    height,
+  }
+): boolean {
+  const x0 = Math.max(0, region.x);
+  const y0 = Math.max(0, region.y);
+  const x1 = Math.min(width, region.x + region.width);
+  const y1 = Math.min(height, region.y + region.height);
+  let changed = false;
+  const write = (index: number, value: number) => {
+    if (target[index] !== value) {
+      target[index] = value;
+      changed = true;
+    }
+  };
   const active = rules.filter((r) => r.active && r.tileIds.length > 0 && r.chance > 0);
-  if (active.length === 0) return out;
+  if (active.length === 0) {
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) write(y * width + x, 0);
+    return changed;
+  }
 
   const read = (x: number, y: number) => {
     const cx = x < 0 ? 0 : x >= width ? width - 1 : x;
@@ -122,8 +164,9 @@ export function generateAutoTiles(
     return { rule, variants };
   });
 
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      let value = 0;
       rules: for (const { rule, variants } of compiled) {
         for (const { fx, fy, checks } of variants) {
           let ok = true;
@@ -140,11 +183,12 @@ export function generateAutoTiles(
             if (roll >= rule.chance) continue rules;
           }
           const pick = hashCells(y, x, rule.uid, seed ^ 0x5bd1e995) % rule.tileIds.length;
-          out[y * width + x] = encodeTile(rule.tileIds[pick], fx, fy);
+          value = encodeTile(rule.tileIds[pick], fx, fy);
           break rules;
         }
       }
+      write(y * width + x, value);
     }
   }
-  return out;
+  return changed;
 }

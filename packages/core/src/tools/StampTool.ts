@@ -1,3 +1,4 @@
+import { boundsOfChanges } from "../document/bounds";
 import type { Position } from "../types";
 import type { CellBuffer, CellChange } from "../document";
 import type { ToolContext, ToolType } from "./types";
@@ -62,7 +63,7 @@ export class StampTool<Buffer extends CellBuffer = CellBuffer> extends Tool<Buff
   cancel(ctx: ToolContext<Buffer>): void {
     if (this.stroke.length > 0) {
       ctx.layer.applyChanges(this.stroke, "backward");
-      ctx.doc.notifyCellsChanged(ctx.layer.id);
+      ctx.doc.notifyCellsChanged(ctx.layer.id, boundsOfChanges(this.stroke));
     }
     this.anchor = null;
     this.stroke = [];
@@ -101,6 +102,11 @@ export class StampTool<Buffer extends CellBuffer = CellBuffer> extends Tool<Buff
         layer.set(px, py, value);
       }
     }
-    ctx.doc.notifyCellsChanged(layer.id);
+    ctx.doc.notifyCellsChanged(layer.id, {
+      x: ox,
+      y: oy,
+      width: pattern.width,
+      height: pattern.height,
+    });
   }
 }

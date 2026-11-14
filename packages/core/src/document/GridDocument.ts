@@ -1,5 +1,6 @@
 import EventEmitter from "../utils/EventEmitter";
 import { GridLayer } from "./GridLayer";
+import type { Rect } from "../types";
 import type {
   CellBuffer,
   CellBufferCtor,
@@ -259,8 +260,12 @@ export class GridDocument<Buffer extends CellBuffer = Uint32Array> {
     this.setActiveLayer(source.activeLayerId ?? this.layers[0]?.id ?? null);
   }
 
-  /** Call after mutating layer cells directly (tools do this once per stroke step). */
-  public notifyCellsChanged(layerId: string): void {
-    this.events.emit("cells:changed", { layerId });
+  /**
+   * Call after mutating layer cells directly (tools do this once per stroke
+   * step). Pass the changed area when known, so listeners (e.g. auto-layers)
+   * can update just that region.
+   */
+  public notifyCellsChanged(layerId: string, rect?: Rect): void {
+    this.events.emit("cells:changed", rect ? { layerId, rect } : { layerId });
   }
 }

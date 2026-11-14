@@ -3,3 +3,4 @@ export * from "./GridLayer";
 export * from "./GridDocument";
 export * from "./serialization";
 export * from "./composite";
+export * from "./bounds";

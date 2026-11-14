@@ -125,3 +125,25 @@ test("saves a copy in the browser and duplicates it from the start screen", asyn
   await expect(browser.getByText("sprite copy copy", { exact: true })).toBeVisible();
   await expect(browser.locator("#usage")).toContainText("used");
 });
+
+test("flips and rotates the selection, each as one undo step", async ({ page }) => {
+  const p = await at(page, 2, 1);
+  await page.mouse.click(p.x, p.y); // one pixel at (2, 1)
+  await page.keyboard.press("m");
+  await drag(page, await at(page, 0, 0), await at(page, 3, 1)); // select 4×2 at (0, 0)
+
+  await page.keyboard.press("Shift+h"); // flip: x 2 → 1 within the 4-wide block
+  await expect.poll(() => pixel(page, 1, 1)).not.toBe(0);
+  expect(await pixel(page, 2, 1)).toBe(0);
+
+  await page.keyboard.press("Shift+r"); // rotate the 4×2 block to 2×4 around its centre
+  const rect = await page.evaluate(
+    () => (window.foundry as unknown as { selection: { rect: unknown } }).selection.rect
+  );
+  expect(rect).toEqual({ x: 1, y: 0, width: 2, height: 4 });
+
+  await page.keyboard.press("Control+z");
+  await page.keyboard.press("Control+z");
+  await expect.poll(() => pixel(page, 2, 1)).not.toBe(0);
+  expect(await pixel(page, 1, 1)).toBe(0);
+});

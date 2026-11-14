@@ -245,3 +245,35 @@ export class SelectTool<Buffer extends CellBuffer = CellBuffer> extends Tool<Buf
     this.selection.set({ ...source, x: source.x + dx, y: source.y + dy });
   }
 }
+
+/** Pixel transforms for a region (flip and quarter turns). */
+export type RegionTransform = "flipX" | "flipY" | "rotateCW" | "rotateCCW";
+
+/**
+ * Returns `region` flipped or rotated. Rotations swap width and height;
+ * a clockwise turn moves the top-left cell to the top-right.
+ */
+export function transformRegion(region: Region, transform: RegionTransform): Region {
+  const { width, height, values } = region;
+  const rotate = transform === "rotateCW" || transform === "rotateCCW";
+  const outW = rotate ? height : width;
+  const outH = rotate ? width : height;
+  const out = Array.from({ length: outW * outH }, () => 0);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let nx = x;
+      let ny = y;
+      if (transform === "flipX") nx = width - 1 - x;
+      else if (transform === "flipY") ny = height - 1 - y;
+      else if (transform === "rotateCW") {
+        nx = height - 1 - y;
+        ny = x;
+      } else {
+        nx = y;
+        ny = width - 1 - x;
+      }
+      out[ny * outW + nx] = values[y * width + x];
+    }
+  }
+  return { width: outW, height: outH, values: out };
+}

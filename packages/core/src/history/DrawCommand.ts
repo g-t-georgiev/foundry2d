@@ -1,3 +1,4 @@
+import { boundsOfChanges } from "../document/bounds";
 import type { ICommand } from "./types";
 import type { CellBuffer, CellChange, GridDocument } from "../document";
 
@@ -22,6 +23,6 @@ export class DrawCommand<Buffer extends CellBuffer = CellBuffer> implements ICom
     const layer = this.doc.getLayer(this.layerId);
     if (!layer) return;
     layer.applyChanges(this.changes, direction);
-    this.doc.notifyCellsChanged(this.layerId);
+    this.doc.notifyCellsChanged(this.layerId, boundsOfChanges(this.changes));
   }
 }

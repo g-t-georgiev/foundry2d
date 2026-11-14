@@ -71,6 +71,9 @@ export function bindKeys(keymap: Keymap, app: Application): void {
   keymap.bind("mod+v", () => clipboard.paste());
   keymap.bind("escape", () => clipboard.deselect());
   keymap.bind("delete", () => clipboard.clearLayer());
+  keymap.bind("shift+h", () => clipboard.transform("flipX"));
+  keymap.bind("shift+v", () => clipboard.transform("flipY"));
+  keymap.bind("shift+r", () => clipboard.transform("rotateCW"));
 
   // View.
   keymap.bind("shift+x", toggleMirror("x"));

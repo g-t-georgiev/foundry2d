@@ -237,3 +237,57 @@ describe("layer locks", () => {
     expect(loaded.levels[0].doc.getLayer(layerIdFor(1))!.locked).toBe(false);
   });
 });
+
+describe("incremental auto-layer regeneration", () => {
+  it("matches a full regeneration after random edits", async () => {
+    const { generateAutoTiles: full } = await import("../src/model/autoRules");
+    const { DrawCommand, HistoryManager } = await import("@foundry2d/core");
+    const project = createProjectFromPreset("platformer");
+    const level = project.levels[0];
+    const source = level.doc.getLayer(layerIdFor(1))!;
+    const tiles = level.doc.getLayer(layerIdFor(2))!;
+    const def = project.getLayerDef(2)!;
+    const history = new HistoryManager();
+    let seed = 7;
+    const rand = (n: number) => {
+      seed = (seed * 1103515245 + 12345) >>> 0;
+      return seed % n;
+    };
+    for (let i = 0; i < 40; i++) {
+      // A small "stroke": a few cells near each other, as one undoable edit.
+      const cx = rand(level.width);
+      const cy = rand(level.height);
+      const changes = Array.from({ length: 1 + rand(4) }, (_, k) => {
+        const x = Math.min(level.width - 1, cx + k);
+        const y = cy;
+        return { x, y, oldValue: source.get(x, y), newValue: rand(3) };
+      }).filter((c, k, all) => all.findIndex((d) => d.x === c.x) === k);
+      history.execute(new DrawCommand(level.doc, source.id, changes));
+      if (i % 5 === 4) history.undo(); // undo goes through the same path
+      project.flushAutoLayers();
+      const expected = full(source.data, level.width, level.height, def.autoRules!, def.autoSeed);
+      expect(Array.from(tiles.data)).toEqual(Array.from(expected));
+    }
+  });
+
+  it("updates a big level quickly after a single-cell edit", async () => {
+    const { DrawCommand } = await import("@foundry2d/core");
+    const project = createProjectFromPreset("platformer");
+    const old = project.levels[0];
+    const level = project.createLevel("big", 256, 256);
+    project.removeLevel(old.uid);
+    const source = level.doc.getLayer(layerIdFor(1))!;
+    source.data.fill(1);
+    project.regenerateAutoLayers();
+    const started = performance.now();
+    for (let i = 0; i < 100; i++) {
+      new DrawCommand(level.doc, source.id, [
+        { x: i, y: 100, oldValue: source.get(i, 100), newValue: 0 },
+      ]).execute();
+      project.flushAutoLayers();
+    }
+    const perEdit = (performance.now() - started) / 100;
+    // A full 256×256 pass takes far longer; a local update is well under a millisecond or two.
+    expect(perEdit).toBeLessThan(5);
+  });
+});

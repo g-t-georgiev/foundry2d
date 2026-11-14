@@ -1,3 +1,4 @@
+import type { Rect } from "../types";
 export type CellBuffer = Uint32Array | Int32Array;
 export type CellBufferCtor<Buffer extends CellBuffer> = new (size: number) => Buffer;
 
@@ -23,7 +24,11 @@ export type DocumentEventMap = {
   /** The active layer changed. */
   "layer:activated": (payload: { layerId: string | null }) => void;
   /** Cell data of a layer changed. */
-  "cells:changed": (payload: { layerId: string }) => void;
+  /**
+   * Cells of a layer changed. `rect` bounds the change when the sender knows
+   * it (in cells); without it, any cell may have changed.
+   */
+  "cells:changed": (payload: { layerId: string; rect?: Rect }) => void;
   /** Document dimensions changed. */
   resized: (payload: { width: number; height: number }) => void;
 };

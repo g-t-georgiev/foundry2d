@@ -1,11 +1,18 @@
 import {
   EventEmitter,
   GridDocument,
+  unionRects,
   PixelUtils,
   type Rect,
   type Unsubscribe,
 } from "@foundry2d/core";
-import { createRule, generateAutoTiles, resizePattern, type AutoRule } from "./autoRules";
+import {
+  autoRuleReach,
+  createRule,
+  generateAutoTilesInto,
+  resizePattern,
+  type AutoRule,
+} from "./autoRules";
 import type { CellColorizer } from "@foundry2d/render";
 import type {
   EntityDef,
@@ -136,7 +143,8 @@ export class LevelProject {
   private nextUid = 1;
   /** Source-layer watchers per level uid (auto-layer regeneration). */
   private watchers = new Map<number, Unsubscribe>();
-  private pendingRegen = new Set<Level>();
+  /** Levels waiting for auto-layer updates, with the area to redo (`null` = all). */
+  private pendingRegen = new Map<Level, Rect | null>();
   private regenQueued = false;
   private colorizers = new Map<number, CellColorizer>();
   private tilesetImages = new Map<
@@ -563,7 +571,7 @@ export class LevelProject {
    * Recomputes auto-layer tiles from their sources. Without arguments every
    * auto-layer in every level is rebuilt. Unchanged layers are left alone.
    */
-  regenerateAutoLayers(defUid?: number, level?: Level): void {
+  regenerateAutoLayers(defUid?: number, level?: Level, area?: Rect): void {
     const defs = this.defs.layers.filter(
       (d) => (defUid === undefined || d.uid === defUid) && this.isAutoLayer(d)
     );
@@ -572,17 +580,27 @@ export class LevelProject {
         const source = target.doc.getLayer(layerIdFor(def.autoSourceUid!));
         const layer = target.doc.getLayer(layerIdFor(def.uid));
         if (!source || !layer) continue;
-        const tiles = generateAutoTiles(
+        const rules = def.autoRules ?? [];
+        // A cell's tile depends on neighbours up to the rules' reach.
+        const reach = autoRuleReach(rules);
+        const region = area && {
+          x: area.x - reach,
+          y: area.y - reach,
+          width: area.width + reach * 2,
+          height: area.height + reach * 2,
+        };
+        const changed = generateAutoTilesInto(
+          layer.data,
           source.data,
           target.width,
           target.height,
-          def.autoRules ?? [],
-          def.autoSeed ?? 0
+          rules,
+          def.autoSeed ?? 0,
+          region
         );
-        if (sameCells(tiles, layer.data)) continue;
-        layer.data.set(tiles);
+        if (!changed) continue;
         layer.version++;
-        target.doc.notifyCellsChanged(layer.id);
+        target.doc.notifyCellsChanged(layer.id, region);
       }
     }
   }
@@ -590,27 +608,35 @@ export class LevelProject {
   /** Runs regenerations queued by source edits now (tests, exports). */
   flushAutoLayers(): void {
     this.regenQueued = false;
-    const levels = [...this.pendingRegen];
+    const pending = [...this.pendingRegen];
     this.pendingRegen.clear();
-    for (const level of levels) {
-      if (this.getLevel(level.uid) === level) this.regenerateAutoLayers(undefined, level);
+    for (const [level, area] of pending) {
+      if (this.getLevel(level.uid) === level) {
+        this.regenerateAutoLayers(undefined, level, area ?? undefined);
+      }
     }
   }
 
   /** Regenerates a level's auto-layers when one of their sources changes (coalesced). */
   private watchLevel(level: Level): void {
     this.watchers.get(level.uid)?.();
-    const queue = () => {
-      this.pendingRegen.add(level);
+    // Edits in one burst are merged into one area; an edit without an area
+    // (or a resize) means the whole level.
+    const queue = (rect?: Rect) => {
+      const known = this.pendingRegen.has(level);
+      const previous = this.pendingRegen.get(level);
+      const merged =
+        !rect || (known && previous === null) ? null : unionRects(previous ?? undefined, rect)!;
+      this.pendingRegen.set(level, merged);
       if (this.regenQueued) return;
       this.regenQueued = true;
       queueMicrotask(() => this.flushAutoLayers());
     };
-    const offCells = level.doc.events.on("cells:changed", ({ layerId }) => {
+    const offCells = level.doc.events.on("cells:changed", ({ layerId, rect }) => {
       const uid = defUidOf(layerId);
-      if (uid !== null && this.defs.layers.some((d) => d.autoSourceUid === uid)) queue();
+      if (uid !== null && this.defs.layers.some((d) => d.autoSourceUid === uid)) queue(rect);
     });
-    const offResize = level.doc.events.on("resized", queue);
+    const offResize = level.doc.events.on("resized", () => queue());
     this.watchers.set(level.uid, () => {
       offCells();
       offResize();
