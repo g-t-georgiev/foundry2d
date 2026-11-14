@@ -302,6 +302,10 @@
               >
               <label title="Flip vertically (Y)"><input type="checkbox" id="flipY" /> Flip Y</label>
             </div>
+            <div id="autoLayerInfo" class="auto-layer-info" hidden>
+              <p class="hint" id="autoLayerText"></p>
+              <button class="btn btn-small" id="editAutoRules">Edit rules…</button>
+            </div>
             <div id="tilesetCanvasHost" class="tileset-host"></div>
             <p class="hint" id="tilePickerHint"></p>
           </div>
@@ -412,6 +416,32 @@
           accept="image/png,image/webp,image/gif,.json"
           hidden
         />
+      </div>
+    </dialog>
+
+    <dialog id="rulesDialog" class="dialog dialog-wide" aria-labelledby="rulesTitle">
+      <form method="dialog" class="dialog-header">
+        <h2 id="rulesTitle">Rules</h2>
+        <button class="btn btn-icon" value="close" aria-label="Close">✕</button>
+      </form>
+      <div class="dialog-body rules-body">
+        <div class="rules-list-column">
+          <div class="column-header">
+            <span class="label">Rules (first match wins)</span>
+            <span class="button-row">
+              <button
+                class="btn btn-small"
+                id="reshuffleRules"
+                title="New random choices for variants and chances"
+              >
+                Reshuffle
+              </button>
+              <button class="btn btn-small" id="addRule">+ Rule</button>
+            </span>
+          </div>
+          <ol id="rulesList" class="rules-list" aria-label="Rules"></ol>
+        </div>
+        <div id="ruleEditor" class="rule-editor"></div>
       </div>
     </dialog>
 

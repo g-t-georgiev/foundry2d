@@ -11,7 +11,7 @@ const names = (project: LevelProject) => project.levels[0].doc.layers.map((l) =>
 
 describe("presets", () => {
   it("discovers every preset file and builds independent projects", () => {
-    expect(presets.map((p) => p.id)).toEqual(["pacman", "blank"]);
+    expect(presets.map((p) => p.id)).toEqual(["pacman", "blank", "platformer"]);
     expect(presets[0].label).toBe("Pac-Man (arcade)");
     const a = createPacmanProject();
     const b = createPacmanProject();
@@ -24,16 +24,15 @@ describe("presets", () => {
 });
 
 describe("LevelProject definitions", () => {
-  it("seeds the Pac-Man project with three IntGrid layers and an entities layer on a 28x36 level", () => {
+  it("seeds the Pac-Man project with two IntGrid layers and an entities layer on a 28x36 level", () => {
     const project = createPacmanProject();
     expect(project.gridSize).toBe(8);
     expect(project.defs.layers.map((d) => d.identifier)).toEqual([
       "collision",
       "collectibles",
-      "spawns",
       "entities",
     ]);
-    expect(names(project)).toEqual(["collision", "collectibles", "spawns", "entities"]);
+    expect(names(project)).toEqual(["collision", "collectibles", "entities"]);
     const level = project.levels[0];
     expect([level.width, level.height]).toEqual([28, 36]);
   });
@@ -47,7 +46,6 @@ describe("LevelProject definitions", () => {
       expect(level.doc.layers.map((l) => l.name)).toEqual([
         "collision",
         "collectibles",
-        "spawns",
         "entities",
         "collision_2",
       ]);
@@ -58,13 +56,12 @@ describe("LevelProject definitions", () => {
       expect(level.doc.layers.map((l) => l.name)).toEqual([
         "collision",
         "collectibles",
-        "spawns",
         "hazards",
         "entities",
       ]);
     }
     project.removeLayerDef(def.uid);
-    expect(project.levels[1].doc.layers).toHaveLength(4);
+    expect(project.levels[1].doc.layers).toHaveLength(3);
   });
 
   it("clears cells when a value is removed and colors per layer", () => {
@@ -92,18 +89,18 @@ describe("project file", () => {
   it("round-trips through JSON", () => {
     const project = createPacmanProject();
     const level = project.levels[0];
-    const spawns = project.defs.layers[2];
-    level.doc.getLayer(layerIdFor(spawns.uid))!.set(13, 26, 1);
-    level.doc.setLayerProperty(layerIdFor(spawns.uid), "opacity", 0.5);
-    level.doc.setActiveLayer(layerIdFor(spawns.uid));
+    const pellets = project.defs.layers[1];
+    level.doc.getLayer(layerIdFor(pellets.uid))!.set(13, 26, 1);
+    level.doc.setLayerProperty(layerIdFor(pellets.uid), "opacity", 0.5);
+    level.doc.setActiveLayer(layerIdFor(pellets.uid));
 
     const copy = deserializeProject(JSON.parse(JSON.stringify(serializeProject(project))));
     const copied = copy.levels[0];
     expect(copy.defs.layers).toEqual(project.defs.layers);
     expect(copied.uid).toBe(level.uid);
-    expect(copied.doc.getLayer(layerIdFor(spawns.uid))!.get(13, 26)).toBe(1);
-    expect(copied.doc.getLayer(layerIdFor(spawns.uid))!.opacity).toBe(0.5);
-    expect(copied.doc.activeLayerId).toBe(layerIdFor(spawns.uid));
+    expect(copied.doc.getLayer(layerIdFor(pellets.uid))!.get(13, 26)).toBe(1);
+    expect(copied.doc.getLayer(layerIdFor(pellets.uid))!.opacity).toBe(0.5);
+    expect(copied.doc.activeLayerId).toBe(layerIdFor(pellets.uid));
     // New uids must not collide with loaded ones.
     expect(copy.allocateUid()).toBeGreaterThan(
       Math.max(...copy.defs.layers.map((d) => d.uid), copied.uid)
@@ -124,7 +121,7 @@ describe("game format", () => {
     project.levels[0].doc.getLayer(layerIdFor(project.defs.layers[0].uid))!.set(1, 0, 1);
     const game = toGameFormat(project, project.levels[0]);
     expect(game.metadata).toEqual({ name: "pacman", columns: 28, rows: 36, tileSize: 8 });
-    expect(Object.keys(game.layers)).toEqual(["collision", "collectibles", "spawns"]);
+    expect(Object.keys(game.layers)).toEqual(["collision", "collectibles"]);
     expect(game.layers.collision).toHaveLength(28 * 36);
     expect(game.layers.collision[1]).toBe(1);
   });

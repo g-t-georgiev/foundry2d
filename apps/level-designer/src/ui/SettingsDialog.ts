@@ -10,6 +10,8 @@ export interface SettingsDialogHooks {
   confirm: (message: string) => boolean;
   /** Reports problems such as an unreadable image. */
   notify: (message: string) => void;
+  /** Opens the rules editor of an auto-layer. */
+  editRules: (layerDefUid: number) => void;
 }
 
 const el = <K extends keyof HTMLElementTagNameMap>(
@@ -199,8 +201,10 @@ export default class SettingsDialog {
     // Layers, top of the stack first like the layers panel.
     this.defsList.replaceChildren(
       ...[...project.defs.layers].reverse().map((def) => {
-        const meta =
-          def.type === "IntGrid"
+        const auto = project.autoSourceOf(def);
+        const meta = auto
+          ? `Auto · from ${auto.identifier} · ${def.autoRules?.length ?? 0} rules`
+          : def.type === "IntGrid"
             ? `IntGrid · ${def.intGridValues.length}`
             : def.type === "Entities"
               ? "Entities"
@@ -294,6 +298,56 @@ export default class SettingsDialog {
         this.render();
       });
       parts.push(field("Tileset", select));
+
+      // Auto-tiling: generate this layer from an IntGrid layer.
+      const sources = project.defs.layers.filter((d) => d.type === "IntGrid");
+      const auto = el("select", { className: "input" });
+      auto.append(new Option("— none: paint tiles by hand —", ""));
+      for (const source of sources) {
+        auto.append(
+          new Option(source.identifier, String(source.uid), false, source.uid === def.autoSourceUid)
+        );
+      }
+      auto.addEventListener("change", () => {
+        const sourceUid = auto.value ? Number(auto.value) : null;
+        const painted = project.levels.some((level) =>
+          level.doc.getLayer(`def_${def.uid}`)?.data.some((v) => v !== 0)
+        );
+        if (
+          sourceUid !== null &&
+          !project.isAutoLayer(def) &&
+          painted &&
+          !this.hooks.confirm(
+            `Generate "${def.identifier}" from rules? Its painted tiles are replaced in every level. This can't be undone.`
+          )
+        ) {
+          this.render();
+          return;
+        }
+        project.setAutoSource(def.uid, sourceUid);
+        if (sourceUid !== null) this.hooks.onDestructiveChange();
+        this.render();
+      });
+      parts.push(field("Auto-tiling: generate from IntGrid layer", auto));
+      if (project.isAutoLayer(def)) {
+        const count = def.autoRules?.length ?? 0;
+        const edit = el("button", {
+          className: "btn btn-small btn-primary",
+          textContent: `Edit rules (${count})…`,
+        });
+        edit.addEventListener("click", () => this.hooks.editRules(def.uid));
+        parts.push(
+          el(
+            "div",
+            { className: "button-row" },
+            edit,
+            el("span", {
+              className: "hint",
+              textContent: "Tiles follow the source layer; paint there instead.",
+            })
+          )
+        );
+      }
       footer.append(el("span"), deleteLayer);
       parts.push(footer);
       return parts;

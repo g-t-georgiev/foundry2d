@@ -1,3 +1,5 @@
+import type { AutoRule } from "./autoRules";
+
 /** One value of an IntGrid layer (0 is always "empty" and never defined). */
 export interface IntGridValueDef {
   /** Integer written into the grid; 1..n. */
@@ -40,6 +42,14 @@ export interface LayerDef {
   intGridValues: IntGridValueDef[];
   /** Tileset of a Tiles layer (`null` until one is assigned). */
   tilesetUid?: number | null;
+  /**
+   * Auto-layer: a Tiles layer with a source is generated from that IntGrid
+   * layer by `autoRules` and can't be painted by hand.
+   */
+  autoSourceUid?: number | null;
+  autoRules?: AutoRule[];
+  /** Varies random choices (tile variants, chance); "Reshuffle" changes it. */
+  autoSeed?: number;
 }
 
 export interface ProjectDefs {

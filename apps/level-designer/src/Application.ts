@@ -35,6 +35,7 @@ import { decodeTile, selectionToPattern, tilesetGrid } from "./model/tiles";
 import LevelLayersController from "./ui/LevelLayersController";
 import LevelsListView from "./ui/LevelsListView";
 import SettingsDialog from "./ui/SettingsDialog";
+import AutoRulesDialog from "./ui/AutoRulesDialog";
 import { WorldScene } from "./world/WorldScene";
 import {
   PROJECT_EXTENSION,
@@ -93,6 +94,7 @@ export default class Application {
   private readonly tilePicker: TilesetPickerView;
   private readonly levelsList: LevelsListView;
   private readonly settings: SettingsDialog;
+  private readonly rulesDialog: AutoRulesDialog;
   readonly entities: EntityController;
   private readonly entityPanel: EntityPanel;
   readonly session: ProjectSession;
@@ -144,6 +146,12 @@ export default class Application {
       confirm: (message) => window.confirm(message),
       onDestructiveChange: () => this.history.clear(),
       notify: (message) => this.showMessage(message, 5000),
+      editRules: (uid) => this.rulesDialog.open(this.project, uid),
+    });
+    this.rulesDialog = new AutoRulesDialog($<HTMLDialogElement>("#rulesDialog"));
+    $("#editAutoRules").addEventListener("click", () => {
+      const def = this.activeDef();
+      if (def && this.project.isAutoLayer(def)) this.rulesDialog.open(this.project, def.uid);
     });
     this.session = new ProjectSession({
       app: "level",
@@ -236,6 +244,7 @@ export default class Application {
       project.events.on("tilesets:loaded", () => {
         this.workspace.requestRender();
         this.tilePicker.draw();
+        this.rulesDialog.refresh();
       }),
       project.events.on("defs:changed", () => {
         this.syncEngineTool();
@@ -1207,9 +1216,10 @@ export default class Application {
       const def = layer ? this.project.getLayerDefForLayer(layer.id) : undefined;
       if (def?.type === "Tiles") {
         const tile = decodeTile(v);
+        const auto = this.project.isAutoLayer(def) ? " (auto)" : "";
         value.textContent = tile
-          ? `tile #${tile.tileId}${tile.flipX ? " ↔" : ""}${tile.flipY ? " ↕" : ""}`
-          : "empty";
+          ? `tile #${tile.tileId}${tile.flipX ? " ↔" : ""}${tile.flipY ? " ↕" : ""}${auto}`
+          : `empty${auto}`;
         return;
       }
       value.textContent =
@@ -1272,6 +1282,17 @@ export default class Application {
     const context = this.tileContext();
     const tileset = this.project.getTileset(def.tilesetUid);
     $("#paletteLayer").textContent = `${def.identifier} · ${tileset?.identifier ?? "no tileset"}`;
+    const source = this.project.autoSourceOf(def);
+    $("#autoLayerInfo").hidden = !source;
+    $("#tilesetCanvasHost").hidden = !!source;
+    $<HTMLElement>(".tile-flip").hidden = !!source;
+    if (source) {
+      const count = def.autoRules?.length ?? 0;
+      $("#autoLayerText").textContent =
+        `Generated from "${source.identifier}" by ${count} rule${count === 1 ? "" : "s"}. Paint on "${source.identifier}" and the tiles follow.`;
+      $("#tilePickerHint").textContent = "";
+      return;
+    }
     this.tilePicker.render(this.project, tileset, context?.selection ?? null);
     $("#tilePickerHint").textContent = tileset
       ? "Click a tile, or drag to pick a stamp. X / Y flip. Right mouse erases."

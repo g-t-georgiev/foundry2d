@@ -12,7 +12,7 @@ export interface PresetInfo {
 }
 
 /**
- * Every `presets/*.f2dlevel.json` file, bundled at build time. Presets are
+ * Every `presets/*.f2dlevel.json` file, bundled when this module is transformed. Presets are
  * plain project files, so they go through the same validation as "Open".
  */
 const files = import.meta.glob<unknown>("../../presets/*.f2dlevel.json", {

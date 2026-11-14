@@ -170,7 +170,7 @@ describe("entity files", () => {
     ]);
   });
 
-  it("loads the Pac-Man preset with its spawns", () => {
+  it("loads the Pac-Man preset with its spawn entities", () => {
     const project = createProjectFromPreset("pacman");
     const level = project.levels[0];
     const game = toGameFormat(project, level);
@@ -187,7 +187,7 @@ describe("entity files", () => {
       scatterTarget: { x: 25, y: 0 },
     });
     // The IntGrid layers the game already reads are unchanged.
-    expect(Object.keys(game.layers)).toEqual(["collision", "collectibles", "spawns"]);
+    expect(Object.keys(game.layers)).toEqual(["collision", "collectibles"]);
   });
 });
 

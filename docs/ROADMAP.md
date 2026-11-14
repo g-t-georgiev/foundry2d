@@ -220,14 +220,36 @@ LDtk's entity model, kept small enough to stay readable.
    - Every instance edit is an undo step in the shared history; definition edits are not, as before. Edge resizes shift entities and their points with the content.
    - The world view and library thumbnails draw entities too. Labels show Enum values (a ghost reads "blinky"), the shape takes the Enum value's colour, and labels shorten or hide when they would overlap.
 4. **Files:** the project file gains `defs.entities`, `defs.enums` and per-level `entities`. Older files still open. The game export gains an `entities` object keyed by layer identifier, with field values keyed by field identifier.
-5. **Pac-Man preset:** an `entities` layer with Pac-Man, Ghost (enum `ghost`: blinky, pinky, inky, clyde, plus a scatter-target Point field) and Fruit. The empty IntGrid `spawns` layer stays until the game reads entities.
+5. **Pac-Man preset:** an `entities` layer with Pac-Man, Ghost (enum `ghost`: blinky, pinky, inky, clyde, plus a scatter-target Point field) and Fruit. The old IntGrid `spawns` layer (always empty) was removed: entities do its job, so the game export has `collision` and `collectibles` grids plus `entities`.
 6. **Pulled forward from the polish backlog:** entity code lives in its own modules (`model/entities.ts`, `model/entityCommands.ts`, `entities/EntityController.ts`, `entities/EntityPanel.ts`, `ui/EntityDefsEditor.ts`, `render/entityRenderer.ts`) instead of growing `Application.ts`, which is already 1,200 lines. This is the pattern Phase 8 applies to the rest.
 7. **Workspace additions:** `GridDocumentScene` accepts a `getPointerDelegate` that takes over pointer input from the grid tools. This is how object layers plug in.
 8. **Fix:** `InputController` no longer gets stuck when `setPointerCapture` throws for a pointer that is no longer active. Before, all further canvas input was ignored until reload.
 
-### Phase 7b: Auto-layers (deferred from Phase 4)
+### Phase 7b: Auto-layers ✅ (2026-11-14)
 
-Rules that paint a Tiles layer from IntGrid values (LDtk's signature feature): a rule is a pattern of required or forbidden neighbour values plus the tiles to place, evaluated per cell, re-run on changes to the source layer, with random variants and flips. This is a feature rather than polish, so it gets its own phase and can be swapped with Phase 8.
+LDtk's signature feature, simplified: a Tiles layer can be **generated** from an IntGrid layer by rules.
+
+1. **Rules** (`model/autoRules.ts`, a pure engine): each rule is a 1×1, 3×3 or 5×5 pattern of conditions around a cell.
+   - **Conditions:** must be value _v_, must not be _v_, any value, empty, or anything.
+   - **Output:** the tiles to place. With several, one is picked per cell at random but stably, so repeating an id weights it.
+   - **Chance:** a probability, so a rule can scatter details.
+   - **Mirroring:** Mirror X / Mirror Y also match the mirrored pattern and flip the tile, so one corner rule covers both sides.
+   - **Priority and edges:** the first matching rule wins. Cells past the level edge repeat the edge, so ground touching a border doesn't grow an edge there.
+2. **Auto-layers:** in Project settings, a Tiles layer gets "Auto-tiling: generate from IntGrid layer".
+   - Generated layers are locked, and the side panel explains where to paint instead.
+   - Tiles regenerate whenever the source changes: painting, undo, resize and removed values all count. Bursts of changes are coalesced into one regeneration.
+   - Generated tiles are derived data, never undo steps. Undoing a source edit brings the tiles back with it.
+   - Removing the source layer turns the layer back into a hand-painted one that keeps its tiles.
+3. **Rules editor** (Edit rules…):
+   - A prioritised list with pattern and tile previews; rules can be toggled, reordered, duplicated and deleted.
+   - The pattern editor paints with a value brush: click for "must be", right-click for "must not be".
+   - Tiles come from the tileset picker; drag to pick several variants. Chance and mirroring are set per rule, and Reshuffle gives new random choices.
+   - Every edit regenerates the level behind the dialog live.
+4. **Files:** layer definitions store `autoSourceUid`, `autoRules` and `autoSeed`. Tiles are regenerated on load, so they always match the rules. The game export's `tileLayers` entry names the `autoSource` layer.
+5. **New preset, "Platformer (auto-tiles)":** a 40×22 side-scroller with a generated 16px tileset (grass, dirt with variants, corners, walls, undersides, planks). Six rules cover all of it, using mirroring for the right-hand corners and walls. It also has Player and Coin entities.
+6. **Pac-Man preset:** the empty IntGrid `spawns` layer was removed; entities cover spawns now.
+
+**Not done (LDtk has them):** several tiles stacked in one cell (rules that don't stop at the first match), rule groups, per-rule out-of-bounds handling, tile offsets, and auto-layers built on top of other auto-layers.
 
 ### Phase 8: Refactor and polish
 
@@ -266,12 +288,15 @@ Issues, improvements and polish candidates collected along the way. Items marked
 20. Game JSON import cannot recreate entities (the file has no definitions). Map known identifiers when importing over an existing project.
 21. Project settings has grown to five sections in one scrolling dialog. Split it into tabs (General, Layers, Tilesets, Entities, Enums), so the header and close button stay in view.
 22. Entity tiles are chosen by numeric tile id. Reuse the tileset picker for a visual choice.
+23. Auto-layers regenerate the whole layer on every source change, because `cells:changed` carries no region. Add dirty rectangles to the event and regenerate only the area around them (pattern radius). This matters on 256×256 levels with many rules.
+24. Game JSON import still treats a `spawns` key as a generic IntGrid layer (values named `value_n`). Map it to Pac-Man entities, or keep the old names for older exports.
 
 **Quality**
 
-23. Add browser end-to-end smoke tests for both apps: open, draw, undo, save, reload, recover. Use Vitest browser mode or Playwright, so regressions like the stale zoom readout get caught. Canvas tests need real pointer events (synthetic ones were what exposed the pointer-capture bug in Phase 7).
-24. Accessibility pass: focus order, visible focus rings, `aria` labels on canvas-adjacent controls, and keyboard access to every panel action.
-25. Performance check on big levels (256×256 with several layers) and long animations (100+ frames): thumbnails, onion skin and autosave serialization.
+25. Add browser end-to-end smoke tests for both apps: open, draw, undo, save, reload, recover. Use Vitest browser mode or Playwright, so regressions like the stale zoom readout get caught. Canvas tests need real pointer events (synthetic ones were what exposed the pointer-capture bug in Phase 7).
+26. Toolchain quirk seen in Phase 7b on Windows: the dev server kept serving a stale module after a file was appended to from a shell, and the test runner kept a stale `import.meta.glob` result until the importing file's content changed. Restarting the dev server, or editing the importing file, fixes it. Check whether a newer Vite+ fixes it, and otherwise document it in the contributor notes.
+27. Accessibility pass: focus order, visible focus rings, `aria` labels on canvas-adjacent controls, and keyboard access to every panel action.
+28. Performance check on big levels (256×256 with several layers) and long animations (100+ frames): thumbnails, onion skin and autosave serialization.
 
 ### Phase 9: Documentation, manual and onboarding
 

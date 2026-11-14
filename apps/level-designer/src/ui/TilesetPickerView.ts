@@ -30,7 +30,11 @@ export default class TilesetPickerView {
     this.canvas.addEventListener("pointerdown", (ev) => {
       const cell = this.cellAt(ev);
       if (!cell) return;
-      this.canvas.setPointerCapture(ev.pointerId);
+      try {
+        this.canvas.setPointerCapture(ev.pointerId);
+      } catch {
+        // The pointer is gone already; dragging still works without capture.
+      }
       this.drag = cell;
       this.emit(cell, cell);
     });

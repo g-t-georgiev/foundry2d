@@ -44,7 +44,14 @@ export interface GameLevelFile {
    */
   tileLayers?: Record<
     string,
-    { tileset: string; tileSize: number; columns: number; image: string | null }
+    {
+      tileset: string;
+      tileSize: number;
+      columns: number;
+      image: string | null;
+      /** Identifier of the IntGrid layer an auto-layer is generated from. */
+      autoSource?: string;
+    }
   >;
   /** Present when the project has Entities layers: instances keyed by layer identifier. */
   entities?: Record<string, GameEntity[]>;
@@ -99,6 +106,7 @@ export function toGameFormat(project: LevelProject, level: Level): GameLevelFile
       tileSize: tileset?.tileSize ?? project.gridSize,
       columns: tileset ? tilesetGrid(tileset).columns : 0,
       image: tileset?.image.fileName ?? null,
+      ...(project.isAutoLayer(def) ? { autoSource: project.autoSourceOf(def)!.identifier } : {}),
     };
   }
   return {

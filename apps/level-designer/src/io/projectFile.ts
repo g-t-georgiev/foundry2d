@@ -17,6 +17,7 @@ import {
   type WorldLayout,
 } from "../model/types";
 import { initialDefault, isHexColor, newIid, validateFieldValue } from "../model/entities";
+import { AUTO_RULE_SIZES, type AutoRule, type AutoRuleSize } from "../model/autoRules";
 
 export const PROJECT_FORMAT = "foundry2d.level";
 /** 2 added entity definitions, enums and entity instances. */
@@ -262,6 +263,33 @@ function parseEntities(raw: unknown, project: LevelProject): EntityInstance[] {
   return result;
 }
 
+function parseAutoRules(raw: unknown[], project: LevelProject): AutoRule[] {
+  return raw.flatMap((entry) => {
+    if (!isRecord(entry) || !isInt(entry.uid)) return [];
+    const size = AUTO_RULE_SIZES.includes(entry.size as AutoRuleSize)
+      ? (entry.size as AutoRuleSize)
+      : 3;
+    const pattern = Array.isArray(entry.pattern) ? entry.pattern : [];
+    project.reserveUid(entry.uid);
+    return [
+      {
+        uid: entry.uid,
+        active: entry.active !== false,
+        size,
+        pattern: Array.from({ length: size * size }, (_, i) =>
+          isInt(pattern[i]) ? pattern[i] : 0
+        ),
+        tileIds: (Array.isArray(entry.tileIds) ? entry.tileIds : []).filter(
+          (t): t is number => isInt(t) && t >= 0
+        ),
+        chance: Math.min(1, Math.max(0, num(entry.chance, 1))),
+        flipX: entry.flipX === true,
+        flipY: entry.flipY === true,
+      },
+    ];
+  });
+}
+
 export function isProjectFile(json: unknown): boolean {
   return isRecord(json) && json.format === PROJECT_FORMAT;
 }
@@ -334,6 +362,12 @@ export function deserializeProject(json: unknown): LevelProject {
         type: "Tiles",
         intGridValues: [],
         tilesetUid,
+        // The source is checked once every layer is known (it may come later).
+        ...(isInt(raw.autoSourceUid) ? { autoSourceUid: raw.autoSourceUid } : {}),
+        ...(Array.isArray(raw.autoRules)
+          ? { autoRules: parseAutoRules(raw.autoRules, project) }
+          : {}),
+        ...(isInt(raw.autoSeed) ? { autoSeed: raw.autoSeed >>> 0 } : {}),
       });
     } else if (raw.type === "Entities") {
       project.defs.layers.push({
@@ -412,5 +446,17 @@ export function deserializeProject(json: unknown): LevelProject {
     if (isInt(raw.activeDefUid)) level.doc.setActiveLayer(layerIdFor(raw.activeDefUid));
   }
 
+  for (const def of project.defs.layers) {
+    if (def.autoSourceUid !== undefined && !project.isAutoLayer(def)) def.autoSourceUid = null;
+  }
+  // Locks follow the (now validated) auto-layer flags, and generated tiles are
+  // rebuilt so they always match the rules, whatever the file stored.
+  for (const level of project.levels) {
+    for (const def of project.defs.layers) {
+      const layer = level.doc.getLayer(layerIdFor(def.uid));
+      if (layer) layer.locked = project.isAutoLayer(def);
+    }
+  }
+  project.regenerateAutoLayers();
   return project;
 }

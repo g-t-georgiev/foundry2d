@@ -1,4 +1,11 @@
-import { EventEmitter, GridDocument, PixelUtils, type Rect } from "@foundry2d/core";
+import {
+  EventEmitter,
+  GridDocument,
+  PixelUtils,
+  type Rect,
+  type Unsubscribe,
+} from "@foundry2d/core";
+import { createRule, generateAutoTiles, resizePattern, type AutoRule } from "./autoRules";
 import type { CellColorizer } from "@foundry2d/render";
 import type {
   EntityDef,
@@ -101,6 +108,10 @@ export class LevelProject {
   /** World grid cell in pixels; levels snap to it in the "gridvania" layout. */
   public worldGrid = { width: 256, height: 256 };
   private nextUid = 1;
+  /** Source-layer watchers per level uid (auto-layer regeneration). */
+  private watchers = new Map<number, Unsubscribe>();
+  private pendingRegen = new Set<Level>();
+  private regenQueued = false;
   private colorizers = new Map<number, CellColorizer>();
   private tilesetImages = new Map<
     number,
@@ -186,6 +197,7 @@ export class LevelProject {
       doc
     );
     this.levels.push(level);
+    this.watchLevel(level);
     this.arrangeLevels();
     this.events.emit("levels:changed");
     return level;
@@ -213,7 +225,9 @@ export class LevelProject {
   removeLevel(uid: number): number {
     const index = this.indexOfLevel(uid);
     if (index === -1 || this.levels.length <= 1) return -1;
-    this.levels.splice(index, 1);
+    const [removed] = this.levels.splice(index, 1);
+    this.watchers.get(removed.uid)?.();
+    this.watchers.delete(removed.uid);
     this.arrangeLevels();
     this.events.emit("levels:changed");
     return index;
@@ -223,6 +237,7 @@ export class LevelProject {
   insertLevel(level: Level, index = this.levels.length): void {
     this.reserveUid(level.uid);
     this.levels.splice(Math.max(0, Math.min(index, this.levels.length)), 0, level);
+    this.watchLevel(level);
     this.arrangeLevels();
     this.events.emit("levels:changed");
   }
@@ -423,6 +438,178 @@ export class LevelProject {
     this.defsChanged();
   }
 
+  // ------------------------------------------------------------------ auto-layers
+
+  /** The IntGrid source of an auto-layer, or `undefined` for hand-painted layers. */
+  autoSourceOf(def: LayerDef | undefined): LayerDef | undefined {
+    if (def?.type !== "Tiles" || def.autoSourceUid === null || def.autoSourceUid === undefined) {
+      return undefined;
+    }
+    const source = this.getLayerDef(def.autoSourceUid);
+    return source?.type === "IntGrid" ? source : undefined;
+  }
+
+  isAutoLayer(def: LayerDef | undefined): boolean {
+    return this.autoSourceOf(def) !== undefined;
+  }
+
+  /**
+   * Turns a Tiles layer into an auto-layer fed by an IntGrid layer (or back
+   * into a hand-painted layer with `null`, keeping the current tiles).
+   * Switching to auto replaces painted tiles in every level.
+   */
+  setAutoSource(defUid: number, sourceUid: number | null): void {
+    const def = this.getLayerDef(defUid);
+    if (def?.type !== "Tiles") return;
+    if (sourceUid !== null && this.getLayerDef(sourceUid)?.type !== "IntGrid") return;
+    if ((def.autoSourceUid ?? null) === sourceUid) return;
+    this.setAutoSourceInternal(def, sourceUid);
+    this.regenerateAutoLayers(defUid);
+    this.defsChanged();
+  }
+
+  getAutoRule(defUid: number, ruleUid: number): AutoRule | undefined {
+    return this.getLayerDef(defUid)?.autoRules?.find((r) => r.uid === ruleUid);
+  }
+
+  /** Adds a rule (by default "every cell holding the source's first value") at the end. */
+  addAutoRule(defUid: number, value: number | null = null): AutoRule | null {
+    const def = this.getLayerDef(defUid);
+    if (def?.type !== "Tiles") return null;
+    const first = this.autoSourceOf(def)?.intGridValues[0]?.value ?? null;
+    const rule = createRule(this.allocateUid(), value ?? first);
+    def.autoRules = [...(def.autoRules ?? []), rule];
+    this.autoRulesChanged(def);
+    return rule;
+  }
+
+  updateAutoRule(defUid: number, ruleUid: number, patch: Partial<Omit<AutoRule, "uid">>): void {
+    const def = this.getLayerDef(defUid);
+    const rule = this.getAutoRule(defUid, ruleUid);
+    if (!def || !rule) return;
+    if (patch.size !== undefined && patch.size !== rule.size && !patch.pattern) {
+      rule.pattern = resizePattern(rule.pattern, rule.size, patch.size);
+    }
+    Object.assign(rule, structuredClone(patch));
+    rule.chance = Math.min(1, Math.max(0, rule.chance));
+    this.autoRulesChanged(def);
+  }
+
+  removeAutoRule(defUid: number, ruleUid: number): void {
+    const def = this.getLayerDef(defUid);
+    if (!def?.autoRules) return;
+    def.autoRules = def.autoRules.filter((r) => r.uid !== ruleUid);
+    this.autoRulesChanged(def);
+  }
+
+  /** Copies a rule right below the original; returns the copy. */
+  duplicateAutoRule(defUid: number, ruleUid: number): AutoRule | null {
+    const def = this.getLayerDef(defUid);
+    const index = def?.autoRules?.findIndex((r) => r.uid === ruleUid) ?? -1;
+    if (!def?.autoRules || index === -1) return null;
+    const copy = { ...structuredClone(def.autoRules[index]), uid: this.allocateUid() };
+    def.autoRules.splice(index + 1, 0, copy);
+    this.autoRulesChanged(def);
+    return copy;
+  }
+
+  /** Moves a rule up (earlier, higher priority) or down. */
+  moveAutoRule(defUid: number, ruleUid: number, direction: "up" | "down"): void {
+    const rules = this.getLayerDef(defUid)?.autoRules;
+    const from = rules?.findIndex((r) => r.uid === ruleUid) ?? -1;
+    const to = direction === "up" ? from - 1 : from + 1;
+    if (!rules || from === -1 || to < 0 || to >= rules.length) return;
+    const [rule] = rules.splice(from, 1);
+    rules.splice(to, 0, rule);
+    this.autoRulesChanged(this.getLayerDef(defUid)!);
+  }
+
+  /** New random choices for tile variants and chances. */
+  reshuffleAutoLayer(defUid: number): void {
+    const def = this.getLayerDef(defUid);
+    if (!def) return;
+    def.autoSeed = ((def.autoSeed ?? 0) + 0x9e3779b9) >>> 0;
+    this.autoRulesChanged(def);
+  }
+
+  /**
+   * Recomputes auto-layer tiles from their sources. Without arguments every
+   * auto-layer in every level is rebuilt. Unchanged layers are left alone.
+   */
+  regenerateAutoLayers(defUid?: number, level?: Level): void {
+    const defs = this.defs.layers.filter(
+      (d) => (defUid === undefined || d.uid === defUid) && this.isAutoLayer(d)
+    );
+    for (const target of level ? [level] : this.levels) {
+      for (const def of defs) {
+        const source = target.doc.getLayer(layerIdFor(def.autoSourceUid!));
+        const layer = target.doc.getLayer(layerIdFor(def.uid));
+        if (!source || !layer) continue;
+        const tiles = generateAutoTiles(
+          source.data,
+          target.width,
+          target.height,
+          def.autoRules ?? [],
+          def.autoSeed ?? 0
+        );
+        if (sameCells(tiles, layer.data)) continue;
+        layer.data.set(tiles);
+        layer.version++;
+        target.doc.notifyCellsChanged(layer.id);
+      }
+    }
+  }
+
+  /** Runs regenerations queued by source edits now (tests, exports). */
+  flushAutoLayers(): void {
+    this.regenQueued = false;
+    const levels = [...this.pendingRegen];
+    this.pendingRegen.clear();
+    for (const level of levels) {
+      if (this.getLevel(level.uid) === level) this.regenerateAutoLayers(undefined, level);
+    }
+  }
+
+  /** Regenerates a level's auto-layers when one of their sources changes (coalesced). */
+  private watchLevel(level: Level): void {
+    this.watchers.get(level.uid)?.();
+    const queue = () => {
+      this.pendingRegen.add(level);
+      if (this.regenQueued) return;
+      this.regenQueued = true;
+      queueMicrotask(() => this.flushAutoLayers());
+    };
+    const offCells = level.doc.events.on("cells:changed", ({ layerId }) => {
+      const uid = defUidOf(layerId);
+      if (uid !== null && this.defs.layers.some((d) => d.autoSourceUid === uid)) queue();
+    });
+    const offResize = level.doc.events.on("resized", queue);
+    this.watchers.set(level.uid, () => {
+      offCells();
+      offResize();
+    });
+    this.applyAutoLocks(level);
+  }
+
+  /** Auto-layers are locked so the grid tools leave them alone. */
+  private applyAutoLocks(level: Level): void {
+    for (const def of this.defs.layers) {
+      const layer = level.doc.getLayer(layerIdFor(def.uid));
+      if (layer) layer.locked = this.isAutoLayer(def);
+    }
+  }
+
+  private setAutoSourceInternal(def: LayerDef, sourceUid: number | null): void {
+    def.autoSourceUid = sourceUid;
+    def.autoRules ??= [];
+    for (const level of this.levels) this.applyAutoLocks(level);
+  }
+
+  private autoRulesChanged(def: LayerDef): void {
+    this.regenerateAutoLayers(def.uid);
+    this.defsChanged();
+  }
+
   // ------------------------------------------------------------------ tilesets
 
   getTileset(uid: number | null | undefined): TilesetDef | undefined {
@@ -500,6 +687,10 @@ export class LevelProject {
     const index = this.defs.layers.findIndex((d) => d.uid === uid);
     if (index === -1 || this.defs.layers.length <= 1) return false;
     const [removed] = this.defs.layers.splice(index, 1);
+    for (const def of this.defs.layers) {
+      // Auto-layers fed by the removed layer keep their tiles and become manual.
+      if (def.autoSourceUid === uid) this.setAutoSourceInternal(def, null);
+    }
     for (const level of this.levels) {
       level.doc.removeLayer(layerIdFor(uid));
       if (removed.type === "Entities") {
@@ -926,4 +1117,10 @@ export class LevelProject {
     this.paletteVersion++;
     this.events.emit("defs:changed");
   }
+}
+
+function sameCells(a: ArrayLike<number>, b: ArrayLike<number>): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
 }

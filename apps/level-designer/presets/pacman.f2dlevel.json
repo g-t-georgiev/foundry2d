@@ -3,7 +3,7 @@
   "version": 2,
   "preset": {
     "label": "Pac-Man (arcade)",
-    "description": "28×36 tile maze with collision, collectibles, spawn layers and Pac-Man, ghost and fruit entities.",
+    "description": "28×36 tile maze with collision and collectibles layers, plus Pac-Man, ghost and fruit entities.",
     "order": 0
   },
   "name": "pacman",
@@ -62,38 +62,6 @@
             "value": 2,
             "identifier": "power_pellet",
             "color": "#ff8a65"
-          }
-        ]
-      },
-      {
-        "uid": 3,
-        "identifier": "spawns",
-        "type": "IntGrid",
-        "intGridValues": [
-          {
-            "value": 1,
-            "identifier": "pacman",
-            "color": "#ffff00"
-          },
-          {
-            "value": 2,
-            "identifier": "blinky",
-            "color": "#ff0000"
-          },
-          {
-            "value": 3,
-            "identifier": "inky",
-            "color": "#00eeff"
-          },
-          {
-            "value": 4,
-            "identifier": "pinky",
-            "color": "#ff00ea"
-          },
-          {
-            "value": 5,
-            "identifier": "clyde",
-            "color": "#ff7300"
           }
         ]
       },
@@ -212,12 +180,6 @@
         },
         {
           "defUid": 2,
-          "visible": true,
-          "opacity": 1,
-          "data": [1008, 0]
-        },
-        {
-          "defUid": 3,
           "visible": true,
           "opacity": 1,
           "data": [1008, 0]
