@@ -5,6 +5,7 @@ import {
   isAbortError,
   pickFileToOpen,
   pickFileToSave,
+  stripFileExtension,
   writeFileHandle,
   type FileHandleLike,
   type FileTypeSpec,
@@ -194,7 +195,11 @@ export class ProjectSession {
     const picked = await pickFileToOpen([this.options.fileType, ANY_JSON]);
     if (!picked) return null;
     const json: unknown = JSON.parse(await picked.file.text());
-    return { json, name: stripExtension(picked.file.name), handle: picked.handle };
+    return {
+      json,
+      name: stripFileExtension(picked.file.name, this.options.fileType),
+      handle: picked.handle,
+    };
   }
 
   /** Binds a successfully opened file (its handle, if any) as the save target. */
@@ -237,7 +242,7 @@ export class ProjectSession {
     const file = await handle.getFile();
     return {
       json: JSON.parse(await file.text()) as unknown,
-      name: stripExtension(file.name),
+      name: stripFileExtension(file.name, this.options.fileType),
       handle,
     };
   }
@@ -375,7 +380,3 @@ const ANY_JSON: FileTypeSpec = {
   mimeType: "application/json",
   extensions: [".json"],
 };
-
-function stripExtension(name: string): string {
-  return name.replace(/(\.f2d(level)?)?\.json$/i, "");
-}

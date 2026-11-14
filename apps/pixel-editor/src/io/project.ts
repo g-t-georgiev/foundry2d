@@ -8,7 +8,12 @@ export const PROJECT_FORMAT = "foundry2d.pixel";
  * v2: `frames[]` with per-frame `duration` and `document`, plus `fps`
  */
 export const PROJECT_VERSION = 2;
-export const PROJECT_EXTENSION = ".f2d.json";
+/** Branded work-file extension; the content is JSON. */
+export const PROJECT_EXTENSION = ".f2dsprite";
+/** Earlier extensions that still open. */
+export const LEGACY_EXTENSIONS = [".f2d.json"];
+/** Vendor MIME type for the save picker and downloads. */
+export const PROJECT_MIME = "application/vnd.foundry2d.sprite+json";
 
 export interface PixelProjectFile {
   format: typeof PROJECT_FORMAT;

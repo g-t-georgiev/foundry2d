@@ -18,6 +18,13 @@ import {
   ProjectSession,
   Workspace,
   downloadBlob,
+  editorBlock,
+  readBoolean,
+  readCamera,
+  readInteger,
+  readRecord,
+  readString,
+  tryRestore,
 } from "@foundry2d/workspace";
 import { bindProjectBrowser, type LayersPanel, type ProjectBrowser } from "@foundry2d/ui";
 import type { Level, LevelProject } from "./model/LevelProject";
@@ -42,7 +49,9 @@ import AddLayerMenu from "./ui/AddLayerMenu";
 import { WorldScene } from "./world/WorldScene";
 import { LevelOperations } from "./world/LevelOperations";
 import {
+  LEGACY_EXTENSIONS,
   PROJECT_EXTENSION,
+  PROJECT_MIME,
   ProjectFormatError,
   deserializeProject,
   isProjectFile,
@@ -70,6 +79,12 @@ const inflate = (r: Rect, amount: number): Rect => ({
   width: r.width + amount * 2,
   height: r.height + amount * 2,
 });
+
+/** A level project as opened from a work file, with its saved editor state. */
+interface LevelWork {
+  project: LevelProject;
+  editor?: Record<string, unknown>;
+}
 
 /**
  * Composition root of the level designer.
@@ -107,7 +122,7 @@ export default class Application {
   private loading = false;
   private readonly layersPanel: LayersPanel;
   private altHeld = false;
-  readonly files: ProjectFiles<LevelProject>;
+  readonly files: ProjectFiles<LevelWork>;
   readonly levelOps: LevelOperations;
   /**
    * The running view transition. World/level switches are chained on it, so
@@ -115,6 +130,8 @@ export default class Application {
    * instead of being dropped.
    */
   private transition: Promise<void> = Promise.resolve();
+  /** Resolves once the scene shown by `loadProject` has been fitted. */
+  private sceneReady: Promise<void> = Promise.resolve();
   private messageTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(storage: Storage) {
@@ -178,10 +195,14 @@ export default class Application {
       titleSuffix: "Foundry2D Level Designer",
       fileType: {
         description: "Foundry2D level project",
-        mimeType: "application/json",
+        mimeType: PROJECT_MIME,
         extensions: [PROJECT_EXTENSION],
+        legacyExtensions: LEGACY_EXTENSIONS,
       },
-      serialize: () => serializeProject(this.project),
+      serialize: () => ({
+        ...serializeProject(this.project),
+        editor: this.captureEditorState(),
+      }),
       toStored: (json) => externalizeAssets(json, storage.assets),
       fromStored: (json) => internalizeAssets(json, storage.assets),
       getName: () => this.project.name,
@@ -193,23 +214,31 @@ export default class Application {
     });
     this.session.installUnloadGuard();
     const browser = $<ProjectBrowser>("#projectBrowser");
-    this.files = new ProjectFiles<LevelProject>({
+    this.files = new ProjectFiles<LevelWork>({
       session: this.session,
       startScreen: browser,
       noun: { one: "project", title: "Level projects" },
       // Files may be native projects or game exports; library and recovery
       // copies are always native.
       parse: ({ json }) => {
-        if (isProjectFile(json)) return deserializeProject(json);
-        if (isGameFormat(json)) return fromGameFormat(json);
+        if (isProjectFile(json)) {
+          return { project: deserializeProject(json), editor: editorBlock(json) };
+        }
+        if (isGameFormat(json)) return { project: fromGameFormat(json) };
         throw new ProjectFormatError("Unrecognized file: expected a level project or game JSON.");
       },
-      load: (project) => this.loadProject(project),
+      load: ({ project, editor }) => {
+        this.loadProject(project);
+        if (editor) this.restoreEditorState(editor);
+      },
       templates: () =>
         presets.map((p) => ({ id: p.id, label: p.label, description: p.description })),
       createFromTemplate: (id) => {
         const label = presets.find((p) => p.id === id)?.label ?? id;
-        return { project: createProjectFromPreset(id), message: `New project from "${label}"` };
+        return {
+          project: { project: createProjectFromPreset(id) },
+          message: `New project from "${label}"`,
+        };
       },
       isUserFacingError: (error) => error instanceof ProjectFormatError,
       notify: (message, timeout) => this.showMessage(message, timeout),
@@ -334,9 +363,10 @@ export default class Application {
     // Single-level projects open straight into the level; multi-level ones in the world.
     const view: EditorView = project.levels.length > 1 ? "world" : "level";
     levelStore.dispatch(LevelActions.SetView, view);
-    void this.workspace.setScene(view === "world" ? this.worldScene : this.levelScene, {
-      fit: true,
-    });
+    this.sceneReady = this.workspace.setScene(
+      view === "world" ? this.worldScene : this.levelScene,
+      { fit: true }
+    );
     this.renderView();
   }
 
@@ -424,6 +454,78 @@ export default class Application {
   }
 
   // ------------------------------------------------------------------ views
+
+  // ------------------------------------------------------------------ editor state
+
+  /**
+   * View and tool state saved in the work file's `editor` block (not part
+   * of the project data), so a project reopens as it was left.
+   */
+  private captureEditorState(): Record<string, unknown> {
+    const state = levelStore.getState();
+    const tool =
+      state.currentTool === "eyedropper" && this.altHeld ? state.previousTool : state.currentTool;
+    return {
+      view: this.view,
+      levelUid: this.level.uid,
+      camera: this.workspace.camera.getState(),
+      tool,
+      grid: state.grid.enabled,
+      selectedValues: { ...state.selectedValues },
+      tileFlip: { ...state.tileFlip },
+      tileSelections: structuredClone(state.tileSelections),
+    };
+  }
+
+  /** Restores what `captureEditorState` saved; invalid entries are skipped. */
+  private restoreEditorState(editor: Record<string, unknown>): void {
+    const dispatch = levelStore.dispatch.bind(levelStore);
+    const tool = readString(editor.tool);
+    const grid = readBoolean(editor.grid);
+    if (tool) tryRestore(() => dispatch(LevelActions.SetTool, tool as LevelTool));
+    if (grid !== undefined) tryRestore(() => dispatch(LevelActions.ToggleGrid, { enabled: grid }));
+    for (const [defUid, value] of Object.entries(readRecord(editor.selectedValues) ?? {})) {
+      const uid = Number(defUid);
+      if (Number.isInteger(uid) && Number.isInteger(value)) {
+        tryRestore(() =>
+          dispatch(LevelActions.SelectValue, { defUid: uid, value: value as number })
+        );
+      }
+    }
+    const flip = readRecord(editor.tileFlip);
+    if (flip) {
+      const x = readBoolean(flip.x) ?? false;
+      const y = readBoolean(flip.y) ?? false;
+      tryRestore(() => dispatch(LevelActions.SetTileFlip, { x, y }));
+    }
+    for (const [tilesetUid, rect] of Object.entries(readRecord(editor.tileSelections) ?? {})) {
+      const r = readRecord(rect);
+      const uid = Number(tilesetUid);
+      if (!r || !Number.isInteger(uid)) continue;
+      tryRestore(() =>
+        dispatch(LevelActions.SelectTiles, {
+          tilesetUid: uid,
+          x: readInteger(r.x) ?? 0,
+          y: readInteger(r.y) ?? 0,
+          width: readInteger(r.width) ?? 1,
+          height: readInteger(r.height) ?? 1,
+        })
+      );
+    }
+
+    // View, level and camera, after the scene `loadProject` showed is fitted.
+    const level = this.project.getLevel(readInteger(editor.levelUid) ?? -1);
+    const view = readString(editor.view);
+    const camera = readCamera(editor.camera);
+    void this.sceneReady
+      .then(() => {
+        if (view === "world") return this.showWorld(false);
+        if (view === "level" && level) return this.enterLevel(level.uid, false);
+      })
+      .then(() => {
+        if (camera) this.workspace.setCamera(camera);
+      });
+  }
 
   /** Opens a level for editing, zooming in from its place in the world. */
   enterLevel(uid: number, animate = true): Promise<void> {

@@ -11,7 +11,19 @@ import {
   type Unsubscribe,
 } from "@foundry2d/core";
 import { LayerStackPass } from "@foundry2d/render";
-import { GridDocumentScene, ProjectFiles, ProjectSession, Workspace } from "@foundry2d/workspace";
+import {
+  GridDocumentScene,
+  ProjectFiles,
+  ProjectSession,
+  Workspace,
+  editorBlock,
+  readBoolean,
+  readCamera,
+  readInteger,
+  readRecord,
+  readString,
+  tryRestore,
+} from "@foundry2d/workspace";
 import { bindProjectBrowser, type LayersPanel, type ProjectBrowser } from "@foundry2d/ui";
 import type { ApplicationContext } from "./types";
 import { ApplicationStateActions, applicationStore } from "./state";
@@ -34,7 +46,9 @@ import {
 } from "./model/commands";
 import { renderThumbnail } from "./io/thumbnail";
 import {
+  LEGACY_EXTENSIONS,
   PROJECT_EXTENSION,
+  PROJECT_MIME,
   ProjectFormatError,
   fromProjectFile,
   toProjectFile,
@@ -61,6 +75,8 @@ const ONION_ALPHA = 0.28;
 interface SpriteProject {
   sprite: Sprite;
   name: string;
+  /** The work file's `editor` block (view and tool state), if any. */
+  editor?: Record<string, unknown>;
 }
 
 /**
@@ -96,6 +112,8 @@ export default class Application implements ApplicationContext {
   private loading = false;
   private docSubscriptions: Unsubscribe[] = [];
   private altHeld = false;
+  /** Resolves once the current scene has been shown (and fitted). */
+  private sceneReady: Promise<void> = Promise.resolve();
 
   constructor(elements: ApplicationElements, storage: Storage) {
     const { size } = applicationStore.getState().doc;
@@ -160,10 +178,14 @@ export default class Application implements ApplicationContext {
       titleSuffix: "Foundry2D Pixel Editor",
       fileType: {
         description: "Foundry2D sprite",
-        mimeType: "application/json",
+        mimeType: PROJECT_MIME,
         extensions: [PROJECT_EXTENSION],
+        legacyExtensions: LEGACY_EXTENSIONS,
       },
-      serialize: () => toProjectFile(this.sprite, this.name),
+      serialize: () => ({
+        ...toProjectFile(this.sprite, this.name),
+        editor: this.captureEditorState(),
+      }),
       getName: () => this.name,
       thumbnail: () => renderThumbnail(this.sprite.frames[0].doc),
       onChange: (state) =>
@@ -178,9 +200,12 @@ export default class Application implements ApplicationContext {
       noun: { one: "sprite", title: "Sprites" },
       parse: (opened) => {
         const { sprite, name } = fromProjectFile(opened.json);
-        return { sprite, name: name || opened.name };
+        return { sprite, name: name || opened.name, editor: editorBlock(opened.json) };
       },
-      load: ({ sprite, name }) => this.loadSprite(sprite, name),
+      load: ({ sprite, name, editor }) => {
+        this.loadSprite(sprite, name);
+        if (editor) this.restoreEditorState(editor);
+      },
       templates: () =>
         NEW_SIZES.map((s) => ({
           id: String(s),
@@ -338,6 +363,60 @@ export default class Application implements ApplicationContext {
     applicationStore.dispatch(ApplicationStateActions.SetTool, previousTool);
   }
 
+  // ------------------------------------------------------------------ editor state
+
+  /**
+   * View and tool state saved in the work file's `editor` block (not part
+   * of the sprite itself), so a sprite reopens as it was left.
+   */
+  private captureEditorState(): Record<string, unknown> {
+    const state = applicationStore.getState();
+    const tool =
+      state.currentTool === "eyedropper" && this.altHeld ? state.previousTool : state.currentTool;
+    return {
+      camera: this.workspace.camera.getState(),
+      frame: this.sprite.currentIndex,
+      tool,
+      color: state.currentColor,
+      penSize: state.penSize,
+      grid: state.preferences.grid.enabled,
+      onionSkin: state.preferences.onionSkin.enabled,
+      mirror: { ...state.preferences.mirror },
+    };
+  }
+
+  /** Restores what `captureEditorState` saved; invalid entries are skipped. */
+  private restoreEditorState(editor: Record<string, unknown>): void {
+    const dispatch = applicationStore.dispatch.bind(applicationStore);
+    const tool = readString(editor.tool);
+    const color = readString(editor.color);
+    const penSize = readInteger(editor.penSize);
+    const grid = readBoolean(editor.grid);
+    const onionSkin = readBoolean(editor.onionSkin);
+    const mirror = readRecord(editor.mirror);
+    const frame = readInteger(editor.frame);
+    if (tool) tryRestore(() => dispatch(ApplicationStateActions.SetTool, tool));
+    if (color) tryRestore(() => dispatch(ApplicationStateActions.SetColor, { color }));
+    if (penSize) tryRestore(() => dispatch(ApplicationStateActions.EditPen, { size: penSize }));
+    if (grid !== undefined) {
+      tryRestore(() => dispatch(ApplicationStateActions.ToggleGrid, { enabled: grid }));
+    }
+    if (onionSkin !== undefined) {
+      tryRestore(() => dispatch(ApplicationStateActions.ToggleOnionSkin, { enabled: onionSkin }));
+    }
+    if (mirror) {
+      const x = readBoolean(mirror.x) ?? false;
+      const y = readBoolean(mirror.y) ?? false;
+      tryRestore(() => dispatch(ApplicationStateActions.SetMirror, { x, y }));
+    }
+    if (frame !== undefined && frame > 0 && frame < this.sprite.frames.length) {
+      this.sprite.selectFrame(frame);
+    }
+    const camera = readCamera(editor.camera);
+    // After the first fit of the new scene, or it would override the camera.
+    if (camera) void this.sceneReady.then(() => this.workspace.setCamera(camera));
+  }
+
   // ------------------------------------------------------------------ internals
 
   /** Rebuilds the scene for the current frame; keeps the camera unless `fit`. */
@@ -383,7 +462,7 @@ export default class Application implements ApplicationContext {
       ],
     });
     const camera = fit ? undefined : this.workspace.camera.getState();
-    void this.workspace.setScene(this.scene, { fit, camera });
+    this.sceneReady = this.workspace.setScene(this.scene, { fit, camera });
     this.bindDocument();
   }
 

@@ -284,7 +284,13 @@ Issues, improvements and polish candidates collected along the way, including ev
   - **Shared theme (3):** `@foundry2d/ui/theme/tokens.css` holds the design tokens, `<layers-panel>` tokens and base resets, and both apps `@import` it. The pixel editor's short names (`--bg`, `--panel`…) are aliases of the shared tokens, so it now uses the level designer's palette.
   - **Store review (4):** every action is still used. The rule (the store holds UI state only; model data changes through commands) is now documented at the top of both stores.
   - **Tooling:** the root Vite config excludes `e2e/` from Vitest, so VS Code's Testing tab no longer imports the Playwright specs (which failed with "Playwright Test did not expect test.beforeEach() to be called here"). The Playwright extension is recommended for running them from the editor.
-- **8.4 Files and storage:** items 6–9 and 32–37 (work files versus export files).
+- **8.4 Files and storage** (in progress): items 6–9 and 32–37 (work files versus export files).
+  - ✅ **Work files keep the editing state (32):** an `editor` block next to the document data, written on save and in recovery snapshots and restored on open. Tool changes alone don't mark a file as changed, as in other editors; the state is captured whenever the file is next saved.
+    - Pixel editor: camera, frame, tool, colour, pen size, grid, onion skin and mirror.
+    - Level designer: view, open level, camera, tool, grid, selected values, tile flips and tile selections.
+    - Readers are lenient (shared helpers in `@foundry2d/workspace`), so a damaged or older block never blocks opening.
+  - ✅ **Branded extensions (33):** `.f2dsprite` (MIME `application/vnd.foundry2d.sprite+json`) and `.f2dlevel` (`application/vnd.foundry2d.level+json`). The older `.f2d.json` and `.f2dlevel.json` names still open but are no longer written, and the level designer's tileset import accepts `.f2dsprite`. Presets keep `.json` names, because the build imports them as JSON.
+  - Next: the level export dialog (35), the packaged format with images (6), re-importing sprite tilesets (7), the library extras (8) and undo for definition edits (9). Item 34 (OS file association) goes with the manifest in 8.7. Items 36–37 are decisions to take with a target engine.
 - **8.5 Features:** items 12–15, 17–20, 23, 30 and 31.
 - **8.6 Quality:** items 16, 26–28.
 - **8.7 Engine formats and distribution:** items 38–40. Item 40 is shared with Phase 9, so it can move there if the packer starts first.
@@ -445,4 +451,4 @@ A third app in the monorepo that turns many images into optimised spritesheets p
 
 1. **Order after Phase 0:** Phase 1 (pixel parity) came first. Done.
 2. **Pac-Man tile size:** 8 px, the arcade original, set in the Pac-Man preset and editable per project.
-3. **Project file format:** human-readable JSON with RLE layer data (`.f2d.json` for the pixel editor, `.f2dlevel.json` for the level designer).
+3. **Project file format:** human-readable JSON with RLE layer data. Since stage 8.4 the files use branded extensions, `.f2dsprite` (pixel editor) and `.f2dlevel` (level designer), with vendor MIME types; the older `.f2d.json` and `.f2dlevel.json` names still open.

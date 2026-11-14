@@ -22,7 +22,15 @@ import { AUTO_RULE_SIZES, type AutoRule, type AutoRuleSize } from "../model/auto
 export const PROJECT_FORMAT = "foundry2d.level";
 /** 2 added entity definitions, enums and entity instances. */
 export const PROJECT_VERSION = 2;
-export const PROJECT_EXTENSION = ".f2dlevel.json";
+/** Branded work-file extension; the content is JSON. */
+export const PROJECT_EXTENSION = ".f2dlevel";
+/**
+ * Earlier extensions that still open. Presets in `presets/` keep the
+ * `.f2dlevel.json` name because the build imports them as JSON modules.
+ */
+export const LEGACY_EXTENSIONS = [".f2dlevel.json"];
+/** Vendor MIME type for the save picker and downloads. */
+export const PROJECT_MIME = "application/vnd.foundry2d.level+json";
 
 export interface SerializedLevelLayer {
   defUid: number;

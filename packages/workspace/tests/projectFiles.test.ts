@@ -148,3 +148,19 @@ describe("ProjectFiles", () => {
     expect(fresh.screens).toHaveLength(1);
   });
 });
+
+describe("stripFileExtension", () => {
+  it("strips branded, legacy and plain JSON extensions", async () => {
+    const { stripFileExtension } = await import("../src/project/files");
+    const type = {
+      description: "",
+      mimeType: "application/vnd.foundry2d.level+json",
+      extensions: [".f2dlevel"],
+      legacyExtensions: [".f2dlevel.json"],
+    };
+    expect(stripFileExtension("maze.f2dlevel", type)).toBe("maze");
+    expect(stripFileExtension("maze.F2DLEVEL.json", type)).toBe("maze");
+    expect(stripFileExtension("export.json", type)).toBe("export");
+    expect(stripFileExtension("notes.txt", type)).toBe("notes.txt");
+  });
+});

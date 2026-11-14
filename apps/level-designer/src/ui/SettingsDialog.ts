@@ -188,7 +188,7 @@ export default class SettingsDialog {
     const project = this.project;
     if (!project) return;
     try {
-      const isSprite = /\.json$/i.test(file.name);
+      const isSprite = /\.(f2dsprite|json)$/i.test(file.name);
       let image: { dataUrl: string; width: number; height: number };
       let tileSize = project.gridSize;
       if (isSprite) {

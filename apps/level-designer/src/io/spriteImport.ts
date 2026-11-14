@@ -2,7 +2,7 @@ import { compositeRgba, deserializeDocument, type SerializedDocument } from "@fo
 import { ProjectFormatError } from "./projectFile";
 
 /**
- * Reads a Foundry2D pixel-editor sprite (`.f2d.json`, format
+ * Reads a Foundry2D pixel-editor sprite (`.f2dsprite`, or older `.f2d.json`; format
  * "foundry2d.pixel", v1 or v2) and lays its frames out side by side, so each
  * frame can become a tile (or a block of tiles) of a tileset.
  *

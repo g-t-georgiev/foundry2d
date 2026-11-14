@@ -6,8 +6,20 @@
 export interface FileTypeSpec {
   description: string;
   mimeType: string;
-  /** Extensions including the dot, e.g. [".json"]. */
+  /** Extensions including the dot, e.g. [".f2dsprite"]. The first one is used when saving. */
   extensions: string[];
+  /** Older extensions that still open (never written), e.g. [".f2d.json"]. */
+  legacyExtensions?: string[];
+}
+
+/** The file name without any of the type's extensions (or a plain `.json`). */
+export function stripFileExtension(name: string, type: FileTypeSpec): string {
+  const known = [...type.extensions, ...(type.legacyExtensions ?? []), ".json"].sort(
+    (a, b) => b.length - a.length
+  );
+  const lower = name.toLowerCase();
+  const match = known.find((ext) => lower.endsWith(ext.toLowerCase()));
+  return match ? name.slice(0, -match.length) : name;
 }
 
 /** The subset of `FileSystemFileHandle` we rely on (not all of it is in lib.dom yet). */
@@ -47,7 +59,10 @@ export const supportsFileSystemAccess = (): boolean => fsWindow() !== null;
 const isAbort = (error: unknown) => error instanceof DOMException && error.name === "AbortError";
 
 const pickerTypes = (types: FileTypeSpec[]): PickerAcceptType[] =>
-  types.map((t) => ({ description: t.description, accept: { [t.mimeType]: t.extensions } }));
+  types.map((t) => ({
+    description: t.description,
+    accept: { [t.mimeType]: [...t.extensions, ...(t.legacyExtensions ?? [])] },
+  }));
 
 /** Asks the user for a file. Resolves `null` when they cancel. */
 export async function pickFileToOpen(
@@ -66,7 +81,9 @@ export async function pickFileToOpen(
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = types.flatMap((t) => [t.mimeType, ...t.extensions]).join(",");
+    input.accept = types
+      .flatMap((t) => [t.mimeType, ...t.extensions, ...(t.legacyExtensions ?? [])])
+      .join(",");
     input.addEventListener("change", () =>
       resolve(input.files?.[0] ? { file: input.files[0], handle: null } : null)
     );

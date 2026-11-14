@@ -88,3 +88,20 @@ test("saves to the browser library and lists it on the start screen", async ({ p
   const browser = page.locator("project-browser");
   await expect(browser.getByText("sprite", { exact: true })).toBeVisible();
 });
+
+test("reopens with the same zoom, tool and toggles (work file editor state)", async ({ page }) => {
+  await page.keyboard.press("#"); // grid off
+  await page.locator('[data-command="zoom-in"]').click();
+  const zoom = await page.evaluate(() => window.foundry!.workspace.zoom);
+  const p = await at(page, 4, 4);
+  await page.mouse.click(p.x, p.y); // an edit, so unsaved work is snapshotted
+  await page.keyboard.press("e"); // eraser
+
+  // Tool changes alone don't mark the sprite dirty; another edit does.
+  await page.mouse.click(p.x, p.y);
+  await reloadAfterRecovery(page);
+  await expect(page.locator("#messageDisplay")).toContainText("Restored");
+  await expect.poll(() => page.evaluate(() => window.foundry!.workspace.zoom)).toBeCloseTo(zoom, 5);
+  await expect(page.locator('[data-tool="eraser"]')).toHaveClass(/active/);
+  await expect(page.locator("#gridToggle")).not.toBeChecked();
+});

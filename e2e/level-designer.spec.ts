@@ -139,3 +139,17 @@ test("adds and deletes layers from the layers panel", async ({ page }) => {
   await expect(panel.locator(".row")).toHaveCount(3);
   await expect(panel.locator(".row .name")).toHaveText(["entities", "collectibles", "collision"]);
 });
+
+test("reopens with the same view, tool and zoom (work file editor state)", async ({ page }) => {
+  await page.keyboard.press("r"); // rectangle tool
+  await page.keyboard.press("+");
+  const zoom = await page.evaluate(() => window.foundry!.workspace.zoom);
+  const p = await atCell(page, 2, 2);
+  await drag(page, p, await atCell(page, 3, 3)); // an edit, so unsaved work is snapshotted
+  await expect.poll(() => cell(page, "def_1", 3, 3)).toBe(1);
+
+  await reloadAfterRecovery(page);
+  await expect(page.locator("#statMessage")).toContainText("Restored");
+  await expect(page.locator('[data-tool="rect"]')).toHaveClass(/active/);
+  await expect.poll(() => page.evaluate(() => window.foundry!.workspace.zoom)).toBeCloseTo(zoom, 5);
+});
