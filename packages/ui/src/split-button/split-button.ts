@@ -48,19 +48,27 @@ template.innerHTML = `
     .toggle svg { width: 12px; height: 12px; transition: rotate 0.15s; }
     .toggle[aria-expanded="true"] svg { rotate: 180deg; }
     ::slotted(svg), ::slotted([slot="icon"]) { width: 16px; height: 16px; fill: currentColor; }
+    /*
+     * The menu is a manual popover, so it renders in the top layer: it
+     * floats over the page instead of growing (or scrolling) whatever
+     * container holds the button, e.g. a toolbar with overflow-x: auto.
+     * It is placed in viewport coordinates next to the button (_place).
+     */
     .menu {
-      position: absolute;
-      top: calc(100% + 4px);
-      right: 0;
-      z-index: 50;
-      min-width: 100%;
+      position: fixed;
+      inset: auto;
+      margin: 0;
+      z-index: 1000; /* only matters without popover support */
+      overflow: visible;
+      color: inherit;
       padding: 4px;
       background: var(--_menu-bg);
       border: 1px solid var(--theme-border-color, #2a2a32);
       border-radius: 8px;
       box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
     }
-    .menu[hidden] { display: none; }
+    .menu { display: none; }
+    .menu:popover-open, .menu.open { display: block; }
     .item {
       display: flex;
       width: 100%;
@@ -83,7 +91,7 @@ template.innerHTML = `
   <button class="toggle" part="toggle" aria-haspopup="menu" aria-expanded="false" aria-label="More options">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
   </button>
-  <div class="menu" role="menu" hidden></div>
+  <div class="menu" role="menu" popover="manual"></div>
   <slot name="options"></slot>
 `;
 
@@ -238,12 +246,51 @@ export default class SplitButton extends Base implements WebComponent {
   }
 
   private setOpen(open: boolean): void {
-    this.menu.hidden = !open;
+    const menu = this.menu;
     this.toggle.setAttribute("aria-expanded", String(open));
     if (open) {
+      if (typeof menu.showPopover === "function") menu.showPopover();
+      else menu.classList.add("open");
+      this.place();
+      window.addEventListener("resize", this.reposition);
+      window.addEventListener("scroll", this.reposition, true);
       const items = this.items();
       (items.find((i) => i.getAttribute("aria-checked") === "true") ?? items[0])?.focus();
+    } else {
+      if (typeof menu.hidePopover === "function" && menu.matches(":popover-open")) {
+        menu.hidePopover();
+      }
+      menu.classList.remove("open");
+      window.removeEventListener("resize", this.reposition);
+      window.removeEventListener("scroll", this.reposition, true);
     }
+  }
+
+  private reposition = () => {
+    if (this.isOpen) this.place();
+  };
+
+  /**
+   * Below the button and right-aligned with it (above when there's no room
+   * below), at least as wide as the button, always inside the viewport.
+   */
+  private place(): void {
+    const gap = 4;
+    const margin = 8;
+    const button = this.getBoundingClientRect();
+    const menu = this.menu;
+    menu.style.minWidth = `${button.width}px`;
+    const rect = menu.getBoundingClientRect();
+    const below = window.innerHeight - button.bottom;
+    let top =
+      below >= rect.height + gap || button.top < rect.height + gap
+        ? button.bottom + gap
+        : button.top - rect.height - gap;
+    let left = button.right - rect.width;
+    left = Math.max(margin, Math.min(left, window.innerWidth - rect.width - margin));
+    top = Math.max(margin, Math.min(top, window.innerHeight - rect.height - margin));
+    menu.style.top = `${top}px`;
+    menu.style.left = `${left}px`;
   }
 
   private items(): HTMLElement[] {

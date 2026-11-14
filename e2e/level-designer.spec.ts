@@ -187,7 +187,11 @@ test.describe("with the Pac-Man preset", () => {
     await exportButton.getByRole("button", { name: "Export (JSON)" }).click();
     expect((await json).suggestedFilename()).toBe("pacman.json");
 
+    // The menu floats over the page: the scrolling toolbar must not grow.
+    const toolbar = page.locator(".toolbar");
+    const heightBefore = await toolbar.evaluate((el) => el.scrollHeight);
     await exportButton.getByRole("button", { name: "More options" }).click();
+    expect(await toolbar.evaluate((el) => el.scrollHeight)).toBe(heightBefore);
     const csv = page.waitForEvent("download");
     await exportButton.getByRole("menuitemradio", { name: /Export \(CSV\)/ }).click();
     expect((await csv).suggestedFilename()).toBe("pacman-csv.zip");
