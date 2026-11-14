@@ -38,6 +38,7 @@ import LevelLayersController from "./ui/LevelLayersController";
 import LevelsListView from "./ui/LevelsListView";
 import SettingsDialog from "./ui/SettingsDialog";
 import AutoRulesDialog from "./ui/AutoRulesDialog";
+import AddLayerMenu from "./ui/AddLayerMenu";
 import { WorldScene } from "./world/WorldScene";
 import { LevelOperations } from "./world/LevelOperations";
 import {
@@ -100,6 +101,7 @@ export default class Application {
   private readonly rulesDialog: AutoRulesDialog;
   readonly entities: EntityController;
   private readonly entityPanel: EntityPanel;
+  private readonly addLayerMenu = new AddLayerMenu($("#addLayerMenu"));
   readonly session: ProjectSession;
   /** True while a project is being loaded, so load-time events don't mark it dirty. */
   private loading = false;
@@ -353,7 +355,12 @@ export default class Application {
       this.workspace.refreshCursor();
     };
     this.levelSession = {
-      layers: new LevelLayersController(this.layersPanel, this.project, level, this.history),
+      layers: new LevelLayersController(this.layersPanel, this.project, level, this.history, {
+        chooseLayerType: () => this.addLayerMenu.choose(),
+        confirm: (message) => window.confirm(message),
+        onDestructiveChange: () => this.history.clear(),
+        notify: (message, timeout) => this.showMessage(message, timeout),
+      }),
       unsubscribe: [
         doc.events.on("layer:activated", refreshLayerUi),
         doc.events.on("resized", () => {

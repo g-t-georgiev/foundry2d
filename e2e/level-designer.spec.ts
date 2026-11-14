@@ -122,3 +122,20 @@ test("project settings open on tabs that switch with the arrow keys", async ({ p
   await expect(dialog.getByRole("tab", { name: "Enums" })).toHaveAttribute("aria-selected", "true");
   await expect(dialog.locator("#enumsList")).toContainText("ghost");
 });
+
+test("adds and deletes layers from the layers panel", async ({ page }) => {
+  const panel = page.locator("#layersPanel");
+  await panel.getByRole("button", { name: "Add layer" }).click();
+  await page
+    .locator("#addLayerMenu")
+    .getByRole("menuitem", { name: /Entities/ })
+    .click();
+  await expect(panel.locator(".row")).toHaveCount(4);
+  // Added above the active layer (collision, at the bottom) and made active.
+  await expect(panel.locator('.row[aria-selected="true"] .name')).toHaveText("entities_2");
+
+  // Delete asks for confirmation (accepted by openApp's dialog handler).
+  await panel.getByRole("button", { name: "Delete layer" }).click();
+  await expect(panel.locator(".row")).toHaveCount(3);
+  await expect(panel.locator(".row .name")).toHaveText(["entities", "collectibles", "collision"]);
+});

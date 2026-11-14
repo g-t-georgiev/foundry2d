@@ -275,7 +275,18 @@
         </section>
 
         <section class="panel-section flex-expand level-only">
-          <layers-panel id="layersPanel" actions="up down"></layers-panel>
+          <layers-panel id="layersPanel" actions="add up down delete"></layers-panel>
+          <div id="addLayerMenu" class="popover-menu" role="menu" aria-label="Add layer" hidden>
+            <button type="button" role="menuitem" data-layer-type="IntGrid">
+              IntGrid <small>integer values painted per cell</small>
+            </button>
+            <button type="button" role="menuitem" data-layer-type="Tiles">
+              Tiles <small>tiles from a tileset, by hand or by rules</small>
+            </button>
+            <button type="button" role="menuitem" data-layer-type="Entities">
+              Entities <small>placed objects with fields</small>
+            </button>
+          </div>
           <button class="btn btn-full" data-command="settings">Edit layer definitions…</button>
         </section>
       </aside>

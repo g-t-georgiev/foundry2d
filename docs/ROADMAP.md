@@ -375,6 +375,12 @@ Foundry2D already has both, but the line between them isn't drawn deliberately y
     - Apply the same contract here: work files carry a format version with migrations (both formats already have versions); exports are documented and stable for games, but are not meant to be reopened for editing.
     - Also consider LDtk's option to store each level in its own file, which keeps version-control diffs small for big worlds.
 
+**Reported issues**
+
+41. **Level designer layers panel had no add or delete buttons** (reported 2026-11-15). Layers could only be moved and renamed there; adding and deleting meant going to Project settings. ✅ Fixed right after 8.3:
+    - "+" opens a menu to add an IntGrid, Tiles or Entities layer above the active one. IntGrid layers start with one value, and Tiles layers bind the first tileset.
+    - Delete asks first, because layer definitions apply to every level and aren't undoable.
+
 **Delivery and engine formats** (requested 2026-11-14)
 
 38. **Offline support (installable web app).** Each app gets a web app manifest, icons and a service worker that caches the app shell, so it installs from the browser and works offline. Items 33–34 (branded files, file association) build on the same manifest.

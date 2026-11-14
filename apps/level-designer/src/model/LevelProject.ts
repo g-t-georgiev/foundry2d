@@ -707,6 +707,15 @@ export class LevelProject {
     return true;
   }
 
+  /** Moves a definition to sit directly above `anchorUid` (used when adding layers). */
+  placeLayerDefAbove(uid: number, anchorUid: number): void {
+    const target = this.defs.layers.findIndex((d) => d.uid === anchorUid) + 1;
+    if (target <= 0) return;
+    let index = this.defs.layers.findIndex((d) => d.uid === uid);
+    while (index > target && this.moveLayerDef(uid, "down")) index--;
+    while (index !== -1 && index < target - 1 && this.moveLayerDef(uid, "up")) index++;
+  }
+
   /** Moves a definition one step up (drawn above) or down in every level. */
   moveLayerDef(uid: number, direction: "up" | "down"): boolean {
     const from = this.defs.layers.findIndex((d) => d.uid === uid);

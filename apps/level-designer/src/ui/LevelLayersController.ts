@@ -1,6 +1,16 @@
 import { SetLayerPropertyCommand, type HistoryManager, type Unsubscribe } from "@foundry2d/core";
 import { LayerPanelEvents, type LayersPanel } from "@foundry2d/ui";
-import { defUidOf, type Level, type LevelProject } from "../model/LevelProject";
+import { defUidOf, layerIdFor, type Level, type LevelProject } from "../model/LevelProject";
+import type { LayerType } from "../model/types";
+
+export interface LevelLayersHooks {
+  /** Asks which kind of layer to add (`null` = cancelled). */
+  chooseLayerType(): Promise<LayerType | null>;
+  confirm(message: string): boolean;
+  /** After edits that remove data (deleting a layer): undo history is no longer safe. */
+  onDestructiveChange(): void;
+  notify(message: string, timeout?: number): void;
+}
 
 /**
  * Bridges `<layers-panel>` and a level. Layer structure (order, names) comes
@@ -16,7 +26,8 @@ export default class LevelLayersController {
     private readonly panel: LayersPanel,
     private readonly project: LevelProject,
     private readonly level: Level,
-    private readonly history: HistoryManager
+    private readonly history: HistoryManager,
+    private readonly hooks: LevelLayersHooks
   ) {
     const sync = () => this.sync();
     const { doc } = level;
@@ -47,6 +58,47 @@ export default class LevelLayersController {
     this.panel.activeId = this.level.doc.activeLayerId;
   }
 
+  /**
+   * Adds a layer definition of the chosen type above the active layer (in
+   * every level) and makes it active here. Like other definition edits, this
+   * isn't an undo step.
+   */
+  private async addLayer(): Promise<void> {
+    const type = await this.hooks.chooseLayerType();
+    if (!type) return;
+    const { project, level } = this;
+    const activeUid = defUidOf(level.doc.activeLayerId ?? "");
+    const def =
+      type === "IntGrid"
+        ? project.addIntGridLayer("intgrid")
+        : type === "Tiles"
+          ? project.addTilesLayer("tiles", project.defs.tilesets[0]?.uid ?? null)
+          : project.addEntitiesLayer("entities");
+    // A fresh IntGrid layer gets one value, so it can be painted right away.
+    if (type === "IntGrid") project.addIntGridValue(def.uid);
+    if (activeUid !== null) project.placeLayerDefAbove(def.uid, activeUid);
+    level.doc.setActiveLayer(layerIdFor(def.uid));
+    this.hooks.notify(`Added "${def.identifier}" · double-click to rename`, 3500);
+  }
+
+  private deleteLayer(uid: number): void {
+    const { project } = this;
+    const def = project.getLayerDef(uid);
+    if (!def) return;
+    if (project.defs.layers.length <= 1) {
+      this.hooks.notify("A project needs at least one layer.", 3000);
+      return;
+    }
+    const dependents = project.defs.layers.filter((d) => d.autoSourceUid === uid);
+    const extra = dependents.length
+      ? ` Auto-layers generated from it (${dependents.map((d) => d.identifier).join(", ")}) keep their tiles and become hand-painted.`
+      : "";
+    const message = `Delete layer "${def.identifier}" and its data in every level?${extra} This can't be undone.`;
+    if (!this.hooks.confirm(message)) return;
+    project.removeLayerDef(uid);
+    this.hooks.onDestructiveChange();
+  }
+
   destroy(): void {
     this.subscriptions.forEach((unsubscribe) => unsubscribe());
     this.abort.abort();
@@ -60,6 +112,15 @@ export default class LevelLayersController {
     panel.addEventListener(LayerPanelEvents.Select, (ev) => doc.setActiveLayer(ev.detail.id), {
       signal,
     });
+    panel.addEventListener(LayerPanelEvents.Add, () => void this.addLayer(), { signal });
+    panel.addEventListener(
+      LayerPanelEvents.Delete,
+      (ev) => {
+        const uid = defUidOf(ev.detail.id);
+        if (uid !== null) this.deleteLayer(uid);
+      },
+      { signal }
+    );
     panel.addEventListener(
       LayerPanelEvents.Move,
       (ev) => {
