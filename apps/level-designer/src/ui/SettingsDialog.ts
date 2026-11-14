@@ -69,6 +69,8 @@ export default class SettingsDialog {
   private readonly tilesetsList: HTMLElement;
   private readonly tilesetEditor: HTMLElement;
   private readonly fileInput: HTMLInputElement;
+  /** Set while the file picker is open for "Re-import" of this tileset. */
+  private reimportUid: number | null = null;
   private readonly entityDefs: EntityDefsEditor;
 
   constructor(
@@ -132,11 +134,17 @@ export default class SettingsDialog {
       this.selectedLayerUid = this.project.addEntitiesLayer("entities").uid;
       this.render();
     });
-    $("#importTileset").addEventListener("click", () => this.fileInput.click());
+    $("#importTileset").addEventListener("click", () => {
+      this.reimportUid = null;
+      this.fileInput.click();
+    });
     this.fileInput.addEventListener("change", () => {
       const file = this.fileInput.files?.[0];
       this.fileInput.value = "";
-      if (file) void this.importTileset(file);
+      const uid = this.reimportUid;
+      this.reimportUid = null;
+      if (!file) return;
+      void (uid === null ? this.importTileset(file) : this.reimportTileset(uid, file));
     });
 
     this.defsList.addEventListener("click", (ev) => {
@@ -184,24 +192,56 @@ export default class SettingsDialog {
     if (this.dialog.open) this.dialog.close();
   }
 
+  /**
+   * Reads a PNG/WebP/GIF sheet, or a pixel-editor sprite (frames side by
+   * side; square frames suggest the tile size).
+   */
+  private async readTilesetSource(
+    file: File,
+    gridSize: number
+  ): Promise<{ image: { dataUrl: string; width: number; height: number }; tileSize: number }> {
+    if (/\.(f2dsprite|json)$/i.test(file.name)) {
+      const json: unknown = JSON.parse(await file.text());
+      if (!isPixelSpriteFile(json)) throw new Error("Not a Foundry2D sprite file.");
+      const sheet = spriteToSheet(json);
+      return {
+        image: { dataUrl: sheetToDataUrl(sheet), width: sheet.width, height: sheet.height },
+        tileSize: sheet.frameWidth === sheet.frameHeight ? sheet.frameWidth : gridSize,
+      };
+    }
+    return { image: await readImageFile(file), tileSize: gridSize };
+  }
+
+  /**
+   * Replaces a tileset's image with an updated file, keeping its identity,
+   * tile size and every placed tile (tile ids refer to positions in the
+   * sheet, so updated art shows up everywhere at once).
+   */
+  private async reimportTileset(uid: number, file: File): Promise<void> {
+    const project = this.project;
+    const tileset = project?.getTileset(uid);
+    if (!project || !tileset) return;
+    try {
+      const { image } = await this.readTilesetSource(file, project.gridSize);
+      const resized = image.width !== tileset.image.width || image.height !== tileset.image.height;
+      project.updateTileset(uid, { image: { ...image, fileName: file.name } });
+      this.hooks.notify(
+        resized
+          ? `Re-imported "${tileset.identifier}" from ${file.name} (size changed: check the tile layout)`
+          : `Re-imported "${tileset.identifier}" from ${file.name}`
+      );
+      this.render();
+    } catch (error) {
+      console.error(error);
+      this.hooks.notify(`Could not re-import "${file.name}": ${(error as Error).message}`);
+    }
+  }
+
   private async importTileset(file: File): Promise<void> {
     const project = this.project;
     if (!project) return;
     try {
-      const isSprite = /\.(f2dsprite|json)$/i.test(file.name);
-      let image: { dataUrl: string; width: number; height: number };
-      let tileSize = project.gridSize;
-      if (isSprite) {
-        // A pixel-editor sprite: frames side by side. Square frames become
-        // one tile each; otherwise slice by the project grid.
-        const json: unknown = JSON.parse(await file.text());
-        if (!isPixelSpriteFile(json)) throw new Error("Not a Foundry2D sprite file.");
-        const sheet = spriteToSheet(json);
-        image = { dataUrl: sheetToDataUrl(sheet), width: sheet.width, height: sheet.height };
-        if (sheet.frameWidth === sheet.frameHeight) tileSize = sheet.frameWidth;
-      } else {
-        image = await readImageFile(file);
-      }
+      const { image, tileSize } = await this.readTilesetSource(file, project.gridSize);
       const tileset = project.addTileset({
         identifier: file.name.replace(/(\.f2d)?\.[^.]+$/, "").replace(/\W+/g, "_") || "tileset",
         tileSize,
@@ -486,6 +526,16 @@ export default class SettingsDialog {
       textContent: `${tileset.image.fileName ?? "embedded image"} · ${tileset.image.width}×${tileset.image.height}px · ${columns}×${rows} tiles`,
     });
 
+    const reimport = el("button", {
+      className: "btn btn-small",
+      textContent: "Re-import…",
+      title: "Replace the image with an updated PNG or .f2dsprite; placed tiles stay",
+    });
+    reimport.addEventListener("click", () => {
+      this.reimportUid = tileset.uid;
+      this.fileInput.click();
+    });
+
     const used = project.defs.layers.filter((d) => d.tilesetUid === tileset.uid);
     const remove = el("button", {
       className: "btn btn-small btn-danger",
@@ -511,7 +561,7 @@ export default class SettingsDialog {
       ),
       preview,
       info,
-      el("div", { className: "def-editor-footer" }, el("span"), remove),
+      el("div", { className: "def-editor-footer" }, reimport, remove),
     ];
   }
 }

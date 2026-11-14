@@ -9,6 +9,8 @@ export interface StartScreenData {
   recent: RecentFileRecord[];
   warning?: string;
   currentId?: string | null;
+  /** Storage use shown next to the library, e.g. "1.2 MB used of 2 GB". */
+  usage?: string;
 }
 
 /** The start screen / Open dialog, e.g. `<project-browser>`. */
@@ -36,6 +38,33 @@ export interface ProjectFilesOptions<Project> {
   confirm?(message: string): boolean;
   /** Extra clean-up after a library project is deleted (e.g. pruning assets). */
   afterDelete?(id: string): Promise<void>;
+  /** Renames the open project (used by "Save a copy in this browser"). */
+  setName?(name: string): void;
+  /** Asks for a name (default `window.prompt`); `null` cancels. */
+  promptName?(message: string, initial: string): string | null;
+}
+
+const formatBytes = (bytes: number): string => {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return `${value < 10 && unit > 0 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`;
+};
+
+/** "1.2 MB used of 2 GB" from the browser's storage estimate, if available. */
+async function storageUsage(): Promise<string | undefined> {
+  try {
+    const estimate = await navigator.storage?.estimate?.();
+    if (estimate?.usage === undefined) return undefined;
+    const quota = estimate.quota ? ` of ${formatBytes(estimate.quota)}` : "";
+    return `${formatBytes(estimate.usage)} used${quota}`;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -128,6 +157,23 @@ export class ProjectFiles<Project> {
     await this.showBrowser();
   }
 
+  /** Copies a library project to a new entry named "... copy". */
+  async duplicateLibrary(id: string): Promise<void> {
+    const storage = this.session.storage;
+    const record = await storage.projects.get(id);
+    if (!record) return;
+    const taken = new Set((await this.session.listLibrary()).map((p) => p.name));
+    let name = `${record.name} copy`;
+    for (let n = 2; taken.has(name); n++) name = `${record.name} copy ${n}`;
+    const now = Date.now();
+    const newId =
+      globalThis.crypto?.randomUUID?.() ??
+      `${now.toString(36)}-${Math.random().toString(36).slice(2)}`;
+    await storage.projects.put({ ...record, id: newId, name, createdAt: now, updatedAt: now });
+    this.options.notify(`Duplicated as "${name}"`);
+    await this.showBrowser();
+  }
+
   async removeRecent(id: string): Promise<void> {
     await this.session.removeRecent(id);
     await this.showBrowser();
@@ -148,6 +194,26 @@ export class ProjectFiles<Project> {
     }
   }
 
+  /**
+   * "Save as" into the browser library: asks for a name, then saves the open
+   * project as a new library entry and continues working on that copy (the
+   * original entry or file stays as it was).
+   */
+  async saveCopyInBrowser(currentName: string): Promise<void> {
+    const ask = this.options.promptName ?? ((message, initial) => window.prompt(message, initial));
+    const name = ask("Save a copy in this browser as:", `${currentName} copy`)?.trim();
+    if (!name) return;
+    this.options.setName?.(name);
+    this.session.detachForCopy();
+    this.session.markDirty();
+    try {
+      await this.session.save();
+      this.options.notify(`Saved a copy as "${name}" in this browser`);
+    } catch (error) {
+      this.reportSaveError(error);
+    }
+  }
+
   /** Ctrl+Shift+S: writes a file (picker where supported, download otherwise). */
   async saveAs(): Promise<void> {
     try {
@@ -163,9 +229,10 @@ export class ProjectFiles<Project> {
 
   /** Opens the start screen / Open dialog. */
   async showBrowser(): Promise<void> {
-    const [library, recent] = await Promise.all([
+    const [library, recent, usage] = await Promise.all([
       this.session.listLibrary(),
       this.session.listRecent(),
+      storageUsage(),
     ]);
     const { noun } = this.options;
     this.options.startScreen.show({
@@ -174,6 +241,7 @@ export class ProjectFiles<Project> {
       library,
       recent,
       currentId: this.session.state.libraryId,
+      usage,
       warning:
         this.session.storage.kind === "memory"
           ? `Browser storage is unavailable (private mode?). ${noun.title} saved here are lost on reload; use Save as file.`

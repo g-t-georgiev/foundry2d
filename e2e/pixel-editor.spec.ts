@@ -105,3 +105,23 @@ test("reopens with the same zoom, tool and toggles (work file editor state)", as
   await expect(page.locator('[data-tool="eraser"]')).toHaveClass(/active/);
   await expect(page.locator("#gridToggle")).not.toBeChecked();
 });
+
+test("saves a copy in the browser and duplicates it from the start screen", async ({ page }) => {
+  const p = await at(page, 1, 1);
+  await page.mouse.click(p.x, p.y);
+  await page.keyboard.press("Control+s");
+  await expect(page.locator("#messageDisplay")).toContainText("Saved");
+
+  // Save as ▾ → "Save a copy in this browser…" (the name prompt is accepted as suggested).
+  const saveAs = page.locator("#saveAsButton");
+  await saveAs.getByRole("button", { name: "More options" }).click();
+  await saveAs.getByRole("menuitemradio", { name: /Save a copy in this browser/ }).click();
+  await expect(page.locator("#messageDisplay")).toContainText('Saved a copy as "sprite copy"');
+
+  await page.locator('[data-command="open"]').click();
+  const browser = page.locator("project-browser");
+  await expect(browser.getByText("sprite copy", { exact: true })).toBeVisible();
+  await browser.getByRole("button", { name: "Duplicate sprite copy" }).click();
+  await expect(browser.getByText("sprite copy copy", { exact: true })).toBeVisible();
+  await expect(browser.locator("#usage")).toContainText("used");
+});

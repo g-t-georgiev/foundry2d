@@ -114,6 +114,17 @@ export default class LevelLayersController {
     });
     panel.addEventListener(LayerPanelEvents.Add, () => void this.addLayer(), { signal });
     panel.addEventListener(
+      LayerPanelEvents.Duplicate,
+      (ev) => {
+        const uid = defUidOf(ev.detail.id);
+        const copy = uid === null ? null : project.duplicateLayerDef(uid);
+        if (!copy) return;
+        this.level.doc.setActiveLayer(layerIdFor(copy.uid));
+        this.hooks.notify(`Duplicated as "${copy.identifier}" in every level`, 3000);
+      },
+      { signal }
+    );
+    panel.addEventListener(
       LayerPanelEvents.Delete,
       (ev) => {
         const uid = defUidOf(ev.detail.id);

@@ -152,3 +152,34 @@ describe("game format", () => {
     expect(formatLayerAsArray([1, 2, 3, 4], 2, 2)).toBe("[\n  1, 2,\n  3, 4\n]");
   });
 });
+
+describe("duplicating layer definitions", () => {
+  it("copies cells and entities into every level, right above the original", () => {
+    const project = createPacmanProject();
+    project.createLevel("level_1", 28, 36);
+    const level = project.levels[0];
+    level.doc.getLayer(layerIdFor(1))!.set(2, 2, 1);
+    const copy = project.duplicateLayerDef(1)!;
+    expect(project.defs.layers.map((d) => d.identifier)).toEqual([
+      "collision",
+      "collision_copy",
+      "collectibles",
+      "entities",
+    ]);
+    for (const l of project.levels) {
+      expect(l.doc.layers.map((x) => x.name)).toEqual(project.defs.layers.map((d) => d.identifier));
+    }
+    const copied = level.doc.getLayer(layerIdFor(copy.uid))!;
+    expect(copied.get(2, 2)).toBe(1);
+    copied.set(2, 2, 0); // independent buffers
+    expect(level.doc.getLayer(layerIdFor(1))!.get(2, 2)).toBe(1);
+
+    const entities = project.defs.layers.find((d) => d.type === "Entities")!;
+    const before = level.entities.length;
+    const entityCopy = project.duplicateLayerDef(entities.uid)!;
+    expect(level.entities).toHaveLength(before * 2);
+    const copies = level.entities.filter((e) => e.layerUid === entityCopy.uid);
+    expect(new Set(copies.map((e) => e.iid)).size).toBe(before);
+    expect(copies.some((e) => e.iid === "pacman-spawn")).toBe(false);
+  });
+});

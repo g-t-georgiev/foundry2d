@@ -199,3 +199,71 @@ export function fromGameFormat(json: unknown): LevelProject {
   level.doc.setActiveLayer(level.doc.layers[0]?.id ?? null);
   return project;
 }
+
+// ------------------------------------------------------------------ CSV
+
+/** Quotes a CSV field when needed (RFC 4180). */
+function csvField(value: unknown): string {
+  let text = "";
+  if (typeof value === "string") text = value;
+  else if (typeof value === "number" || typeof value === "boolean") text = String(value);
+  else if (value && typeof value === "object" && "x" in value && "y" in value) {
+    text = `${Number(value.x)};${Number(value.y)}`; // Point fields
+  }
+  const needsQuotes = /[",\r\n]/.test(text);
+  return needsQuotes ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+const csvLine = (values: unknown[]) => values.map(csvField).join(",");
+
+/** One CSV file of a level export. */
+export interface CsvFile {
+  name: string;
+  text: string;
+}
+
+/**
+ * CSV export of a level, one file per layer (like Tiled's CSV layer format):
+ * - IntGrid and Tiles layers: one row per line of cells (Tiles cells use the
+ *   same encoding as the JSON export: `tileId + 1`, flips in bits 29/30);
+ * - Entities layers: a header row, then one row per entity with its
+ *   position, size and one column per field (Point fields as `x;y`).
+ */
+export function toCsvFiles(project: LevelProject, level: Level): CsvFile[] {
+  const files: CsvFile[] = [];
+  for (const def of project.defs.layers) {
+    if (def.type === "Entities") {
+      const entities = entitiesForLayer(project, level, def.uid);
+      const fieldNames = [...new Set(entities.flatMap((e) => Object.keys(e.fields)))];
+      const columns = ["id", "iid", "x", "y", "cx", "cy", "left", "top", "width", "height"];
+      const rows = entities.map((e) =>
+        csvLine([
+          e.id,
+          e.iid,
+          e.x,
+          e.y,
+          e.cx,
+          e.cy,
+          e.left,
+          e.top,
+          e.width,
+          e.height,
+          ...fieldNames.map((f) => e.fields[f]),
+        ])
+      );
+      files.push({
+        name: `${def.identifier}.csv`,
+        text: [csvLine([...columns, ...fieldNames]), ...rows].join("\n") + "\n",
+      });
+      continue;
+    }
+    const layer = level.doc.getLayer(layerIdFor(def.uid));
+    if (!layer) continue;
+    const lines: string[] = [];
+    for (let y = 0; y < layer.height; y++) {
+      lines.push(Array.from(layer.data.subarray(y * layer.width, (y + 1) * layer.width)).join(","));
+    }
+    files.push({ name: `${def.identifier}.csv`, text: lines.join("\n") + "\n" });
+  }
+  return files;
+}

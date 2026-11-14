@@ -149,6 +149,38 @@ describe("ProjectFiles", () => {
   });
 });
 
+describe("ProjectFiles library extras", () => {
+  it("duplicates a library entry under a free name", async () => {
+    const t = setup();
+    await t.files.save();
+    const [original] = await t.session.listLibrary();
+    await t.files.duplicateLibrary(original.id);
+    await t.files.duplicateLibrary(original.id);
+    const names = (await t.session.listLibrary()).map((p) => p.name).sort();
+    expect(names).toEqual(["maze", "maze copy", "maze copy 2"]);
+    expect(t.screens.at(-1)?.library).toHaveLength(3);
+  });
+
+  it("saves a copy in the browser and keeps working on the copy", async () => {
+    const t = setup();
+    await t.files.save();
+    const [original] = await t.session.listLibrary();
+    let renamed = "";
+    const files = new ProjectFiles<Doc>({
+      ...(t.files as unknown as { options: ConstructorParameters<typeof ProjectFiles<Doc>>[0] })
+        .options,
+      setName: (name) => (renamed = name),
+      promptName: (_message, initial) => `${initial}!`,
+    });
+    await files.saveCopyInBrowser("maze");
+    expect(renamed).toBe("maze copy!");
+    const library = await t.session.listLibrary();
+    expect(library).toHaveLength(2);
+    expect(t.session.state.libraryId).not.toBe(original.id);
+    expect(t.session.state.dirty).toBe(false);
+  });
+});
+
 describe("stripFileExtension", () => {
   it("strips branded, legacy and plain JSON extensions", async () => {
     const { stripFileExtension } = await import("../src/project/files");

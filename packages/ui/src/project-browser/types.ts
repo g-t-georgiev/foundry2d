@@ -28,6 +28,8 @@ export interface ProjectBrowserData {
   warning?: string;
   /** Library id of the project currently open (highlighted). */
   currentId?: string | null;
+  /** Storage use shown next to the library heading, e.g. "1.2 MB used of 2 GB". */
+  usage?: string;
 }
 
 export const ProjectBrowserEvents = {
@@ -37,6 +39,7 @@ export const ProjectBrowserEvents = {
   RemoveRecent: "browser-remove-recent",
   OpenLibrary: "browser-open-library",
   DeleteLibrary: "browser-delete-library",
+  DuplicateLibrary: "browser-duplicate-library",
 } as const;
 
 export type ProjectBrowserEventPayloads = {
@@ -46,6 +49,7 @@ export type ProjectBrowserEventPayloads = {
   [ProjectBrowserEvents.RemoveRecent]: { id: string };
   [ProjectBrowserEvents.OpenLibrary]: { id: string };
   [ProjectBrowserEvents.DeleteLibrary]: { id: string };
+  [ProjectBrowserEvents.DuplicateLibrary]: { id: string };
 };
 
 export type ProjectBrowserEventName = keyof ProjectBrowserEventPayloads;

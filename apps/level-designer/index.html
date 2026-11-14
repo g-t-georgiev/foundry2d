@@ -45,27 +45,25 @@
         >
           Save
         </button>
-        <button class="btn" data-command="save-as" title="Save as a file (Ctrl+Shift+S)">
-          Save as…
-        </button>
-        <button class="btn btn-primary" data-command="export" title="Export game JSON (Ctrl+E)">
-          <svg class="icon" viewBox="0 0 24 24">
+        <split-button id="saveAsButton" title="Save as (Ctrl+Shift+S saves to a file)">
+          <option value="file" selected data-hint="Ctrl+Shift+S">Save as file…</option>
+          <option value="browser" data-hint="new library entry">
+            Save a copy in this browser…
+          </option>
+        </split-button>
+        <split-button
+          id="exportButton"
+          variant="primary"
+          remember="level-export"
+          title="Export the level (Ctrl+E). The arrow picks the format."
+        >
+          <svg slot="icon" viewBox="0 0 24 24">
             <path d="M5 20h14v-2H5M12 2 5 9h4v6h6V9h4l-7-7z" />
           </svg>
-          Export game JSON
-        </button>
-        <button
-          class="btn"
-          data-command="copy-layer"
-          title="Copy active layer as array (Ctrl+Shift+C)"
-        >
-          <svg class="icon" viewBox="0 0 24 24">
-            <path
-              d="M19 21H8V7h11m0-2H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2m-3-4H4a2 2 0 0 0-2 2v14h2V3h12V1z"
-            />
-          </svg>
-          Copy layer
-        </button>
+          <option value="json" selected data-hint="game data">Export (JSON)</option>
+          <option value="csv" data-hint="one file per layer">Export (CSV)</option>
+          <option value="copy-array" data-hint="Ctrl+Shift+C">Copy layer as array</option>
+        </split-button>
         <span class="divider"></span>
         <button class="btn btn-icon" data-command="undo" title="Undo (Ctrl+Z)" aria-label="Undo">
           <svg class="icon" viewBox="0 0 24 24">
@@ -275,7 +273,7 @@
         </section>
 
         <section class="panel-section flex-expand level-only">
-          <layers-panel id="layersPanel" actions="add up down delete"></layers-panel>
+          <layers-panel id="layersPanel" actions="add duplicate up down delete"></layers-panel>
           <div id="addLayerMenu" class="popover-menu" role="menu" aria-label="Add layer" hidden>
             <button type="button" role="menuitem" data-layer-type="IntGrid">
               IntGrid <small>integer values painted per cell</small>

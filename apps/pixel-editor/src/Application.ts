@@ -24,7 +24,13 @@ import {
   readString,
   tryRestore,
 } from "@foundry2d/workspace";
-import { bindProjectBrowser, type LayersPanel, type ProjectBrowser } from "@foundry2d/ui";
+import {
+  SplitButtonEvents,
+  bindProjectBrowser,
+  type LayersPanel,
+  type ProjectBrowser,
+  type SplitButton,
+} from "@foundry2d/ui";
 import type { ApplicationContext } from "./types";
 import { ApplicationStateActions, applicationStore } from "./state";
 import UIManager from "./ui/UIManager";
@@ -222,8 +228,15 @@ export default class Application implements ApplicationContext {
       },
       isUserFacingError: (error) => error instanceof ProjectFormatError,
       notify,
+      setName: (name) => this.rename(name),
     });
     bindProjectBrowser(elements.projectBrowser, this.files);
+    document
+      .querySelector<SplitButton>("#saveAsButton")
+      ?.addEventListener(SplitButtonEvents.Action, (ev) => {
+        if (ev.detail.value === "browser") void this.files.saveCopyInBrowser(this.name);
+        else void this.files.saveAs();
+      });
     this.ui.updateName(this.name);
 
     this.bindStore();

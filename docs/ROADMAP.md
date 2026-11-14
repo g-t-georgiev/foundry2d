@@ -290,8 +290,21 @@ Issues, improvements and polish candidates collected along the way, including ev
     - Level designer: view, open level, camera, tool, grid, selected values, tile flips and tile selections.
     - Readers are lenient (shared helpers in `@foundry2d/workspace`), so a damaged or older block never blocks opening.
   - ✅ **Branded extensions (33):** `.f2dsprite` (MIME `application/vnd.foundry2d.sprite+json`) and `.f2dlevel` (`application/vnd.foundry2d.level+json`). The older `.f2d.json` and `.f2dlevel.json` names still open but are no longer written, and the level designer's tileset import accepts `.f2dsprite`. Presets keep `.json` names, because the build imports them as JSON.
-  - Next: the level export dialog (35), the packaged format with images (6), re-importing sprite tilesets (7), the library extras (8) and undo for definition edits (9). Item 34 (OS file association) goes with the manifest in 8.7. Items 36–37 are decisions to take with a target engine.
-- **8.5 Features:** items 12–15, 17–20, 23, 30 and 31.
+  - ✅ **Level exports (35, partly):** the toolbar's "Export game JSON" and "Copy layer" buttons became one **Export split button** (see item 42):
+    - Export (JSON): game data only.
+    - Export (CSV): one file per layer, zipped when there are several, like Tiled's CSV layers. Entities get a header row and a column per field.
+    - Copy layer as array.
+
+    The chosen format is remembered per browser. The ZIP writer moved to `@foundry2d/core`. PNG renders of levels and layers are still to do.
+
+  - ✅ **Re-import tilesets (7):** a Re-import… button in the tileset editor replaces the image with an updated PNG or `.f2dsprite`. The tileset keeps its id, tile size and every placed tile, and a changed image size is flagged. Re-reading the original file automatically would need stored file handles, which aren't worth it yet.
+  - ✅ **Library extras (8):**
+    - **Save as** is a split button: "Save as file…" (the default, also Ctrl+Shift+S) or "Save a copy in this browser…", which asks for a name and continues with the copy.
+    - Library cards on the start screen have a duplicate button.
+    - The start screen shows storage use ("2.1 MB used of 1.2 GB").
+  - ⏭ **Undo for definition edits (9) moved to 8.5.** Definition edits can delete data in every level, while the undo history holds references to those levels' layers. Restoring a project snapshot in place would break older undo steps, which is why these edits clear the history today. The safe design is an inverse command per definition operation (add, remove, rename, reorder, values, fields, enums). That's a feature-sized piece of work.
+  - Still open in 8.4: the packaged project format with images (6; it needs a ZIP reader next to the writer) and PNG level renders (35). Item 34 (OS file association) goes with the manifest in 8.7, and items 36–37 are decisions to take with a target engine.
+- **8.5 Features:** items 9, 12–15, 17–20, 23, 30 and 31.
 - **8.6 Quality:** items 16, 26–28.
 - **8.7 Engine formats and distribution:** items 38–40. Item 40 is shared with Phase 9, so it can move there if the packer starts first.
 
@@ -386,6 +399,12 @@ Foundry2D already has both, but the line between them isn't drawn deliberately y
 41. **Level designer layers panel had no add or delete buttons** (reported 2026-11-15). Layers could only be moved and renamed there; adding and deleting meant going to Project settings. ✅ Fixed right after 8.3:
     - "+" opens a menu to add an IntGrid, Tiles or Entities layer above the active one. IntGrid layers start with one value, and Tiles layers bind the first tileset.
     - Delete asks first, because layer definitions apply to every level and aren't undoable.
+
+42. **Layers panel and toolbar consistency** (requested 2026-11-15). ✅ Done in 8.4:
+    - **Layers panels:** the level designer's panel now has duplicate as well (definition plus data in every level; entity copies get new ids), matching the pixel editor.
+    - **Export split button:** the level designer's separate "Copy layer" toolbar button (which copies cells as a number array for code, a different thing from duplicating) moved into the Export split button.
+    - **Shared `<split-button>` component** in `@foundry2d/ui`: the main part runs the current default, and the arrow opens the alternatives. Picking one makes it the default (the label follows) and runs it. Options are `<option>` children, the default can be remembered per browser, and it is keyboard accessible. The name "split button" is the common one (Microsoft and most design systems); "dropdown button" usually means a button that only opens a menu. Based on the `spritesheet-generator` prototype's SplitButton.
+    - **Pixel editor undo/redo:** these existed but were easy to miss, as ↶ ↷ text glyphs at the start of the second toolbar row. They moved next to Export in the top row with the same icons as the level designer, and disabled icon buttons stay more visible.
 
 **Delivery and engine formats** (requested 2026-11-14)
 

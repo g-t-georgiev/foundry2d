@@ -318,3 +318,26 @@ describe("legacy game exports", () => {
     ]);
   });
 });
+
+describe("CSV export", () => {
+  it("writes one CSV per layer: grids row by row, entities with field columns", async () => {
+    const { toCsvFiles } = await import("../src/io/gameFormat");
+    const project = createProjectFromPreset("pacman");
+    const level = project.levels[0];
+    level.doc.getLayer(layerIdFor(1))!.set(1, 0, 1);
+    const files = toCsvFiles(project, level);
+    expect(files.map((f) => f.name)).toEqual(["collision.csv", "collectibles.csv", "entities.csv"]);
+
+    const collision = files[0].text.trim().split("\n");
+    expect(collision).toHaveLength(36);
+    expect(collision[0].split(",")).toHaveLength(28);
+    expect(collision[0].startsWith("0,1,0")).toBe(true);
+
+    const [header, ...rows] = files[2].text.trim().split("\n");
+    expect(header).toBe("id,iid,x,y,cx,cy,left,top,width,height,kind,scatterTarget,points");
+    expect(rows).toHaveLength(6);
+    expect(rows[1]).toBe("Ghost,ghost-blinky,112,116,14,14,104,108,16,16,blinky,25;0,");
+    expect(rows[0].endsWith(",,,")).toBe(true); // PacMan has none of the fields
+    expect(rows[5].endsWith(",,,100")).toBe(true); // Fruit: points only
+  });
+});

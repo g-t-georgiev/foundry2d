@@ -19,7 +19,12 @@
         >
           Save
         </button>
-        <button data-command="save-as" title="Save as a file (Ctrl+Shift+S)">Save as…</button>
+        <split-button id="saveAsButton" title="Save as (Ctrl+Shift+S saves to a file)">
+          <option value="file" selected data-hint="Ctrl+Shift+S">Save as file…</option>
+          <option value="browser" data-hint="new library entry">
+            Save a copy in this browser…
+          </option>
+        </split-button>
         <span class="divider"></span>
         <button
           data-command="export"
@@ -28,11 +33,25 @@
         >
           Export…
         </button>
+        <span class="divider"></span>
+        <button class="icon-button" data-command="undo" title="Undo (Ctrl+Z)" aria-label="Undo">
+          <svg viewBox="0 0 24 24">
+            <path
+              d="M12.5 8c-2.65 0-5.05 1-6.9 2.6L2 7v9h9l-3.62-3.62A7.97 7.97 0 0 1 20.1 16l2.37-.78A10.5 10.5 0 0 0 12.5 8z"
+            />
+          </svg>
+        </button>
+        <button
+          class="icon-button"
+          data-command="redo"
+          title="Redo (Ctrl+Shift+Z or Ctrl+Y)"
+          aria-label="Redo"
+        >
+          <svg viewBox="0 0 24 24"><path d="redo" /></svg>
+        </button>
       </div>
 
       <div class="group" aria-label="Edit">
-        <button data-command="undo" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
-        <button data-command="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷</button>
         <button data-command="clear" title="Clear active layer (Delete)">Clear layer</button>
       </div>
 

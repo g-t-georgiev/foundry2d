@@ -707,6 +707,50 @@ export class LevelProject {
     return true;
   }
 
+  /**
+   * Copies a layer definition and its data in every level (cells, entity
+   * instances with new ids, auto-layer rules), placed directly above the
+   * original. Returns the copy.
+   */
+  duplicateLayerDef(uid: number): LayerDef | null {
+    const source = this.getLayerDef(uid);
+    if (!source) return null;
+    const copy: LayerDef = {
+      ...structuredClone(source),
+      uid: this.allocateUid(),
+      identifier: this.uniqueIdentifier(`${source.identifier}_copy`),
+    };
+    for (const rule of copy.autoRules ?? []) rule.uid = this.allocateUid();
+    this.defs.layers.splice(this.defs.layers.indexOf(source) + 1, 0, copy);
+    for (const level of this.levels) {
+      const original = level.doc.getLayer(layerIdFor(uid));
+      const index = level.doc.layers.findIndex((l) => l.id === layerIdFor(uid));
+      level.doc.addLayer({
+        id: layerIdFor(copy.uid),
+        name: copy.identifier,
+        visible: original?.visible ?? true,
+        opacity: original?.opacity ?? 1,
+        locked: this.isAutoLayer(copy) || (original?.locked ?? false),
+        data: original?.data,
+        activate: false,
+      });
+      // addLayer appends on top; move the copy right above the original.
+      const from = level.doc.layers.length - 1;
+      if (index !== -1 && from !== index + 1) level.doc.moveLayer(from, index + 1);
+      if (source.type === "Entities") {
+        const copies = level.entities
+          .filter((e) => e.layerUid === uid)
+          .map((e) => ({ ...cloneInstance(e, newIid()), layerUid: copy.uid }));
+        if (copies.length) {
+          level.entities.push(...copies);
+          this.events.emit("entities:changed", level.uid);
+        }
+      }
+    }
+    this.defsChanged();
+    return copy;
+  }
+
   /** Moves a definition to sit directly above `anchorUid` (used when adding layers). */
   placeLayerDefAbove(uid: number, anchorUid: number): void {
     const target = this.defs.layers.findIndex((d) => d.uid === anchorUid) + 1;

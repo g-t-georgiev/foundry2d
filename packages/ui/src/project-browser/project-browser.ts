@@ -104,7 +104,16 @@ template.innerHTML = `
       padding: 0 6px;
       opacity: 0;
     }
-    div:hover > .delete, .delete:focus-visible { opacity: 1; }
+    .duplicate {
+      position: absolute;
+      top: 4px;
+      right: 34px;
+      padding: 0 6px;
+      opacity: 0;
+    }
+    div:hover > .delete, .delete:focus-visible,
+    div:hover > .duplicate, .duplicate:focus-visible { opacity: 1; }
+    .usage { margin-left: 8px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--_muted); }
     .delete:hover { background: var(--_danger); border-color: var(--_danger); }
     .empty { color: var(--_muted); margin: 0; }
   </style>
@@ -130,7 +139,7 @@ template.innerHTML = `
         <ul class="recent" id="recent"></ul>
       </section>
       <section>
-        <h3>In this browser</h3>
+        <h3>In this browser<span class="usage" id="usage"></span></h3>
         <div class="grid" id="library"></div>
       </section>
     </div>
@@ -224,6 +233,10 @@ export default class ProjectBrowser extends Base implements WebComponent {
         ev.stopPropagation();
         this.emit(ProjectBrowserEvents.DeleteLibrary, { id });
         break;
+      case "duplicate-library":
+        ev.stopPropagation();
+        this.emit(ProjectBrowserEvents.DuplicateLibrary, { id });
+        break;
     }
   }
 
@@ -276,6 +289,7 @@ export default class ProjectBrowser extends Base implements WebComponent {
       })
     );
 
+    $("usage").textContent = data.usage ? `· ${data.usage}` : "";
     const library = $("library");
     if (data.library.length === 0) {
       const empty = document.createElement("p");
@@ -305,11 +319,15 @@ export default class ProjectBrowser extends Base implements WebComponent {
         remove.textContent = "✕";
         remove.title = `Delete ${p.name} from this browser`;
         remove.setAttribute("aria-label", remove.title);
+        const duplicate = this.button("duplicate-library", p.id, "duplicate");
+        duplicate.textContent = "⧉";
+        duplicate.title = `Duplicate ${p.name}`;
+        duplicate.setAttribute("aria-label", duplicate.title);
         card.append(thumb, name, time);
         // A button can't contain a button: wrap the card.
         const wrap = document.createElement("div");
         wrap.style.position = "relative";
-        wrap.append(card, remove);
+        wrap.append(card, duplicate, remove);
         return wrap;
       })
     );

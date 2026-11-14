@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { expect, test, type Page } from "@playwright/test";
 import { drag, openApp, reloadAfterRecovery, toScreen, type FoundryApp } from "./helpers";
 
@@ -152,4 +153,63 @@ test("reopens with the same view, tool and zoom (work file editor state)", async
   await expect(page.locator("#statMessage")).toContainText("Restored");
   await expect(page.locator('[data-tool="rect"]')).toHaveClass(/active/);
   await expect.poll(() => page.evaluate(() => window.foundry!.workspace.zoom)).toBeCloseTo(zoom, 5);
+});
+
+test("the export split button runs JSON by default and remembers CSV", async ({ page }) => {
+  const exportButton = page.locator("#exportButton");
+  const json = page.waitForEvent("download");
+  await exportButton.getByRole("button", { name: "Export (JSON)" }).click();
+  expect((await json).suggestedFilename()).toBe("pacman.json");
+
+  await exportButton.getByRole("button", { name: "More options" }).click();
+  const csv = page.waitForEvent("download");
+  await exportButton.getByRole("menuitemradio", { name: /Export \(CSV\)/ }).click();
+  expect((await csv).suggestedFilename()).toBe("pacman-csv.zip");
+  await expect(exportButton.getByRole("button", { name: "Export (CSV)" })).toBeVisible();
+
+  // The choice survives a reload (kept per browser).
+  await page.reload();
+  await expect(
+    page.locator("#exportButton").getByRole("button", { name: "Export (CSV)" })
+  ).toBeVisible();
+});
+
+test("duplicates a layer from the layers panel", async ({ page }) => {
+  const panel = page.locator("#layersPanel");
+  await panel.getByRole("button", { name: "Duplicate layer" }).click();
+  await expect(panel.locator(".row .name")).toHaveText([
+    "entities",
+    "collectibles",
+    "collision_copy",
+    "collision",
+  ]);
+  await expect(panel.locator('.row[aria-selected="true"] .name')).toHaveText("collision_copy");
+});
+
+// 1×1 transparent PNG.
+const TINY_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "base64"
+);
+
+test("re-imports a tileset image and keeps the placed tiles", async ({ page }) => {
+  await page.locator('[data-command="open"]').click();
+  await page
+    .locator("project-browser")
+    .getByRole("button", { name: /Platformer/ })
+    .click();
+  await expect.poll(() => app(page)).toBe("platformer");
+  const tilesBefore = await cell(page, "def_2", 0, 18);
+  expect(tilesBefore).not.toBe(0);
+
+  await page.locator('[data-command="settings"]').first().click();
+  const dialog = page.locator("#settingsDialog");
+  await dialog.getByRole("tab", { name: "Tilesets" }).click();
+  const chooser = page.waitForEvent("filechooser");
+  await dialog.getByRole("button", { name: "Re-import…" }).click();
+  await (await chooser).setFiles({ name: "sheet-v2.png", mimeType: "image/png", buffer: TINY_PNG });
+
+  await expect(page.locator("#statMessage")).toContainText("Re-imported");
+  await expect(dialog).toContainText("sheet-v2.png");
+  expect(await cell(page, "def_2", 0, 18)).toBe(tilesBefore);
 });

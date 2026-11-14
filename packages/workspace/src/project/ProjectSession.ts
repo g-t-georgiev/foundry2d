@@ -109,6 +109,18 @@ export class ProjectSession {
     this.changed();
   }
 
+  /**
+   * Unbinds the open project from its file and library entry, keeping its
+   * contents (for "Save a copy": the next save creates a new entry).
+   */
+  detachForCopy(): void {
+    this.libraryId = null;
+    this.handle = null;
+    this.fileName = null;
+    this.recentId = null;
+    this.changed();
+  }
+
   markDirty(): void {
     if (!this.dirty) {
       this.dirty = true;

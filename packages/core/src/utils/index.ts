@@ -6,3 +6,4 @@ export {
 } from "./EventEmitter";
 export * from "./MathUtils";
 export * from "./PixelUtils";
+export * from "./zip";

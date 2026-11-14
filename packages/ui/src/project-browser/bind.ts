@@ -9,6 +9,7 @@ export interface ProjectBrowserHandlers {
   removeRecent(id: string): unknown;
   openLibrary(id: string): unknown;
   deleteLibrary(id: string): unknown;
+  duplicateLibrary(id: string): unknown;
 }
 
 /**
@@ -45,6 +46,11 @@ export function bindProjectBrowser(
   browser.addEventListener(
     ProjectBrowserEvents.DeleteLibrary,
     (ev) => void handlers.deleteLibrary(ev.detail.id),
+    options
+  );
+  browser.addEventListener(
+    ProjectBrowserEvents.DuplicateLibrary,
+    (ev) => void handlers.duplicateLibrary(ev.detail.id),
     options
   );
   return () => abort.abort();

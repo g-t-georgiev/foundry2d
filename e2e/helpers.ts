@@ -31,8 +31,9 @@ declare global {
 
 /** Waits until the app has booted, started its session and drawn once. */
 export async function openApp(page: Page, path = "/"): Promise<void> {
-  // A dirty project asks before unload; tests reload on purpose.
-  page.on("dialog", (dialog) => void dialog.accept());
+  // Confirmations are accepted: tests reload and delete on purpose.
+  // Prompts are accepted with their suggested value.
+  page.on("dialog", (dialog) => void dialog.accept(dialog.defaultValue()));
   await page.goto(path);
   await page.waitForFunction(() => window.foundry !== undefined);
 }

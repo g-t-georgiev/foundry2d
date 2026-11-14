@@ -1,5 +1,6 @@
 import {
   CompositeCommand,
+  createZip,
   HistoryManager,
   RectangleTool,
   StampTool,
@@ -26,7 +27,13 @@ import {
   readString,
   tryRestore,
 } from "@foundry2d/workspace";
-import { bindProjectBrowser, type LayersPanel, type ProjectBrowser } from "@foundry2d/ui";
+import {
+  SplitButtonEvents,
+  bindProjectBrowser,
+  type LayersPanel,
+  type ProjectBrowser,
+  type SplitButton,
+} from "@foundry2d/ui";
 import type { Level, LevelProject } from "./model/LevelProject";
 import { WORLD_LAYOUTS, type LayerDef, type WorldLayout } from "./model/types";
 import { createProjectFromPreset, presets, DEFAULT_PRESET_ID } from "./model/presets";
@@ -59,6 +66,7 @@ import {
 } from "./io/projectFile";
 import {
   entitiesForLayer,
+  toCsvFiles,
   formatLayerAsArray,
   fromGameFormat,
   isGameFormat,
@@ -117,6 +125,7 @@ export default class Application {
   readonly entities: EntityController;
   private readonly entityPanel: EntityPanel;
   private readonly addLayerMenu = new AddLayerMenu($("#addLayerMenu"));
+  private readonly exportButton = $<SplitButton>("#exportButton");
   readonly session: ProjectSession;
   /** True while a project is being loaded, so load-time events don't mark it dirty. */
   private loading = false;
@@ -243,6 +252,7 @@ export default class Application {
       isUserFacingError: (error) => error instanceof ProjectFormatError,
       notify: (message, timeout) => this.showMessage(message, timeout),
       afterDelete: () => this.pruneAssets(),
+      setName: (name) => this.project.setName(name),
     });
     bindProjectBrowser(browser, this.files);
 
@@ -644,17 +654,52 @@ export default class Application {
     if (!this.loading) this.session.markDirty();
   }
 
-  /** Asks before throwing away unsaved work. */
-  /** Exports the level being edited (or the one selected in the world). */
-  exportGame(): void {
-    const level = (this.view === "world" ? this.selectedLevel() : undefined) ?? this.level;
-    const json = JSON.stringify(toGameFormat(this.project, level), null, 2);
+  /** Runs an export action: "json", "csv" or "copy-array" (the split button's options). */
+  runExport(action: string): void {
+    if (action === "csv") this.exportCsv();
+    else if (action === "copy-array") void this.copyActiveLayer();
+    else this.exportJson();
+  }
+
+  /** The level being edited, or the one selected in the world view. */
+  private exportLevel(): Level {
+    return (this.view === "world" ? this.selectedLevel() : undefined) ?? this.level;
+  }
+
+  private exportBaseName(level: Level): string {
     const suffix = this.project.levels.length > 1 ? `-${level.identifier}` : "";
+    return `${this.project.name}${suffix}`;
+  }
+
+  /** Game JSON of one level: only data a game needs (no editor state). */
+  exportJson(): void {
+    const level = this.exportLevel();
+    const json = JSON.stringify(toGameFormat(this.project, level), null, 2);
     downloadBlob(
       new Blob([json], { type: "application/json" }),
-      `${this.project.name}${suffix}.json`
+      `${this.exportBaseName(level)}.json`
     );
-    this.showMessage(`Exported ${level.identifier} as game JSON`);
+    this.showMessage(`Exported ${level.identifier} as JSON`);
+  }
+
+  /** One CSV per layer; zipped when there is more than one. */
+  exportCsv(): void {
+    const level = this.exportLevel();
+    const files = toCsvFiles(this.project, level);
+    const base = this.exportBaseName(level);
+    if (files.length === 1) {
+      downloadBlob(new Blob([files[0].text], { type: "text/csv" }), `${base}-${files[0].name}`);
+    } else {
+      const encoder = new TextEncoder();
+      const zip = createZip(files.map((f) => ({ name: f.name, data: encoder.encode(f.text) })));
+      downloadBlob(
+        new Blob([zip as Uint8Array<ArrayBuffer>], { type: "application/zip" }),
+        `${base}-csv.zip`
+      );
+    }
+    this.showMessage(
+      `Exported ${level.identifier} as CSV (${files.length} layer${files.length === 1 ? "" : "s"})`
+    );
   }
 
   async copyActiveLayer(): Promise<void> {
@@ -858,6 +903,13 @@ export default class Application {
   }
 
   private bindDom(): void {
+    this.exportButton.addEventListener(SplitButtonEvents.Action, (ev) =>
+      this.runExport(ev.detail.value)
+    );
+    $<SplitButton>("#saveAsButton").addEventListener(SplitButtonEvents.Action, (ev) => {
+      if (ev.detail.value === "browser") void this.files.saveCopyInBrowser(this.project.name);
+      else void this.files.saveAs();
+    });
     for (const button of document.querySelectorAll<HTMLButtonElement>("[data-tool]")) {
       button.addEventListener("click", () =>
         levelStore.dispatch(LevelActions.SetTool, button.dataset.tool as LevelTool)
@@ -943,10 +995,7 @@ export default class Application {
         void this.files.saveAs();
         break;
       case "export":
-        this.exportGame();
-        break;
-      case "copy-layer":
-        void this.copyActiveLayer();
+        this.runExport(this.exportButton.value);
         break;
       case "undo":
         this.history.undo();

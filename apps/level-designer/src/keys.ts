@@ -28,7 +28,7 @@ export function bindKeys(keymap: Keymap, app: Application): void {
   keymap.bind("mod+s", () => void app.files.save());
   keymap.bind("mod+shift+s", () => void app.files.saveAs());
   keymap.bind("mod+o", () => void app.files.showBrowser());
-  keymap.bind("mod+e", () => app.exportGame());
+  keymap.bind("mod+e", () => app.runCommand("export"));
   keymap.bind(
     "mod+shift+c",
     inLevel(() => void app.copyActiveLayer())
