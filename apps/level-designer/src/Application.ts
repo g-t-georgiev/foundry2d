@@ -1,7 +1,6 @@
 import {
   CompositeCommand,
   HistoryManager,
-  JsonRecovery,
   RectangleTool,
   StampTool,
   type StampPattern,
@@ -10,10 +9,11 @@ import {
   type CameraState,
   type ICommand,
   type Rect,
+  type Storage,
   type Unsubscribe,
 } from "@foundry2d/core";
-import { GridDocumentScene, Workspace } from "@foundry2d/workspace";
-import type { LayersPanel } from "@foundry2d/ui";
+import { GridDocumentScene, ProjectSession, Workspace, downloadBlob } from "@foundry2d/workspace";
+import { ProjectBrowserEvents, type LayersPanel, type ProjectBrowser } from "@foundry2d/ui";
 import type { Level, LevelProject } from "./model/LevelProject";
 import { WORLD_LAYOUTS, type LayerDef, type WorldLayout } from "./model/types";
 import { createProjectFromPreset, presets, DEFAULT_PRESET_ID } from "./model/presets";
@@ -41,20 +41,13 @@ import {
   serializeProject,
 } from "./io/projectFile";
 import { formatLayerAsArray, fromGameFormat, isGameFormat, toGameFormat } from "./io/gameFormat";
+import { collectAssetRefs, externalizeAssets, internalizeAssets } from "./io/assets";
+import { renderProjectThumbnail } from "./io/thumbnail";
 
 const $ = <T extends Element = HTMLElement>(selector: string) =>
   document.querySelector<T>(selector)!;
 
 const TRANSITION_MS = 320;
-
-function download(text: string, filename: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-}
 
 /** Grows a rectangle by `amount` on every side. */
 const inflate = (r: Rect, amount: number): Rect => ({
@@ -91,13 +84,16 @@ export default class Application {
   private readonly tilePicker: TilesetPickerView;
   private readonly levelsList: LevelsListView;
   private readonly settings: SettingsDialog;
-  private readonly recovery: JsonRecovery;
+  readonly session: ProjectSession;
+  private readonly browser: ProjectBrowser;
+  /** True while a project is being loaded, so load-time events don't mark it dirty. */
+  private loading = false;
   private readonly layersPanel: LayersPanel;
   private altHeld = false;
   private transitioning = false;
   private messageTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor() {
+  constructor(storage: Storage) {
     this.tools.registerTool(new RectangleTool<Int32Array>("rect", true));
     // Engine-only tool: the pen becomes a stamp when several tiles are selected.
     this.tools.registerTool(new StampTool<Int32Array>(() => this.currentPattern(), "stamp"));
@@ -138,14 +134,27 @@ export default class Application {
       onDestructiveChange: () => this.history.clear(),
       notify: (message) => this.showMessage(message, 5000),
     });
-    this.recovery = new JsonRecovery(
-      "level-designer:autosave",
-      () => serializeProject(this.project),
-      {
-        onSaved: () => this.showMessage("Autosaved", 1200),
-        onError: (error) => console.warn("Autosave failed", error),
-      }
-    );
+    this.session = new ProjectSession({
+      app: "level",
+      storage,
+      titleSuffix: "Foundry2D Level Designer",
+      fileType: {
+        description: "Foundry2D level project",
+        mimeType: "application/json",
+        extensions: [PROJECT_EXTENSION],
+      },
+      serialize: () => serializeProject(this.project),
+      toStored: (json) => externalizeAssets(json, storage.assets),
+      fromStored: (json) => internalizeAssets(json, storage.assets),
+      getName: () => this.project.name,
+      thumbnail: () => renderProjectThumbnail(this.project),
+      onChange: (state) => {
+        const where = state.fileName ?? (state.libraryId ? "browser library" : "not saved yet");
+        $("#statFile").textContent = `${state.dirty ? "● " : ""}${where}`;
+      },
+    });
+    this.session.installUnloadGuard();
+    this.browser = $<ProjectBrowser>("#projectBrowser");
 
     this.tilePicker = new TilesetPickerView($("#tilesetCanvasHost"), (tileset, selection) => {
       levelStore.dispatch(LevelActions.SelectTiles, { tilesetUid: tileset.uid, ...selection });
@@ -155,7 +164,6 @@ export default class Application {
       }
     });
 
-    this.renderPresets();
     this.bindStore();
     this.bindDom();
     this.bindKeys();
@@ -163,11 +171,15 @@ export default class Application {
     this.history.onChange((state) => {
       $<HTMLButtonElement>('[data-command="undo"]').disabled = !state.canUndo;
       $<HTMLButtonElement>('[data-command="redo"]').disabled = !state.canRedo;
-      this.recovery.schedule();
+      this.markDirty();
     });
 
+    this.bindBrowser();
     this.loadProject(this.project);
-    void this.restoreAutosave();
+    // Only refresh the title here: resetIdentity() would discard the recovery
+    // snapshot that startup() is about to restore.
+    this.session.refresh();
+    void this.startup();
   }
 
   get view(): EditorView {
@@ -177,6 +189,15 @@ export default class Application {
   // ------------------------------------------------------------------ project lifecycle
 
   loadProject(project: LevelProject): void {
+    this.loading = true;
+    try {
+      this.loadProjectInner(project);
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  private loadProjectInner(project: LevelProject): void {
     this.workspace.input.cancelStroke();
     this.projectSession.forEach((unsubscribe) => unsubscribe());
 
@@ -184,7 +205,7 @@ export default class Application {
     this.history.clear();
     this.worldScene = this.createWorldScene();
 
-    const persist = () => this.recovery.schedule();
+    const persist = () => this.markDirty();
     this.projectSession = [
       project.events.on("tilesets:loaded", () => {
         this.workspace.requestRender();
@@ -198,6 +219,7 @@ export default class Application {
         persist();
       }),
       project.events.on("settings:changed", () => {
+        this.session.refresh();
         this.refreshScenes();
         this.renderProjectInfo();
         this.renderWorldSettings();
@@ -249,7 +271,6 @@ export default class Application {
       layers: new LevelLayersController(this.layersPanel, this.project, level, this.history),
       unsubscribe: [
         doc.events.on("layer:activated", refreshLayerUi),
-        doc.events.on("layer:activated", () => this.recovery.schedule()),
         doc.events.on("resized", () => {
           this.project.arrangeLevels();
           this.renderLevelInfo();
@@ -466,63 +487,202 @@ export default class Application {
 
   // ------------------------------------------------------------------ files
 
-  newProject(presetId: string = this.selectedPresetId()): void {
+  private markDirty(): void {
+    if (!this.loading) this.session.markDirty();
+  }
+
+  /** Asks before throwing away unsaved work. */
+  private confirmDiscard(action: string): boolean {
+    return !this.session.state.dirty || confirm(`${action}? Unsaved changes will be lost.`);
+  }
+
+  newProject(presetId: string = DEFAULT_PRESET_ID): void {
     const label = presets.find((p) => p.id === presetId)?.label ?? presetId;
-    if (
-      this.history.canUndo &&
-      !confirm(`Start a new "${label}" project? Unsaved changes will be lost.`)
-    ) {
-      return;
-    }
+    if (!this.confirmDiscard(`Start a new "${label}" project`)) return;
     this.loadProject(createProjectFromPreset(presetId));
-    void this.recovery.clear();
+    this.session.resetIdentity();
     this.showMessage(`New project from "${label}"`);
   }
 
-  private selectedPresetId(): string {
-    return $<HTMLSelectElement>("#presetSelect").value || DEFAULT_PRESET_ID;
+  /** Builds a project from a native project file or a game export. */
+  private parseProjectJson(json: unknown): LevelProject {
+    if (isProjectFile(json)) return deserializeProject(json);
+    if (isGameFormat(json)) return fromGameFormat(json);
+    throw new ProjectFormatError("Unrecognized file: expected a level project or game JSON.");
   }
 
-  private renderPresets(): void {
-    const select = $<HTMLSelectElement>("#presetSelect");
-    select.replaceChildren(
-      ...presets.map((preset) => {
-        const option = new Option(preset.label, preset.id, false, preset.id === DEFAULT_PRESET_ID);
-        option.title = preset.description;
-        return option;
-      })
-    );
+  private reportOpenError(error: unknown): void {
+    const message =
+      error instanceof ProjectFormatError
+        ? error.message
+        : error instanceof SyntaxError
+          ? "File is not valid JSON."
+          : error instanceof Error
+            ? error.message
+            : "Could not open the project.";
+    this.showMessage(message, 5000);
+    console.error(error);
   }
 
-  async openFile(file: File): Promise<void> {
+  async openFile(): Promise<void> {
+    if (!this.confirmDiscard("Open another project")) return;
     try {
-      const json: unknown = JSON.parse(await file.text());
-      let project: LevelProject;
-      if (isProjectFile(json)) project = deserializeProject(json);
-      else if (isGameFormat(json)) project = fromGameFormat(json);
-      else
-        throw new ProjectFormatError("Unrecognized file: expected a level project or game JSON.");
-      this.loadProject(project);
-      this.showMessage(`Opened ${file.name}`);
-      this.recovery.schedule();
+      const picked = await this.session.pickFile();
+      if (!picked) return;
+      this.loadProject(this.parseProjectJson(picked.json));
+      await this.session.adoptFile(picked.name, picked.handle);
+      this.showMessage(`Opened ${picked.handle?.name ?? picked.name}`);
     } catch (error) {
-      const message =
-        error instanceof ProjectFormatError
-          ? error.message
-          : error instanceof SyntaxError
-            ? "File is not valid JSON."
-            : "Could not open file.";
-      this.showMessage(message, 5000);
+      this.reportOpenError(error);
+    }
+  }
+
+  async openRecent(id: string): Promise<void> {
+    if (!this.confirmDiscard("Open another project")) return;
+    try {
+      const opened = await this.session.openRecent(id);
+      if (!opened) {
+        this.showMessage("That file is no longer available.", 4000);
+        return;
+      }
+      this.loadProject(this.parseProjectJson(opened.json));
+      await this.session.adoptFile(opened.name, opened.handle);
+      this.showMessage(`Opened ${opened.handle.name}`);
+    } catch (error) {
+      this.reportOpenError(error);
+    }
+  }
+
+  async openFromLibrary(id: string): Promise<void> {
+    if (!this.confirmDiscard("Open another project")) return;
+    try {
+      const opened = await this.session.openFromLibrary(id);
+      if (!opened) {
+        this.showMessage("That project is no longer in this browser.", 4000);
+        return;
+      }
+      this.loadProject(deserializeProject(opened.json));
+      this.session.adoptLibrary(id);
+      this.showMessage(`Opened ${opened.name}`);
+    } catch (error) {
+      this.reportOpenError(error);
+    }
+  }
+
+  /** Ctrl+S: saves to the browser library and, if bound, back to the file. */
+  async save(): Promise<void> {
+    try {
+      await this.session.save();
+      const { fileName } = this.session.state;
+      this.showMessage(
+        fileName ? `Saved to ${fileName} and the browser library` : "Saved in this browser"
+      );
+    } catch (error) {
+      this.showMessage(`Save failed: ${(error as Error).message}`, 5000);
       console.error(error);
     }
   }
 
-  saveProject(): void {
-    download(
-      JSON.stringify(serializeProject(this.project)),
-      `${this.project.name}${PROJECT_EXTENSION}`
+  /** Ctrl+Shift+S: writes a file (picker where supported, download otherwise). */
+  async saveAs(): Promise<void> {
+    try {
+      if (await this.session.saveAsFile()) {
+        this.showMessage(`Saved ${this.session.state.fileName ?? "a copy to Downloads"}`);
+      }
+    } catch (error) {
+      this.showMessage(`Save failed: ${(error as Error).message}`, 5000);
+      console.error(error);
+    }
+  }
+
+  /** Removes a library project and any tileset images nothing else uses. */
+  private async deleteFromLibrary(id: string): Promise<void> {
+    const projects = await this.session.listLibrary();
+    const name = projects.find((p) => p.id === id)?.name ?? "this project";
+    if (!confirm(`Delete "${name}" from this browser? Files on disk are not affected.`)) return;
+    await this.session.deleteFromLibrary(id);
+    const storage = this.session.storage;
+    const keep = new Set<string>();
+    for (const meta of await storage.projects.list()) {
+      const record = await storage.projects.get(meta.id);
+      for (const hash of collectAssetRefs(record?.data)) keep.add(hash);
+    }
+    // Unsaved work may reference assets too: refresh its snapshot first.
+    if (this.session.state.dirty) await this.session.flushRecovery();
+    const recovered = await this.session.loadRecovery();
+    if (recovered) {
+      for (const hash of collectAssetRefs(
+        await externalizeAssets(recovered.json, storage.assets)
+      )) {
+        keep.add(hash);
+      }
+    }
+    await storage.assets.prune(keep);
+    await this.showBrowser();
+  }
+
+  /** Opens the start screen / Open dialog. */
+  async showBrowser(): Promise<void> {
+    const [library, recent] = await Promise.all([
+      this.session.listLibrary(),
+      this.session.listRecent(),
+    ]);
+    this.browser.show({
+      title: "Level projects",
+      templates: presets.map((p) => ({ id: p.id, label: p.label, description: p.description })),
+      library,
+      recent,
+      currentId: this.session.state.libraryId,
+      warning:
+        this.session.storage.kind === "memory"
+          ? "Browser storage is unavailable (private mode?). Projects saved here are lost on reload; use Save as file."
+          : undefined,
+    });
+  }
+
+  private bindBrowser(): void {
+    const browser = this.browser;
+    browser.addEventListener(ProjectBrowserEvents.New, (ev) =>
+      this.newProject(ev.detail.templateId)
     );
-    this.showMessage("Project saved");
+    browser.addEventListener(ProjectBrowserEvents.OpenFile, () => void this.openFile());
+    browser.addEventListener(
+      ProjectBrowserEvents.OpenRecent,
+      (ev) => void this.openRecent(ev.detail.id)
+    );
+    browser.addEventListener(
+      ProjectBrowserEvents.OpenLibrary,
+      (ev) => void this.openFromLibrary(ev.detail.id)
+    );
+    browser.addEventListener(
+      ProjectBrowserEvents.DeleteLibrary,
+      (ev) => void this.deleteFromLibrary(ev.detail.id)
+    );
+    browser.addEventListener(ProjectBrowserEvents.RemoveRecent, (ev) => {
+      void this.session.removeRecent(ev.detail.id).then(() => this.showBrowser());
+    });
+  }
+
+  /** Restores unsaved work, or shows the start screen when there is saved work to pick from. */
+  private async startup(): Promise<void> {
+    const recovered = await this.session.loadRecovery();
+    if (recovered && !this.session.state.dirty) {
+      try {
+        this.loadProject(deserializeProject(recovered.json));
+        await this.session.adoptRecovered(recovered.snapshot);
+        this.showMessage("Restored unsaved work from the last session");
+        return;
+      } catch (error) {
+        console.warn("Ignoring unreadable recovery snapshot", error);
+      }
+    }
+    const [library, recent] = await Promise.all([
+      this.session.listLibrary(),
+      this.session.listRecent(),
+    ]);
+    if ((library.length > 0 || recent.length > 0) && !this.session.state.dirty) {
+      await this.showBrowser();
+    }
   }
 
   /** Exports the level being edited (or the one selected in the world). */
@@ -530,7 +690,10 @@ export default class Application {
     const level = (this.view === "world" ? this.selectedLevel() : undefined) ?? this.level;
     const json = JSON.stringify(toGameFormat(this.project, level), null, 2);
     const suffix = this.project.levels.length > 1 ? `-${level.identifier}` : "";
-    download(json, `${this.project.name}${suffix}.json`);
+    downloadBlob(
+      new Blob([json], { type: "application/json" }),
+      `${this.project.name}${suffix}.json`
+    );
     this.showMessage(`Exported ${level.identifier} as game JSON`);
   }
 
@@ -742,13 +905,6 @@ export default class Application {
       })
     );
 
-    const fileInput = $<HTMLInputElement>("#openFileInput");
-    fileInput.addEventListener("change", () => {
-      const file = fileInput.files?.[0];
-      fileInput.value = "";
-      if (file) void this.openFile(file);
-    });
-
     const projectName = $<HTMLInputElement>("#projectName");
     projectName.addEventListener("change", () => {
       const name = projectName.value.trim();
@@ -796,13 +952,14 @@ export default class Application {
   runCommand(command: string): void {
     switch (command) {
       case "new":
-        this.newProject();
-        break;
       case "open":
-        $<HTMLInputElement>("#openFileInput").click();
+        void this.showBrowser();
         break;
       case "save":
-        this.saveProject();
+        void this.save();
+        break;
+      case "save-as":
+        void this.saveAs();
         break;
       case "export":
         this.exportGame();
@@ -846,8 +1003,9 @@ export default class Application {
     keymap.bind("mod+z", () => void this.history.undo(), { repeat: true });
     keymap.bind("mod+shift+z", () => void this.history.redo(), { repeat: true });
     keymap.bind("mod+y", () => void this.history.redo(), { repeat: true });
-    keymap.bind("mod+s", () => this.saveProject());
-    keymap.bind("mod+o", () => this.runCommand("open"));
+    keymap.bind("mod+s", () => void this.save());
+    keymap.bind("mod+shift+s", () => void this.saveAs());
+    keymap.bind("mod+o", () => void this.showBrowser());
     keymap.bind("mod+e", () => this.exportGame());
     keymap.bind(
       "mod+shift+c",
@@ -1043,16 +1201,5 @@ export default class Application {
     el.textContent = text;
     if (this.messageTimer) clearTimeout(this.messageTimer);
     this.messageTimer = setTimeout(() => (el.textContent = ""), timeout);
-  }
-
-  private async restoreAutosave(): Promise<void> {
-    const json = await this.recovery.load();
-    if (json === null || this.history.canUndo) return;
-    try {
-      this.loadProject(deserializeProject(json));
-      this.showMessage("Restored previous session");
-    } catch (error) {
-      console.warn("Ignoring unreadable autosave", error);
-    }
   }
 }

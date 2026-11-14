@@ -155,23 +155,22 @@ _Done: defects fixed, open tool registry, history events/limit/composite, full l
 4. **Editing:** a tileset picker (click a tile, or drag to pick a rectangular stamp), a core `StampTool` that paints multi-tile patterns, X/Y keys to flip, and pen, eraser, bucket and rectangle working on single tiles.
 5. **Later:** auto-layer rules driven by IntGrid values, LDtk's signature feature.
 
-### Phase 5: Storage and project library
+### Phase 5: Storage and project library ✅ (2026-11-14)
 
-**Today:** `StorageDriver` (IndexedDB, one `recovery` object store) is used only through core `JsonRecovery`. Both apps write one crash-recovery snapshot per app and restore it on load.
+1. **Storage contract** (`@foundry2d/core/storage`): `Storage` = `recovery` + `projects` (local library: id, app, name, timestamps, thumbnail, JSON payload) + `assets` (content-addressed by SHA-256, deduplicated, `prune`) + `recentFiles` (File System Access handles).
+   - `IndexedDBStorage`: database `foundry2d`, migrated in place from v1 (recovery only) to v2.
+   - `MemoryStorage`: for tests, and the fallback when IndexedDB is unavailable. The project browser then shows a warning.
+   - `openStorage()` picks between them.
+2. **`ProjectSession`** (`@foundry2d/workspace`), shared by both apps:
+   - **Ctrl+S** saves to the library and, when a file is bound, writes back to it.
+   - **Ctrl+Shift+S** saves as a file: a save picker in Chromium (the file is then bound and added to recent files), a download elsewhere.
+   - A dirty flag drives the `•` in the title, a "Project" status entry, and a `beforeunload` warning.
+   - A debounced crash-recovery snapshot restores unsaved work, together with its library or file identity, on reload.
+3. **`<project-browser>`** (`@foundry2d/ui`, no workspace dependencies): a start screen and Open dialog with templates (level presets, sprite sizes), Open file…, recent files and the library with thumbnails. It opens at startup when there is saved work and nothing to recover.
+4. **Level designer:** tileset PNGs live in the asset store for library and recovery copies (`asset:<sha256>` references). Saved files always embed the image. Deleting a library project prunes assets that nothing references any more.
+5. **Pixel editor:** the same flow, plus a sprite name field in the toolbar.
 
-**Plan:**
-
-1. **Split the storage contract** into three stores behind one IndexedDB database. The database version moves from 1 to 2 with an `upgrade` migration.
-   - `RecoveryStore`: what exists today, but keyed per project id instead of one slot per app.
-   - `ProjectStore`: list, get, put and delete projects, with metadata (id, app, name, `updatedAt`, thumbnail).
-   - `AssetStore`: binary blobs keyed by content hash. Tileset PNGs move here, and projects reference them by hash. Saving or exporting a file still embeds them, so files stay portable.
-2. **Add `MemoryStorageDriver`** for tests and for browsers where IndexedDB is unavailable (private mode).
-3. **Add `FileSystemAccessDriver`** (Chromium): Open and Save work on real files in place, and file handles are persisted for a "Recent files" list. Firefox and Safari fall back to download and upload.
-4. **UI:**
-   - a start screen and project browser (recent files, local library, presets);
-   - "Save" writes back to the open file, plus "Save as";
-   - a dirty indicator in the title, and a `beforeunload` prompt when there are unsaved changes.
-5. **Both apps share the same project-library component** (it lives in `@foundry2d/ui` and stays free of workspace dependencies).
+**Not done yet:** a "Save as" choice between file and library naming, project duplication in the library, and storage quota and usage display.
 
 ### Phase 6: Pixel Editor, exports, frames and spritesheets
 

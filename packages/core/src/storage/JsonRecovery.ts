@@ -1,8 +1,9 @@
-import type { StorageDriver } from "./types";
-import { IndexedDBStorageDriver } from "./StorageDriver";
+import type { RecoveryStore } from "./types";
+import { IndexedDBStorage } from "./IndexedDBStorage";
 
 export interface JsonRecoveryOptions {
-  driver?: StorageDriver;
+  /** Where snapshots go. Defaults to the shared IndexedDB storage. */
+  store?: RecoveryStore;
   /** Debounce in ms between the last change and the write. Default 800. */
   delay?: number;
   onSaved?: () => void;
@@ -15,7 +16,7 @@ export interface JsonRecoveryOptions {
  */
 export class JsonRecovery {
   private timer: ReturnType<typeof setTimeout> | null = null;
-  private readonly driver: StorageDriver;
+  private readonly driver: RecoveryStore;
   private readonly delay: number;
   private readonly encoder = new TextEncoder();
   private readonly decoder = new TextDecoder();
@@ -25,7 +26,7 @@ export class JsonRecovery {
     private readonly getValue: () => unknown,
     private readonly options: JsonRecoveryOptions = {}
   ) {
-    this.driver = options.driver ?? new IndexedDBStorageDriver("foundry2d");
+    this.driver = options.store ?? new IndexedDBStorage().recovery;
     this.delay = options.delay ?? 800;
   }
 

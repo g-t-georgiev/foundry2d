@@ -5,24 +5,31 @@ import {
   PixelUtils,
   ResizeCommand,
   ToolManager,
+  type Storage,
 } from "@foundry2d/core";
-import { GridDocumentScene, Workspace } from "@foundry2d/workspace";
-import type { LayersPanel } from "@foundry2d/ui";
+import { GridDocumentScene, ProjectSession, Workspace } from "@foundry2d/workspace";
+import { ProjectBrowserEvents, type LayersPanel, type ProjectBrowser } from "@foundry2d/ui";
 import type { ApplicationContext } from "./types";
 import { ApplicationStateActions, applicationStore } from "./state";
 import UIManager from "./ui/UIManager";
 import LayersController from "./ui/LayersController";
-import { Autosave } from "./io/Autosave";
-import { exportPng } from "./io/exportPng";
-import { ProjectFormatError, readProjectFile, saveProjectFile } from "./io/project";
+import { exportPng, renderThumbnail } from "./io/exportPng";
+import {
+  PROJECT_EXTENSION,
+  ProjectFormatError,
+  fromProjectFile,
+  toProjectFile,
+} from "./io/project";
 
 export interface ApplicationElements {
   viewport: HTMLElement;
   canvas: HTMLCanvasElement;
   layersPanel: LayersPanel;
+  projectBrowser: ProjectBrowser;
 }
 
 const DEFAULT_NAME = "sprite";
+const NEW_SIZES = [16, 32, 64, 128];
 
 /**
  * Composition root of the pixel editor.
@@ -39,10 +46,13 @@ export default class Application implements ApplicationContext {
   readonly scene: GridDocumentScene<Uint32Array>;
   readonly ui: UIManager;
   readonly layers: LayersController;
-  private readonly autosave: Autosave;
+  readonly session: ProjectSession;
+  private readonly browser: ProjectBrowser;
   private name = DEFAULT_NAME;
+  /** True while a document is being loaded, so load-time events don't mark it dirty. */
+  private loading = false;
 
-  constructor(elements: ApplicationElements) {
+  constructor(elements: ApplicationElements, storage: Storage) {
     const { size } = applicationStore.getState().doc;
     this.doc = Application.createDocument(size.width, size.height);
 
@@ -62,18 +72,37 @@ export default class Application implements ApplicationContext {
     this.workspace = new Workspace(elements.viewport, { canvas: elements.canvas });
     this.ui = new UIManager(this);
     this.layers = new LayersController(elements.layersPanel, this.doc, this.history);
-    this.autosave = new Autosave(
-      () => ({ doc: this.doc, name: this.name }),
-      () => this.ui.showMessage("Autosaved", 1200)
-    );
+    this.browser = elements.projectBrowser;
+    this.session = new ProjectSession({
+      app: "pixel",
+      storage,
+      titleSuffix: "Foundry2D Pixel Editor",
+      fileType: {
+        description: "Foundry2D sprite",
+        mimeType: "application/json",
+        extensions: [PROJECT_EXTENSION],
+      },
+      serialize: () => toProjectFile(this.doc, this.name),
+      getName: () => this.name,
+      thumbnail: () => renderThumbnail(this.doc),
+      onChange: (state) =>
+        this.ui.updateFileState(
+          `${state.dirty ? "● " : ""}${state.fileName ?? (state.libraryId ? "browser library" : "not saved yet")}`
+        ),
+    });
+    this.session.installUnloadGuard();
+    this.ui.updateName(this.name);
 
     this.bindStore();
     this.bindDocument();
     this.bindWorkspace();
     this.bindKeys();
 
+    this.bindBrowser();
+
     void this.workspace.setScene(this.scene);
-    void this.restoreAutosave();
+    this.session.refresh();
+    void this.startup();
   }
 
   static createDocument(width: number, height: number): GridDocument<Uint32Array> {
@@ -89,31 +118,162 @@ export default class Application implements ApplicationContext {
 
   // ------------------------------------------------------------------ commands
 
-  newDocument(): void {
-    if (this.history.canUndo && !confirm("Start a new sprite? Unsaved changes will be lost.")) {
-      return;
-    }
-    const { width, height } = this.doc;
-    this.loadDocument(Application.createDocument(width, height), DEFAULT_NAME);
-    void this.autosave.clear();
-    this.ui.showMessage("New sprite");
+  private confirmDiscard(action: string): boolean {
+    return !this.session.state.dirty || confirm(`${action}? Unsaved changes will be lost.`);
   }
 
-  async openProject(file: File): Promise<void> {
+  /** Starts a new sprite of `size`×`size` (or the current size). */
+  newDocument(size?: number): void {
+    if (!this.confirmDiscard("Start a new sprite")) return;
+    const width = size ?? this.doc.width;
+    const height = size ?? this.doc.height;
+    this.loadDocument(Application.createDocument(width, height), DEFAULT_NAME);
+    this.session.resetIdentity();
+    this.ui.showMessage(`New ${width}×${height} sprite`);
+  }
+
+  private reportOpenError(error: unknown): void {
+    const message =
+      error instanceof ProjectFormatError
+        ? error.message
+        : error instanceof SyntaxError
+          ? "File is not valid JSON."
+          : error instanceof Error
+            ? error.message
+            : "Could not open the project.";
+    this.ui.showMessage(message, 5000);
+    console.error(error);
+  }
+
+  async openFile(): Promise<void> {
+    if (!this.confirmDiscard("Open another sprite")) return;
     try {
-      const { doc, name } = await readProjectFile(file);
-      this.loadDocument(doc, name);
-      this.ui.showMessage(`Opened ${file.name}`);
+      const picked = await this.session.pickFile();
+      if (!picked) return;
+      const { doc, name } = fromProjectFile(picked.json);
+      this.loadDocument(doc, name || picked.name);
+      await this.session.adoptFile(picked.name, picked.handle);
+      this.ui.showMessage(`Opened ${picked.handle?.name ?? picked.name}`);
     } catch (error) {
-      const message = error instanceof ProjectFormatError ? error.message : "Could not open file.";
-      this.ui.showMessage(message, 5000);
+      this.reportOpenError(error);
+    }
+  }
+
+  async openRecent(id: string): Promise<void> {
+    if (!this.confirmDiscard("Open another sprite")) return;
+    try {
+      const opened = await this.session.openRecent(id);
+      if (!opened) {
+        this.ui.showMessage("That file is no longer available.", 4000);
+        return;
+      }
+      const { doc, name } = fromProjectFile(opened.json);
+      this.loadDocument(doc, name || opened.name);
+      await this.session.adoptFile(opened.name, opened.handle);
+      this.ui.showMessage(`Opened ${opened.handle.name}`);
+    } catch (error) {
+      this.reportOpenError(error);
+    }
+  }
+
+  async openFromLibrary(id: string): Promise<void> {
+    if (!this.confirmDiscard("Open another sprite")) return;
+    try {
+      const opened = await this.session.openFromLibrary(id);
+      if (!opened) {
+        this.ui.showMessage("That sprite is no longer in this browser.", 4000);
+        return;
+      }
+      const { doc, name } = fromProjectFile(opened.json);
+      this.loadDocument(doc, name || opened.name);
+      this.session.adoptLibrary(id);
+      this.ui.showMessage(`Opened ${opened.name}`);
+    } catch (error) {
+      this.reportOpenError(error);
+    }
+  }
+
+  rename(name: string): void {
+    const clean = name.trim();
+    if (!clean || clean === this.name) {
+      this.ui.updateName(this.name);
+      return;
+    }
+    this.name = clean;
+    this.session.markDirty();
+    this.session.refresh();
+  }
+
+  /** Ctrl+S: saves to the browser library and, if bound, back to the file. */
+  async save(): Promise<void> {
+    try {
+      await this.session.save();
+      const { fileName } = this.session.state;
+      this.ui.showMessage(
+        fileName ? `Saved to ${fileName} and the browser library` : "Saved in this browser"
+      );
+    } catch (error) {
+      this.ui.showMessage(`Save failed: ${(error as Error).message}`, 5000);
       console.error(error);
     }
   }
 
-  saveProject(): void {
-    saveProjectFile(this.doc, this.name);
-    this.ui.showMessage("Project saved");
+  /** Ctrl+Shift+S: writes a file (picker where supported, download otherwise). */
+  async saveAs(): Promise<void> {
+    try {
+      if (await this.session.saveAsFile()) {
+        this.ui.showMessage(`Saved ${this.session.state.fileName ?? "a copy to Downloads"}`);
+      }
+    } catch (error) {
+      this.ui.showMessage(`Save failed: ${(error as Error).message}`, 5000);
+      console.error(error);
+    }
+  }
+
+  /** Opens the start screen / Open dialog. */
+  async showBrowser(): Promise<void> {
+    const [library, recent] = await Promise.all([
+      this.session.listLibrary(),
+      this.session.listRecent(),
+    ]);
+    this.browser.show({
+      title: "Sprites",
+      templates: NEW_SIZES.map((size) => ({
+        id: String(size),
+        label: `${size} × ${size}`,
+        description: "Empty sprite with one layer",
+      })),
+      library,
+      recent,
+      currentId: this.session.state.libraryId,
+      warning:
+        this.session.storage.kind === "memory"
+          ? "Browser storage is unavailable (private mode?). Sprites saved here are lost on reload; use Save as."
+          : undefined,
+    });
+  }
+
+  private bindBrowser(): void {
+    const browser = this.browser;
+    browser.addEventListener(ProjectBrowserEvents.New, (ev) =>
+      this.newDocument(Number(ev.detail.templateId) || undefined)
+    );
+    browser.addEventListener(ProjectBrowserEvents.OpenFile, () => void this.openFile());
+    browser.addEventListener(
+      ProjectBrowserEvents.OpenRecent,
+      (ev) => void this.openRecent(ev.detail.id)
+    );
+    browser.addEventListener(
+      ProjectBrowserEvents.OpenLibrary,
+      (ev) => void this.openFromLibrary(ev.detail.id)
+    );
+    browser.addEventListener(ProjectBrowserEvents.DeleteLibrary, (ev) => {
+      if (!confirm("Delete this sprite from the browser? Files on disk are not affected.")) return;
+      void this.session.deleteFromLibrary(ev.detail.id).then(() => this.showBrowser());
+    });
+    browser.addEventListener(ProjectBrowserEvents.RemoveRecent, (ev) => {
+      void this.session.removeRecent(ev.detail.id).then(() => this.showBrowser());
+    });
   }
 
   async exportPNG(scale: number): Promise<void> {
@@ -157,20 +317,41 @@ export default class Application implements ApplicationContext {
 
   /** Swaps document contents in place, so every subscriber keeps working. */
   private loadDocument(source: GridDocument<Uint32Array>, name: string): void {
-    this.workspace.input.cancelStroke();
-    this.doc.replaceWith(source);
-    this.name = name;
-    this.history.clear();
+    this.loading = true;
+    try {
+      this.workspace.input.cancelStroke();
+      this.doc.replaceWith(source);
+      this.name = name;
+      this.ui.updateName(name);
+      this.history.clear();
+    } finally {
+      this.loading = false;
+    }
     void this.workspace.fitToView();
   }
 
-  private async restoreAutosave(): Promise<void> {
-    const saved = await this.autosave.load();
-    if (!saved) return;
+  /** Restores unsaved work, or shows the start screen when there is saved work to pick from. */
+  private async startup(): Promise<void> {
+    const recovered = await this.session.loadRecovery();
     // Don't clobber work started before IndexedDB answered.
-    if (this.history.canUndo) return;
-    this.loadDocument(saved.doc, saved.name);
-    this.ui.showMessage("Restored previous session");
+    if (recovered && !this.session.state.dirty) {
+      try {
+        const { doc, name } = fromProjectFile(recovered.json);
+        this.loadDocument(doc, name);
+        await this.session.adoptRecovered(recovered.snapshot);
+        this.ui.showMessage("Restored unsaved work from the last session");
+        return;
+      } catch (error) {
+        console.warn("Ignoring unreadable recovery snapshot", error);
+      }
+    }
+    const [library, recent] = await Promise.all([
+      this.session.listLibrary(),
+      this.session.listRecent(),
+    ]);
+    if ((library.length > 0 || recent.length > 0) && !this.session.state.dirty) {
+      await this.showBrowser();
+    }
   }
 
   private pickColor(value: number): void {
@@ -227,10 +408,8 @@ export default class Application implements ApplicationContext {
 
     history.onChange((state) => {
       this.ui.updateHistory(state);
-      this.autosave.schedule();
+      if (!this.loading) this.session.markDirty();
     });
-    // Layer selection isn't an undo step but is still worth persisting.
-    doc.events.on("layer:activated", () => this.autosave.schedule());
     this.ui.updateHistory(history.getState());
   }
 
@@ -266,7 +445,8 @@ export default class Application implements ApplicationContext {
     keymap.bind("mod+z", () => this.undo(), { repeat: true });
     keymap.bind("mod+shift+z", () => this.redo(), { repeat: true });
     keymap.bind("mod+y", () => this.redo(), { repeat: true });
-    keymap.bind("mod+s", () => this.saveProject());
+    keymap.bind("mod+s", () => void this.save());
+    keymap.bind("mod+shift+s", () => void this.saveAs());
     keymap.bind("mod+o", () => this.ui.runCommand("open"));
     keymap.bind("mod+e", () => void this.exportPNG(1));
     keymap.bind("b", setTool("pen"));

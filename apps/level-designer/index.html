@@ -32,22 +32,22 @@
       </div>
 
       <div class="toolbar-actions">
-        <select
-          id="presetSelect"
-          class="input preset-select"
-          aria-label="Preset for new projects"
-          title="Preset used by New"
-        ></select>
-        <button class="btn" data-command="new" title="New project from the selected preset">
-          New
-        </button>
-        <button class="btn" data-command="open" title="Open project or game JSON (Ctrl+O)">
+        <button class="btn" data-command="open" title="New or open a project (Ctrl+O)">
           <svg class="icon" viewBox="0 0 24 24">
             <path d="M5 20h14v-2H5m14-9h-4V3H9v6H5l7 7 7-7z" />
           </svg>
           Open
         </button>
-        <button class="btn" data-command="save" title="Save project (Ctrl+S)">Save</button>
+        <button
+          class="btn"
+          data-command="save"
+          title="Save in the browser, and to the open file if any (Ctrl+S)"
+        >
+          Save
+        </button>
+        <button class="btn" data-command="save-as" title="Save as a file (Ctrl+Shift+S)">
+          Save as…
+        </button>
         <button class="btn btn-primary" data-command="export" title="Export game JSON (Ctrl+E)">
           <svg class="icon" viewBox="0 0 24 24">
             <path d="M5 20h14v-2H5M12 2 5 9h4v6h6V9h4l-7-7z" />
@@ -323,6 +323,9 @@
       <div class="statusbar-item">
         <span class="status-label">Zoom</span><span class="status-value" id="statZoom"></span>
       </div>
+      <div class="statusbar-item">
+        <span class="status-label">Project</span><span class="status-value" id="statFile"></span>
+      </div>
       <div class="statusbar-message" id="statMessage" role="status" aria-live="polite"></div>
     </footer>
 
@@ -365,7 +368,7 @@
       </div>
     </dialog>
 
-    <input type="file" id="openFileInput" accept=".json,application/json" hidden />
+    <project-browser id="projectBrowser"></project-browser>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

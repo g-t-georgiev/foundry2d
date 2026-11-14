@@ -596,10 +596,6 @@ layers-panel {
   gap: 8px;
 }
 
-.preset-select {
-  width: 150px;
-}
-
 /* ------------------------------------------------------------------ views */
 
 body[data-view="world"] .level-only,

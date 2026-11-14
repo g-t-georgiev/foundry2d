@@ -21,12 +21,13 @@ export default class UIManager {
     colorPicker: $<ColorPickerButton>("#colorPicker"),
     gridToggle: $<HTMLInputElement>("#gridToggle"),
     previewToggle: $<HTMLInputElement>("#previewToggle"),
-    openFileInput: $<HTMLInputElement>("#openFileInput"),
     coordsDisplay: $("#coordsDisplay"),
     sizeDisplay: $("#sizeDisplay"),
     layerDisplay: $("#layerDisplay"),
     zoomDisplay: $("#zoomDisplay"),
     messageDisplay: $("#messageDisplay"),
+    fileDisplay: $("#fileDisplay"),
+    spriteName: $<HTMLInputElement>("#spriteName"),
     tools: $$<HTMLButtonElement>("[data-tool]"),
     sizes: $$<HTMLButtonElement>("[data-size]"),
     swatches: $$<HTMLButtonElement>("[data-color]"),
@@ -86,11 +87,7 @@ export default class UIManager {
       if (w > 0 && h > 0) this.app.resizeDocument(w, h);
     });
 
-    el.openFileInput?.addEventListener("change", () => {
-      const file = el.openFileInput!.files?.[0];
-      el.openFileInput!.value = "";
-      if (file) void this.app.openProject(file);
-    });
+    el.spriteName?.addEventListener("change", () => this.app.rename(el.spriteName!.value));
 
     for (const button of el.commands) {
       button.addEventListener("click", () => this.runCommand(button.dataset.command ?? ""));
@@ -102,13 +99,14 @@ export default class UIManager {
     const { app } = this;
     switch (command) {
       case "new":
-        app.newDocument();
-        break;
       case "open":
-        this.elements.openFileInput?.click();
+        void app.showBrowser();
         break;
       case "save":
-        app.saveProject();
+        void app.save();
+        break;
+      case "save-as":
+        void app.saveAs();
         break;
       case "export":
         void app.exportPNG(Number(this.elements.exportScale?.value ?? 1));
@@ -247,6 +245,16 @@ export default class UIManager {
           : "Redo (Ctrl+Shift+Z)";
       }
     }
+  }
+
+  updateName(name: string): void {
+    const input = this.elements.spriteName;
+    if (input && input.value !== name) input.value = name;
+  }
+
+  updateFileState(text: string): void {
+    const el = this.elements.fileDisplay;
+    if (el) el.textContent = text;
   }
 
   /** Shows a transient status message. */

@@ -63,30 +63,3 @@ export function fromProjectFile(json: unknown): {
     });
   }
 }
-
-/** Triggers a browser download of `blob`. */
-export function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-}
-
-export function saveProjectFile(doc: GridDocument<Uint32Array>, name: string): void {
-  const json = JSON.stringify(toProjectFile(doc, name));
-  downloadBlob(new Blob([json], { type: "application/json" }), `${name}${PROJECT_EXTENSION}`);
-}
-
-export async function readProjectFile(file: File) {
-  let json: unknown;
-  try {
-    json = JSON.parse(await file.text());
-  } catch (error) {
-    throw new ProjectFormatError("File is not valid JSON.", { cause: error });
-  }
-  const name = file.name.replace(/\.f2d\.json$|\.json$/i, "");
-  const result = fromProjectFile(json);
-  return { ...result, name: result.name || name };
-}

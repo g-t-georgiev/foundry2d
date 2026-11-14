@@ -9,11 +9,17 @@
   <body>
     <header class="toolbar">
       <span class="brand">Foundry2D <small>Pixel</small></span>
+      <input id="spriteName" class="sprite-name" aria-label="Sprite name" spellcheck="false" />
 
       <div class="group" aria-label="File">
-        <button data-command="new" title="New sprite">New</button>
-        <button data-command="open" title="Open project (Ctrl+O)">Open</button>
-        <button data-command="save" title="Save project (Ctrl+S)">Save</button>
+        <button data-command="open" title="New or open a sprite (Ctrl+O)">Projects…</button>
+        <button
+          data-command="save"
+          title="Save in the browser, and to the open file if any (Ctrl+S)"
+        >
+          Save
+        </button>
+        <button data-command="save-as" title="Save as a file (Ctrl+Shift+S)">Save as…</button>
         <span class="divider"></span>
         <select id="exportScale" title="Export scale" aria-label="Export scale">
           <option value="1" selected>1×</option>
@@ -182,10 +188,11 @@
       <span id="sizeDisplay"></span>
       <span id="layerDisplay"></span>
       <span id="zoomDisplay"></span>
+      <span id="fileDisplay"></span>
       <span id="messageDisplay" class="message" role="status" aria-live="polite"></span>
     </footer>
 
-    <input type="file" id="openFileInput" accept=".json,application/json" hidden />
+    <project-browser id="projectBrowser"></project-browser>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

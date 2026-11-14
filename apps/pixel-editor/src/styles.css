@@ -257,3 +257,20 @@ layers-panel {
 .status-bar .message {
   margin-left: auto;
 }
+
+.sprite-name {
+  width: 140px;
+  padding: 4px 8px;
+  font: inherit;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+}
+
+.sprite-name:hover,
+.sprite-name:focus {
+  background: var(--bg);
+  border-color: var(--border);
+  outline: none;
+}
