@@ -309,6 +309,11 @@ Issues, improvements and polish candidates collected along the way, including ev
     - **Cost:** layer data the edit didn't change is shared between snapshots.
     - **Merging:** repeats of the same "Edit …" step within a moment merge (dragging a colour picker is one step). Deletes and adds never merge.
     - **Visible changes:** these edits no longer clear the history, their confirmations say "Ctrl+Z undoes it", and open dialogs refresh after undo or redo.
+  - ✅ **Level background and level fields (18):**
+    - **Background:** Project settings has a new Levels tab with the project's default level background. Each level can set its own colour in the Level panel, and "Default" switches it back. The level view draws it over the checkerboard, and the world view and start-screen thumbnails fill levels with it.
+    - **Fields:** level fields are defined in the same Levels tab, with the field table shared with entity types (type, identifier, default, enum, min/max). Values are edited per level in the Level panel, with the same inputs as the entity inspector; Point fields take x/y numbers there.
+    - **Undo:** field definitions and the default background go through the definition-edit undo. Per-level colour and values are one `SetLevelPropertiesCommand` each.
+    - **Files:** the work file stores the default background, the field definitions and each level's colour and values. Game JSON gains `metadata.bgColor` (the effective colour) and a `fields` object keyed by identifier when the project defines level fields.
   - ⏭ **Packaged project format (6) moved to 8.7.** It is a third file format next to `.f2dsprite` and `.f2dlevel`, so the choice of replacing or adding to them belongs with the OS file association and installable app (34, 38). The Sprite Packer (Phase 9) will need the same machinery: reading ZIPs, including compressed ones from other tools, folder input and asset files. Today only files saved to disk embed tileset images; library and recovery copies already keep them in the asset store.
   - **8.4 is done** apart from item 6 (moved). Items 36–37 are decisions to take with a target engine.
 - **8.5 Features** (in progress): items 9 ✅, 23 ✅, 12 ✅, 13 (partly), 14 ✅, 15 ✅, then 17–20, 30 and 31, roughly in that order.
@@ -363,7 +368,7 @@ Issues, improvements and polish candidates collected along the way, including ev
 **Level designer**
 
 17. Per-layer grid sizes (LDtk allows them). Today one grid size covers every layer.
-18. Level background colour and level custom fields (LDtk has both). This reuses the Phase 7 field editor.
+18. Level background colour and level custom fields (LDtk has both). This reuses the Phase 7 field editor. ✅ Done in 8.5 (see the 8.5 status).
 19. Entity reference fields (a door pointing at a switch) and array fields. Deferred from Phase 7 to keep its scope.
 20. Game JSON import cannot recreate entities (the file has no definitions). Map known identifiers when importing over an existing project.
 21. Project settings has grown to five sections in one scrolling dialog. Split it into tabs (General, Layers, Tilesets, Entities, Enums), so the header and close button stay in view.

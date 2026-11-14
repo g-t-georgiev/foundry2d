@@ -141,6 +141,44 @@ test.describe("with the Pac-Man preset", () => {
     await expect(dialog.locator("#enumsList")).toContainText("ghost");
   });
 
+  test("defines a level field and sets its value and the background per level", async ({
+    page,
+  }) => {
+    const levelState = () =>
+      page.evaluate(() => {
+        const level = (window.foundry as LevelApp).level as unknown as {
+          bgColor: string | null;
+          fields: Record<string, unknown>;
+        };
+        return { bg: level.bgColor, values: Object.values(level.fields) };
+      });
+
+    await page.locator('[data-command="settings"]').first().click();
+    const dialog = page.locator("#settingsDialog");
+    await dialog.getByRole("tab", { name: "Levels" }).click();
+    await dialog.locator("#levelFieldType").selectOption("Int");
+    await dialog.locator("#addLevelField").click();
+    await expect(dialog.locator("#levelFieldsTable input").first()).toHaveValue("int");
+    await dialog.getByRole("button", { name: "Close" }).click();
+    await expect(dialog).toBeHidden();
+
+    const input = page.locator("#levelFields input[type=number]");
+    await input.fill("7");
+    await input.press("Enter");
+    await expect.poll(levelState).toEqual({ bg: null, values: [7] });
+
+    await page.locator("#levelBg").evaluate((el: HTMLInputElement) => {
+      el.value = "#336699";
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await expect.poll(levelState).toEqual({ bg: "#336699", values: [7] });
+    await expect(page.locator("#levelBgDefault")).toBeEnabled();
+
+    await page.keyboard.press("Control+z");
+    await expect.poll(levelState).toEqual({ bg: null, values: [7] });
+    await expect(page.locator("#levelBgDefault")).toBeDisabled();
+  });
+
   test("adds and deletes layers from the layers panel", async ({ page }) => {
     const panel = page.locator("#layersPanel");
     await panel.getByRole("button", { name: "Add layer" }).click();

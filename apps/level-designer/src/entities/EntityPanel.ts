@@ -1,6 +1,7 @@
 import type { Level, LevelProject } from "../model/LevelProject";
 import { fieldText, fieldValue } from "../model/entities";
-import type { EntityDef, EntityInstance, FieldDef, FieldValue } from "../model/types";
+import { fieldInput } from "../ui/fieldInputs";
+import type { EntityDef, EntityInstance, FieldDef } from "../model/types";
 import { entityColor } from "../render/entityRenderer";
 import type { EntityController } from "./EntityController";
 
@@ -154,89 +155,22 @@ export default class EntityPanel {
     instance: EntityInstance,
     field: FieldDef
   ): HTMLElement {
-    const value = fieldValue(instance, field, project.defs.enums);
-    const set = (next: FieldValue) =>
-      this.controller.update(
-        instance.iid,
-        { fields: { ...instance.fields, [field.uid]: next } },
-        `Set ${def.identifier}.${field.identifier}`
-      );
-
-    switch (field.type) {
-      case "Int":
-      case "Float": {
-        const input = el("input", {
-          className: "input",
-          type: "number",
-          step: field.type === "Int" ? "1" : "any",
-          value: fieldText(value),
-        });
-        if (typeof field.min === "number") input.min = String(field.min);
-        if (typeof field.max === "number") input.max = String(field.max);
-        input.addEventListener("change", () => {
-          const n = Number(input.value);
-          if (input.value.trim() !== "" && Number.isFinite(n)) set(n);
-          else input.value = fieldText(value);
-        });
-        return row(field.identifier, input);
-      }
-      case "Bool": {
-        const input = el("input", { type: "checkbox", checked: value === true });
-        input.addEventListener("change", () => set(input.checked));
-        return el(
-          "label",
-          { className: "field inline checkbox-field" },
-          input,
-          el("span", { className: "label", textContent: field.identifier })
-        );
-      }
-      case "String": {
-        const input = el("input", { className: "input", value: fieldText(value) });
-        input.addEventListener("change", () => set(input.value));
-        return row(field.identifier, input);
-      }
-      case "Color": {
-        const input = el("input", { type: "color", value: fieldText(value) });
-        input.addEventListener("change", () => set(input.value));
-        return row(field.identifier, input);
-      }
-      case "Enum": {
-        const enumDef = project.getEnum(field.enumUid);
-        const select = el("select", { className: "input" });
-        select.append(new Option("— none —", ""));
-        for (const v of enumDef?.values ?? []) {
-          select.append(new Option(v.id, v.id, false, v.id === value));
-        }
-        select.disabled = !enumDef;
-        select.addEventListener("change", () => set(select.value || null));
-        return row(field.identifier, select);
-      }
-      case "Point": {
-        const point = value && typeof value === "object" ? value : null;
-        const label = el("span", {
-          className: "point-value",
-          textContent: point ? `${point.x}, ${point.y}` : "not set",
-        });
-        const picking = this.controller.pickingPoint;
-        const isPicking = picking?.iid === instance.iid && picking.fieldUid === field.uid;
-        const pick = el("button", {
-          className: `btn btn-small${isPicking ? " active" : ""}`,
-          textContent: isPicking ? "Click a cell…" : "Pick",
-          title: "Pick a cell on the level",
-        });
-        pick.addEventListener("click", () =>
-          isPicking
-            ? this.controller.cancelPointPick()
-            : this.controller.startPointPick(instance.iid, field.uid)
-        );
-        const clear = el("button", {
-          className: "btn btn-small",
-          textContent: "Clear",
-          disabled: !point,
-        });
-        clear.addEventListener("click", () => set(null));
-        return row(`${field.identifier} (cell)`, label, pick, clear);
-      }
-    }
+    const picking = this.controller.pickingPoint;
+    return fieldInput({
+      project,
+      field,
+      value: fieldValue(instance, field, project.defs.enums),
+      set: (next) =>
+        this.controller.update(
+          instance.iid,
+          { fields: { ...instance.fields, [field.uid]: next } },
+          `Set ${def.identifier}.${field.identifier}`
+        ),
+      pickPoint: {
+        active: picking?.iid === instance.iid && picking.fieldUid === field.uid,
+        start: () => this.controller.startPointPick(instance.iid, field.uid),
+        cancel: () => this.controller.cancelPointPick(),
+      },
+    });
   }
 }

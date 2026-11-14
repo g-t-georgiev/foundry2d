@@ -87,7 +87,7 @@ export function validateFieldValue(
 
 /** The value of `field` on `instance`, falling back to the field default. */
 export function fieldValue(
-  instance: EntityInstance,
+  instance: Pick<EntityInstance, "fields">,
   field: FieldDef,
   enums: readonly EnumDef[]
 ): FieldValue {

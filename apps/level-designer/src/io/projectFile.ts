@@ -53,6 +53,10 @@ export interface SerializedLevel {
   layers: SerializedLevelLayer[];
   /** Entity instances (version 2+). */
   entities?: EntityInstance[];
+  /** Background colour, when the level has its own. */
+  bgColor?: string;
+  /** Level field values by field uid. */
+  fields?: Record<string, FieldValue>;
 }
 
 export interface LevelProjectFile {
@@ -68,7 +72,10 @@ export interface LevelProjectFile {
     tilesets: TilesetDef[];
     entities?: EntityDef[];
     enums?: EnumDef[];
+    levelFields?: FieldDef[];
   };
+  /** Background of levels without their own colour. */
+  defaultLevelBg?: string;
   levels: SerializedLevel[];
 }
 
@@ -84,12 +91,14 @@ export function serializeProject(project: LevelProject): LevelProjectFile {
     gridSize: project.gridSize,
     worldLayout: project.worldLayout,
     worldGrid: { ...project.worldGrid },
+    defaultLevelBg: project.defaultLevelBg,
     nextUid: project.uidCounter,
     defs: {
       layers: structuredClone(project.defs.layers),
       tilesets: structuredClone(project.defs.tilesets),
       entities: structuredClone(project.defs.entities),
       enums: structuredClone(project.defs.enums),
+      levelFields: structuredClone(project.defs.levelFields),
     },
     levels: project.levels.map((level) => {
       const active = level.doc.activeLayerId;
@@ -112,6 +121,8 @@ export function serializeProject(project: LevelProject): LevelProjectFile {
           };
         }),
         entities: structuredClone(level.entities),
+        ...(level.bgColor ? { bgColor: level.bgColor } : {}),
+        fields: structuredClone(level.fields),
       };
     }),
   };
@@ -345,6 +356,14 @@ export function deserializeProject(json: unknown): LevelProject {
     project.defs.enums.push(def);
     project.reserveUid(def.uid);
   }
+  const rawLevelFields = isRecord(json.defs) ? json.defs.levelFields : undefined;
+  for (const raw of Array.isArray(rawLevelFields) ? rawLevelFields : []) {
+    const field = parseField(raw, "Level fields", project.defs.enums);
+    project.defs.levelFields.push(field);
+    project.reserveUid(field.uid);
+  }
+  if (isHexColor(json.defaultLevelBg)) project.defaultLevelBg = json.defaultLevelBg.toLowerCase();
+
   const rawEntities = isRecord(json.defs) ? json.defs.entities : undefined;
   for (const [i, raw] of (Array.isArray(rawEntities) ? rawEntities : []).entries()) {
     const def = parseEntityDef(raw, i, project);
@@ -455,6 +474,12 @@ export function deserializeProject(json: unknown): LevelProject {
         layer.opacity = Math.min(1, Math.max(0, entry.opacity));
     }
     level.entities = parseEntities(raw.entities, project);
+    if (isHexColor(raw.bgColor)) level.bgColor = raw.bgColor.toLowerCase();
+    const storedFields = isRecord(raw.fields) ? raw.fields : {};
+    for (const field of project.defs.levelFields) {
+      const value = validateFieldValue(field, storedFields[String(field.uid)], project.defs.enums);
+      if (value !== undefined) level.fields[String(field.uid)] = value;
+    }
     if (isInt(raw.activeDefUid)) level.doc.setActiveLayer(layerIdFor(raw.activeDefUid));
   }
 

@@ -253,6 +253,20 @@
             <span class="label">Size</span>
             <span class="value" id="levelSize"></span>
           </div>
+          <div class="property-row level-bg-row">
+            <span class="label">Background</span>
+            <span class="button-row">
+              <input id="levelBg" type="color" aria-label="Level background colour" />
+              <button
+                class="btn btn-small"
+                id="levelBgDefault"
+                title="Use the project's default background"
+              >
+                Default
+              </button>
+            </span>
+          </div>
+          <div id="levelFields" class="level-fields"></div>
           <details class="resize">
             <summary>Resize edges</summary>
             <p class="hint">Cells to add (+) or remove (−) on each side.</p>
@@ -364,6 +378,7 @@
         <button type="button" role="tab" data-tab="tilesets">Tilesets</button>
         <button type="button" role="tab" data-tab="entities">Entities</button>
         <button type="button" role="tab" data-tab="enums">Enums</button>
+        <button type="button" role="tab" data-tab="levels">Levels</button>
       </nav>
       <div class="dialog-body">
         <section class="dialog-section" data-panel="layers" role="tabpanel">
@@ -416,6 +431,29 @@
             ></ul>
           </div>
           <div class="def-editor" id="entityDefEditor"></div>
+        </section>
+        <section class="dialog-section levels-settings" data-panel="levels" role="tabpanel">
+          <label class="field inline">
+            <span class="label">Default level background</span>
+            <input id="defaultLevelBg" type="color" />
+          </label>
+          <p class="hint">
+            Used by levels without their own background (set per level in the Level panel).
+          </p>
+          <div class="column-header">
+            <span class="label"
+              >Level fields (every level has these; values are set per level)</span
+            >
+            <span class="button-row">
+              <select
+                id="levelFieldType"
+                class="input input-small"
+                aria-label="Field type"
+              ></select>
+              <button class="btn btn-small" id="addLevelField">+ Field</button>
+            </span>
+          </div>
+          <div id="levelFieldsTable"></div>
         </section>
         <section class="dialog-columns" data-panel="enums" role="tabpanel">
           <div class="defs-list-column">

@@ -58,6 +58,8 @@ export interface ProjectDefs {
   tilesets: TilesetDef[];
   entities: EntityDef[];
   enums: EnumDef[];
+  /** Custom fields every level has (LDtk's level fields), e.g. music or a time limit. */
+  levelFields: FieldDef[];
 }
 
 // ------------------------------------------------------------------ entities

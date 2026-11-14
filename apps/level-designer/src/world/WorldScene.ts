@@ -247,7 +247,7 @@ export class WorldScene implements WorkspaceScene {
         continue;
       }
       ctx.globalAlpha = 1;
-      ctx.fillStyle = "#18181c";
+      ctx.fillStyle = project.levelBackground(level);
       ctx.fillRect(r.x, r.y, r.width, r.height);
 
       let cache = this.caches.get(level.uid);

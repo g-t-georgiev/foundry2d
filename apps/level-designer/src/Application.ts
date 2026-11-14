@@ -39,7 +39,14 @@ import { WORLD_LAYOUTS, type LayerDef, type WorldLayout } from "./model/types";
 import { createProjectFromPreset, presets, DEFAULT_PRESET_ID } from "./model/presets";
 import { bindKeys } from "./keys";
 import { bindStatusBar } from "./ui/StatusBar";
-import { DefinitionEditCommand, MoveLevelCommand } from "./model/commands";
+import {
+  DefinitionEditCommand,
+  MoveLevelCommand,
+  SetLevelPropertiesCommand,
+  type LevelProperties,
+} from "./model/commands";
+import { fieldInput } from "./ui/fieldInputs";
+import { fieldValue } from "./model/entities";
 import { LevelActions, levelStore, type EditorView, type LevelTool } from "./state";
 import PaletteView from "./ui/PaletteView";
 import TilesetPickerView from "./ui/TilesetPickerView";
@@ -54,6 +61,7 @@ import SettingsDialog from "./ui/SettingsDialog";
 import AutoRulesDialog from "./ui/AutoRulesDialog";
 import AddLayerMenu from "./ui/AddLayerMenu";
 import { WorldScene } from "./world/WorldScene";
+import { LevelBackgroundPass } from "./render/levelBackground";
 import { LevelOperations } from "./world/LevelOperations";
 import {
   LEGACY_EXTENSIONS,
@@ -340,6 +348,7 @@ export default class Application {
         this.rulesDialog.refresh();
       }),
       project.events.on("defs:changed", () => {
+        this.renderLevelInfo();
         this.syncEngineTool();
         this.renderPalette();
         this.workspace.refreshCursor();
@@ -377,6 +386,7 @@ export default class Application {
         }
         this.renderLevelsList();
         this.renderLevelInfo();
+        this.workspace.requestRender();
         persist();
       }),
     ];
@@ -455,6 +465,12 @@ export default class Application {
       showGrid: () => levelStore.getState().grid.enabled,
       majorGridEvery: 4,
       checkerboard: true,
+      underlayPasses: [
+        new LevelBackgroundPass(
+          () => level.bgColor,
+          () => this.levelScene.getBounds()
+        ),
+      ],
     });
   }
 
@@ -1014,6 +1030,14 @@ export default class Application {
       else projectName.value = this.project.name;
     });
 
+    const levelBg = $<HTMLInputElement>("#levelBg");
+    levelBg.addEventListener("change", () =>
+      this.setLevelProperties({ bgColor: levelBg.value }, "Change level background")
+    );
+    $("#levelBgDefault").addEventListener("click", () =>
+      this.setLevelProperties({ bgColor: null }, "Use default level background")
+    );
+
     const levelName = $<HTMLInputElement>("#levelName");
     levelName.addEventListener("change", () => {
       this.levelOps.rename(this.level.uid, levelName.value);
@@ -1174,6 +1198,35 @@ export default class Application {
     if (levelName.value !== this.level.identifier) levelName.value = this.level.identifier;
     $("#levelSize").textContent = `${this.level.width} × ${this.level.height} cells`;
     $("#currentLevelName").textContent = this.level.identifier;
+
+    const level = this.level;
+    const project = this.project;
+    $<HTMLInputElement>("#levelBg").value = project.levelBackground(level);
+    const useDefault = $<HTMLButtonElement>("#levelBgDefault");
+    useDefault.disabled = level.bgColor === null;
+    useDefault.title =
+      level.bgColor === null
+        ? "This level uses the project's default background"
+        : "Use the project's default background";
+    $("#levelFields").replaceChildren(
+      ...project.defs.levelFields.map((field) =>
+        fieldInput({
+          project,
+          field,
+          value: fieldValue(level, field, project.defs.enums),
+          set: (next) =>
+            this.setLevelProperties(
+              { fields: { ...level.fields, [field.uid]: next } },
+              `Set level ${field.identifier}`
+            ),
+        })
+      )
+    );
+  }
+
+  /** Changes the open level's background or field values as one undo step. */
+  private setLevelProperties(props: Partial<LevelProperties>, label: string): void {
+    this.history.execute(new SetLevelPropertiesCommand(this.project, this.level, props, label));
   }
 
   private showMessage(text: string, timeout = 2500): void {

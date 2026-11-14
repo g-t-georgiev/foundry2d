@@ -3,6 +3,8 @@ import { tilesetGrid } from "../model/tiles";
 import type { LayerDef, TilesetDef } from "../model/types";
 import { isPixelSpriteFile, sheetToDataUrl, spriteToSheet } from "../io/spriteImport";
 import EntityDefsEditor from "./EntityDefsEditor";
+import { fieldDefsTable } from "./fieldDefsTable";
+import { FIELD_TYPES, type FieldType } from "../model/types";
 
 export interface SettingsDialogHooks {
   confirm: (message: string) => boolean;
@@ -54,7 +56,7 @@ export async function readImageFile(
  * tilesets. Edits apply immediately to the live project; they are not undo
  * steps (like LDtk), and data-removing edits ask for confirmation.
  */
-export type SettingsTab = "layers" | "tilesets" | "entities" | "enums";
+export type SettingsTab = "layers" | "tilesets" | "entities" | "enums" | "levels";
 
 export default class SettingsDialog {
   private project: LevelProject | null = null;
@@ -93,6 +95,15 @@ export default class SettingsDialog {
       },
       hooks
     );
+
+    const typeSelect = $<HTMLSelectElement>("#levelFieldType");
+    for (const t of FIELD_TYPES) typeSelect.append(new Option(t, t));
+    $("#addLevelField").addEventListener("click", () => {
+      this.project?.addLevelField(typeSelect.value as FieldType);
+      this.render();
+    });
+    const defaultBg = $<HTMLInputElement>("#defaultLevelBg");
+    defaultBg.addEventListener("change", () => this.project?.setDefaultLevelBg(defaultBg.value));
 
     for (const button of dialog.querySelectorAll<HTMLButtonElement>("[data-tab]")) {
       button.addEventListener("click", () => this.showTab(button.dataset.tab as SettingsTab));
@@ -263,6 +274,24 @@ export default class SettingsDialog {
     }
   }
 
+  /** Levels tab: default background and the level field definitions. */
+  private renderLevelsTab(project: LevelProject): void {
+    const $ = <T extends Element>(sel: string) => this.dialog.querySelector<T>(sel)!;
+    $<HTMLInputElement>("#defaultLevelBg").value = project.defaultLevelBg;
+    $("#levelFieldsTable").replaceChildren(
+      fieldDefsTable(
+        project,
+        {
+          fields: project.defs.levelFields,
+          update: (uid, patch) => project.updateLevelField(uid, patch),
+          remove: (uid) => project.removeLevelField(uid),
+          emptyHint: "No level fields yet. Examples: music, time limit, a spawn point.",
+        },
+        { confirm: (m) => this.hooks.confirm(m), rerender: () => this.render() }
+      )
+    );
+  }
+
   private render(): void {
     const project = this.project;
     if (!project) return;
@@ -321,6 +350,7 @@ export default class SettingsDialog {
     );
     // Tilesets feed the entity tile picker, so keep that section in step.
     this.entityDefs.render();
+    this.renderLevelsTab(project);
   }
 
   private renderLayerEditor(project: LevelProject, def: LayerDef): HTMLElement[] {

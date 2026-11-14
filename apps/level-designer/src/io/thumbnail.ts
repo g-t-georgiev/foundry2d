@@ -23,7 +23,7 @@ export function renderProjectThumbnail(project: LevelProject, maxSize = 160): st
   for (const level of project.levels) {
     const rect = level.worldRect(project.gridSize);
     ctx.globalAlpha = 1;
-    ctx.fillStyle = "#18181c";
+    ctx.fillStyle = project.levelBackground(level);
     ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
     for (const layer of level.doc.layers) {
       if (!layer.visible || layer.opacity <= 0) continue;

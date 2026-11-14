@@ -1262,3 +1262,31 @@ body {
   color: var(--theme-text-muted);
   font-size: 11px;
 }
+
+/* ------------------------------------------------------------------ level background and fields */
+
+.level-bg-row input[type="color"] {
+  width: 44px;
+  height: 26px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--theme-border-color);
+  border-radius: 4px;
+}
+
+.level-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.level-fields:empty {
+  display: none;
+}
+
+.levels-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}

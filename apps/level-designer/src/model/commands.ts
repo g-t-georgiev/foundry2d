@@ -1,5 +1,6 @@
 import type { ICommand } from "@foundry2d/core";
 import type { DefinitionSnapshot, Level, LevelProject } from "./LevelProject";
+import type { FieldValue } from "./types";
 
 /**
  * Undoable world edits. Commands hold the `Level` objects themselves, so
@@ -129,5 +130,37 @@ export class DefinitionEditCommand implements ICommand {
 
   undo(): void {
     this.project.restoreDefinitions(this.before);
+  }
+}
+
+/** A level's background colour and/or field values, as one undo step. */
+export interface LevelProperties {
+  bgColor: string | null;
+  fields: Record<string, FieldValue>;
+}
+
+export class SetLevelPropertiesCommand implements ICommand {
+  private readonly before: LevelProperties;
+  private readonly after: LevelProperties;
+
+  constructor(
+    private readonly project: LevelProject,
+    private readonly level: Level,
+    next: Partial<LevelProperties>,
+    readonly label = "Edit level"
+  ) {
+    this.before = { bgColor: level.bgColor, fields: structuredClone(level.fields) };
+    this.after = {
+      bgColor: next.bgColor !== undefined ? next.bgColor : level.bgColor,
+      fields: structuredClone(next.fields ?? level.fields),
+    };
+  }
+
+  execute(): void {
+    this.project.setLevelProperties(this.level, this.after);
+  }
+
+  undo(): void {
+    this.project.setLevelProperties(this.level, this.before);
   }
 }

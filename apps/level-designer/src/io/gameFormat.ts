@@ -2,7 +2,7 @@ import { LevelProject, layerIdFor, type Level } from "../model/LevelProject";
 import { createProjectFromPreset } from "../model/presets";
 import { ProjectFormatError } from "./projectFile";
 import { tilesetGrid } from "../model/tiles";
-import { entityRect, namedFieldValues } from "../model/entities";
+import { entityRect, fieldValue, namedFieldValues } from "../model/entities";
 import type { FieldValue } from "../model/types";
 
 /** One placed entity in a game export. */
@@ -36,7 +36,11 @@ export interface GameLevelFile {
     columns: number;
     rows: number;
     tileSize: number;
+    /** The level's background colour (its own, or the project default). */
+    bgColor: string;
   };
+  /** Level field values by field identifier (present when the project defines level fields). */
+  fields?: Record<string, FieldValue>;
   layers: Record<string, number[]>;
   /**
    * Present when the level has Tiles layers. Their cells hold
@@ -117,7 +121,18 @@ export function toGameFormat(project: LevelProject, level: Level): GameLevelFile
       columns: level.width,
       rows: level.height,
       tileSize: project.gridSize,
+      bgColor: project.levelBackground(level),
     },
+    ...(project.defs.levelFields.length
+      ? {
+          fields: Object.fromEntries(
+            project.defs.levelFields.map((f) => [
+              f.identifier,
+              fieldValue(level, f, project.defs.enums),
+            ])
+          ),
+        }
+      : {}),
     layers,
   };
 }

@@ -121,7 +121,13 @@ describe("game format", () => {
     const project = createPacmanProject();
     project.levels[0].doc.getLayer(layerIdFor(project.defs.layers[0].uid))!.set(1, 0, 1);
     const game = toGameFormat(project, project.levels[0]);
-    expect(game.metadata).toEqual({ name: "pacman", columns: 28, rows: 36, tileSize: 8 });
+    expect(game.metadata).toEqual({
+      name: "pacman",
+      columns: 28,
+      rows: 36,
+      tileSize: 8,
+      bgColor: "#18181c", // added in 8.5; games that don't know it ignore it
+    });
     expect(Object.keys(game.layers)).toEqual(["collision", "collectibles"]);
     expect(game.layers.collision).toHaveLength(28 * 36);
     expect(game.layers.collision[1]).toBe(1);
