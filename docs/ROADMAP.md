@@ -156,7 +156,7 @@ _Done: defects fixed, open tool registry, history events/limit/composite, full l
 2. **Tiles layer type** next to IntGrid, bound to one tileset. Cells store `tileId + 1` (0 = empty) with flip flags in the high bits: bit 29 = flip X, bit 30 = flip Y. The sign bit is never used.
 3. **Rendering:** `LayerStackPass` gains a per-layer custom renderer, so tile layers draw visible tiles straight from the tileset image, interleaved correctly with IntGrid layers. The world view uses the same path.
 4. **Editing:** a tileset picker (click a tile, or drag to pick a rectangular stamp), a core `StampTool` that paints multi-tile patterns, X/Y keys to flip, and pen, eraser, bucket and rectangle working on single tiles.
-5. **Later:** auto-layer rules driven by IntGrid values, LDtk's signature feature.
+5. **Later:** auto-layer rules driven by IntGrid values, LDtk's signature feature. ✅ Phase 7b.
 
 ### Phase 5: Storage and project library ✅ (2026-11-14)
 
@@ -173,7 +173,7 @@ _Done: defects fixed, open tool registry, history events/limit/composite, full l
 4. **Level designer:** tileset PNGs live in the asset store for library and recovery copies (`asset:<sha256>` references). Saved files always embed the image. Deleting a library project prunes assets that nothing references any more.
 5. **Pixel editor:** the same flow, plus a sprite name field in the toolbar.
 
-**Not done yet:** a "Save as" choice between file and library naming, project duplication in the library, and storage quota and usage display.
+**Not done yet:** a "Save as" choice between file and library naming, project duplication in the library, and storage quota and usage display. ✅ Done in 8.4 (item 8).
 
 ### Phase 6: Pixel Editor, exports, frames and spritesheets ✅ (2026-11-14)
 
@@ -202,7 +202,7 @@ _Done: defects fixed, open tool registry, history events/limit/composite, full l
 5. **Bridge to the level designer:** Project settings, then Tilesets, then Import… now also accepts a pixel-editor sprite (`.f2d.json`). Its frames are laid side by side, and square frames become one tile each. The compositing it uses moved to core as `compositeRgba`, and the pixel exporter uses the same function.
 6. **Fix:** the workspace's first automatic fit now announces the camera change, so the zoom readout is right from the start.
 
-**Not done:** pasting images from the system clipboard, and non-rectangular selections (lasso, magic wand).
+**Not done:** pasting images from the system clipboard, and non-rectangular selections (lasso, magic wand). ✅ Done in 8.5 (item 14).
 
 ### Phase 7: Entities and custom data ✅ (2026-11-14)
 
@@ -252,11 +252,13 @@ LDtk's signature feature, simplified: a Tiles layer can be **generated** from an
 5. **New preset, "Platformer (auto-tiles)":** a 40×22 side-scroller with a generated 16px tileset (grass, dirt with variants, corners, walls, undersides, planks). Six rules cover all of it, using mirroring for the right-hand corners and walls. It also has Player and Coin entities.
 6. **Pac-Man preset:** the empty IntGrid `spawns` layer was removed; entities cover spawns now.
 
-**Not done (LDtk has them):** several tiles stacked in one cell (rules that don't stop at the first match), rule groups, per-rule out-of-bounds handling, tile offsets, and auto-layers built on top of other auto-layers.
+**Not done (LDtk has them):** several tiles stacked in one cell (rules that don't stop at the first match), rule groups, per-rule out-of-bounds handling, tile offsets, and auto-layers built on top of other auto-layers. ✅ Done in 8.5 (item 30), apart from auto-layers fed by other auto-layers (deferred).
 
-### Phase 8: Refactor and polish
+### Phase 8: Refactor and polish ⚠️ (in progress: 8.1–8.4 done, 8.5 nearly)
 
 Issues, improvements and polish candidates collected along the way, including everything earlier phases marked "not done" or "later". Items marked **earlier** are cheap enough, or annoying enough, to fold into whichever phase touches that code first.
+
+**Status marks:** ✅ done · ⚠️ open (to do or to decide) · ⏸️ deferred or moved to a later stage · ❌ dropped.
 
 **Order of work.** The list is long, so Phase 8 runs in stages:
 
@@ -284,7 +286,7 @@ Issues, improvements and polish candidates collected along the way, including ev
   - **Shared theme (3):** `@foundry2d/ui/theme/tokens.css` holds the design tokens, `<layers-panel>` tokens and base resets, and both apps `@import` it. The pixel editor's short names (`--bg`, `--panel`…) are aliases of the shared tokens, so it now uses the level designer's palette.
   - **Store review (4):** every action is still used. The rule (the store holds UI state only; model data changes through commands) is now documented at the top of both stores.
   - **Tooling:** the root Vite config excludes `e2e/` from Vitest, so VS Code's Testing tab no longer imports the Playwright specs (which failed with "Playwright Test did not expect test.beforeEach() to be called here"). The Playwright extension is recommended for running them from the editor.
-- **8.4 Files and storage** ✅ (2026-11-15; item 6 moved to 8.7): items 6–9 and 32–37 (work files versus export files).
+- **8.4 Files and storage** ✅ (2026-11-15; item 6 moved to 8.7): items 6–8 and 32–37 (work files versus export files).
   - ✅ **Work files keep the editing state (32):** an `editor` block next to the document data, written on save and in recovery snapshots and restored on open. Tool changes alone don't mark a file as changed, as in other editors; the state is captured whenever the file is next saved.
     - Pixel editor: camera, frame, tool, colour, pen size, grid, onion skin and mirror.
     - Level designer: view, open level, camera, tool, grid, selected values, tile flips and tile selections.
@@ -304,11 +306,34 @@ Issues, improvements and polish candidates collected along the way, including ev
     - **Save as** is a split button: "Save as file…" (the default, also Ctrl+Shift+S) or "Save a copy in this browser…", which asks for a name and continues with the copy.
     - Library cards on the start screen have a duplicate button.
     - The start screen shows storage use ("2.1 MB used of 1.2 GB").
-  - ✅ **Undo for definition edits (9)**, first item of 8.5. This went simpler than first expected. Undo steps refer to levels by object and to layers by document plus layer id. A `DefinitionEditCommand` can therefore restore before/after snapshots _in place_: same `Level` and document objects, with layers recreated under their old ids. All earlier undo steps stay valid.
+  - ⏸️ **Packaged project format (6) moved to 8.7.** It is a third file format next to `.f2dsprite` and `.f2dlevel`, so the choice of replacing or adding to them belongs with the OS file association and installable app (34, 38). The Sprite Packer (Phase 9) will need the same machinery: reading ZIPs, including compressed ones from other tools, folder input and asset files. Today only files saved to disk embed tileset images; library and recovery copies already keep them in the asset store.
+  - **8.4 is done** apart from item 6 (moved). Items 36–37 are deferred until there is a target engine.
+- **8.5 Features** ⚠️ (in progress): items 9, 12–15, 17–20, 23, 30, 31 and 46, in the order below.
+  - ✅ **Undo for definition edits (9):** This went simpler than first expected. Undo steps refer to levels by object and to layers by document plus layer id. A `DefinitionEditCommand` can therefore restore before/after snapshots _in place_: same `Level` and document objects, with layers recreated under their old ids. All earlier undo steps stay valid.
     - **Recording:** every definition-editing method of `LevelProject` is wrapped once (a central list with undo labels), so all edits are recorded, whether from Project settings, the layers panel or the rules editor. Nested edits join the outer step, and no-ops record nothing.
     - **Cost:** layer data the edit didn't change is shared between snapshots.
     - **Merging:** repeats of the same "Edit …" step within a moment merge (dragging a colour picker is one step). Deletes and adds never merge.
     - **Visible changes:** these edits no longer clear the history, their confirmations say "Ctrl+Z undoes it", and open dialogs refresh after undo or redo.
+  - ✅ **Incremental auto-layers (23):** `cells:changed` now carries an optional changed rectangle (`GridDocument.notifyCellsChanged(layerId, rect?)`, `boundsOfChanges` and `unionRects` in core).
+    - The draw command and the pen, bucket, shape and stamp tools pass one; without it, listeners assume everything changed.
+    - Auto-layers regenerate only the dirty area, widened by the rules' reach (`generateAutoTilesInto`).
+    - On a 256×256 level, a single-cell edit now costs about 0.014 ms instead of about 21 ms for a full pass. A test checks that incremental results match a full regeneration after random strokes and undos.
+  - ✅ **Selection across layers and frames (12), a decision:** the selection belongs to the canvas, not to a layer, so it is kept when switching layer or frame (as in Aseprite and Photoshop). Workflows like "select, switch layer, copy" rely on it.
+  - ✅ **System clipboard images (14, partly):** Copy and Cut also put the selection on the system clipboard as a PNG, so other apps can paste it. Ctrl+V accepts images copied in other apps: they paste like internal copies, at the selection's top-left, selected, as one undo step. Fully transparent pixels become empty cells, and anything outside the sprite is cut off with a message.
+    - **Paste event:** pasting uses the browser's `paste` event, which carries the clipboard without a permission prompt. Ctrl+V is therefore no longer a keymap binding, because cancelling the key press would also cancel the event.
+    - **Which copy wins:** an image on the system clipboard wins over the internal copy only when our last copy reached the system clipboard. Then the image is either ours or newer. If the write failed, the internal copy is used, since an image there could be older.
+    - **Tests:** end-to-end tests in Chromium with clipboard permissions check both directions, using a synthetic paste event for "copied in another app". Lasso and magic wand (the rest of 14) are still open.
+  - ✅ **Lasso and magic wand (14):** selections no longer have to be rectangles.
+    - **Model:** a `Selection` is a bounding rect plus an optional per-cell mask (`SelectionShape`). Rectangular selections have no mask, so existing code paths are unchanged. `SetSelectionCommand` restores whole shapes, so undoing a move of a lasso selection brings the lasso back.
+    - **Everything respects the mask:** moving (only selected cells move, neighbours inside the rect stay), copy, cut, paste, flip and rotate (the mask turns with the pixels), Delete, and the outline, which traces the mask's real edge with the same dashes.
+    - **Lasso (Q):** drag an outline. Cells whose centre is inside it, or that the outline passes through, are selected, live while dragging; a click deselects.
+    - **Magic wand (W):** click selects the connected area of the same colour; Shift+click selects that colour everywhere on the layer.
+    - **Not yet:** adding to or subtracting from a selection (Shift/Alt with any selection tool), and moving a selection while the lasso or wand is active (use the select tool, M).
+  - ✅ **GIF palette (15):** above 255 colours the GIF encoder now uses a pixel-weighted **median cut** (`export/quantize.ts`) instead of keeping the 255 most frequent colours. On a 4,096-colour gradient the average error per channel dropped from about 61 to about 3.5 (out of 255). Up to 255 colours stay exact, as before. Optional **Floyd–Steinberg dithering** (off by default; "Dither" in the GIF tab) applies only when the palette is reduced, and leaves transparent pixels alone.
+  - ✅ **Flip and rotate (13, partly):** Shift+H and Shift+V flip, and Shift+R rotates 90° clockwise. They act on the selected pixels, or the whole active layer without a selection, and each is one undo step.
+    - Rotation turns around the selection's centre, swaps its width and height, and is kept on the canvas.
+    - There is a Transform section next to Mirror, and `transformRegion` lives in core.
+    - Still open: handles to resize or scale the selection.
   - ✅ **Level background and level fields (18):**
     - **Background:** Project settings has a new Levels tab with the project's default level background. Each level can set its own colour in the Level panel, and "Default" switches it back. The level view draws it over the checkerboard, and the world view and start-screen thumbnails fill levels with it.
     - **Fields:** level fields are defined in the same Levels tab, with the field table shared with entity types (type, identifier, default, enum, min/max). Values are edited per level in the Level panel, with the same inputs as the entity inspector; Point fields take x/y numbers there.
@@ -342,80 +367,59 @@ Issues, improvements and polish candidates collected along the way, including ev
     - **Pixel editor on the shared classes:** it styled bare `button` and `select` elements and had its own copies of the dialog, status bar and section label rules. Its markup now uses the shared classes, those copies are gone, and it looks like the level designer (blue primary button, the same inputs, buttons and status bar).
     - **DOM helpers:** `el()` and `fieldRow()` in `@foundry2d/ui` replace six copies in the level designer.
     - **Decided against wrapping these as web components.** Native `<dialog>`, buttons and inputs with shared classes cover the tool bar, panel sections, modals and status bar without the cost of custom elements. The existing components (`<layers-panel>`, `<split-button>`, `<project-browser>`, the colour picker) stay. A shared palette or property grid can follow once both apps need the same one; their palettes differ today (colours versus IntGrid values).
-  - ⏭ **Packaged project format (6) moved to 8.7.** It is a third file format next to `.f2dsprite` and `.f2dlevel`, so the choice of replacing or adding to them belongs with the OS file association and installable app (34, 38). The Sprite Packer (Phase 9) will need the same machinery: reading ZIPs, including compressed ones from other tools, folder input and asset files. Today only files saved to disk embed tileset images; library and recovery copies already keep them in the asset store.
-  - **8.4 is done** apart from item 6 (moved). Items 36–37 are decisions to take with a target engine.
-- **8.5 Features** (in progress): items 9 ✅, 23 ✅, 12 ✅, 13 (partly), 14 ✅, 15 ✅, then 17–20, 30 and 31, roughly in that order.
-  - ✅ **Incremental auto-layers (23):** `cells:changed` now carries an optional changed rectangle (`GridDocument.notifyCellsChanged(layerId, rect?)`, `boundsOfChanges` and `unionRects` in core).
-    - The draw command and the pen, bucket, shape and stamp tools pass one; without it, listeners assume everything changed.
-    - Auto-layers regenerate only the dirty area, widened by the rules' reach (`generateAutoTilesInto`).
-    - On a 256×256 level, a single-cell edit now costs about 0.014 ms instead of about 21 ms for a full pass. A test checks that incremental results match a full regeneration after random strokes and undos.
-  - ✅ **Selection across layers and frames (12), a decision:** the selection belongs to the canvas, not to a layer, so it is kept when switching layer or frame (as in Aseprite and Photoshop). Workflows like "select, switch layer, copy" rely on it.
-  - ✅ **System clipboard images (14, partly):** Copy and Cut also put the selection on the system clipboard as a PNG, so other apps can paste it. Ctrl+V accepts images copied in other apps: they paste like internal copies, at the selection's top-left, selected, as one undo step. Fully transparent pixels become empty cells, and anything outside the sprite is cut off with a message.
-    - **Paste event:** pasting uses the browser's `paste` event, which carries the clipboard without a permission prompt. Ctrl+V is therefore no longer a keymap binding, because cancelling the key press would also cancel the event.
-    - **Which copy wins:** an image on the system clipboard wins over the internal copy only when our last copy reached the system clipboard. Then the image is either ours or newer. If the write failed, the internal copy is used, since an image there could be older.
-    - **Tests:** end-to-end tests in Chromium with clipboard permissions check both directions, using a synthetic paste event for "copied in another app". Lasso and magic wand (the rest of 14) are still open.
-  - ✅ **Lasso and magic wand (14):** selections no longer have to be rectangles.
-    - **Model:** a `Selection` is a bounding rect plus an optional per-cell mask (`SelectionShape`). Rectangular selections have no mask, so existing code paths are unchanged. `SetSelectionCommand` restores whole shapes, so undoing a move of a lasso selection brings the lasso back.
-    - **Everything respects the mask:** moving (only selected cells move, neighbours inside the rect stay), copy, cut, paste, flip and rotate (the mask turns with the pixels), Delete, and the outline, which traces the mask's real edge with the same dashes.
-    - **Lasso (Q):** drag an outline. Cells whose centre is inside it, or that the outline passes through, are selected, live while dragging; a click deselects.
-    - **Magic wand (W):** click selects the connected area of the same colour; Shift+click selects that colour everywhere on the layer.
-    - **Not yet:** adding to or subtracting from a selection (Shift/Alt with any selection tool), and moving a selection while the lasso or wand is active (use the select tool, M).
-  - ✅ **GIF palette (15):** above 255 colours the GIF encoder now uses a pixel-weighted **median cut** (`export/quantize.ts`) instead of keeping the 255 most frequent colours. On a 4,096-colour gradient the average error per channel dropped from about 61 to about 3.5 (out of 255). Up to 255 colours stay exact, as before. Optional **Floyd–Steinberg dithering** (off by default; "Dither" in the GIF tab) applies only when the palette is reduced, and leaves transparent pixels alone.
-  - ✅ **Flip and rotate (13, partly):** Shift+H and Shift+V flip, and Shift+R rotates 90° clockwise. They act on the selected pixels, or the whole active layer without a selection, and each is one undo step.
-    - Rotation turns around the selection's centre, swaps its width and height, and is kept on the canvas.
-    - There is a Transform section next to Mirror, and `transformRegion` lives in core.
-    - Still open: handles to resize or scale the selection.
-- **8.6 Quality:** items 16, 26–28.
-- **8.7 Engine formats and distribution:** items 38–40, plus item 34 (OS file association) and item 6 (packaged project format). Item 40 is shared with Phase 9, so it can move there if the packer starts first.
+  - ⚠️ **Still open in 8.5:** selection handles to resize the selection (13), adding to and subtracting from selections (14), and the guide grid (46).
+  - ⏸️ **Deferred from 8.5:** auto-layers fed by other auto-layers (part of 30), until there is a concrete use for it.
+- **8.6 Quality** ⚠️: items 16, 26–28.
+- **8.7 Engine formats and distribution** ⚠️: items 38–40, plus item 34 (OS file association) and item 6 (packaged project format). Item 40 is shared with Phase 9, so it can move there if the packer starts first.
 
 **Architecture**
 
-1. Split the composition roots. The level designer `Application.ts` (1,200 lines) and pixel editor `Application.ts` (825) mix file handling, key bindings, tool syncing, status bar and rendering glue. Move these into controllers (files and session, keys, tools, status, export, clipboard), and keep `Application` as wiring only.
-2. Extract the app shell both apps duplicate: project session wiring, start-screen handling, `showMessage` and the status bar, undo/redo button state, and zoom readouts. Move it into `@foundry2d/workspace` (an `AppShell` helper) or `@foundry2d/ui`.
-3. Share the theme. Both apps carry their own copy of the design tokens and panel CSS; move them into one stylesheet in `@foundry2d/ui`.
-4. Review the store. The pixel editor keeps preferences in the Ajv/Immer store but the sprite outside it; the level designer is similar. Document the rule (the store holds UI state only, never cell data) and remove leftover actions.
-5. `compositeRgba` and the layer bitmaps read `Uint32Array` pixels as RGBA bytes, which assumes a little-endian host. That holds for every browser today; add a startup assertion and a note.
+1. ✅ Split the composition roots. The level designer `Application.ts` (1,200 lines) and pixel editor `Application.ts` (825) mix file handling, key bindings, tool syncing, status bar and rendering glue. Move these into controllers (files and session, keys, tools, status, export, clipboard), and keep `Application` as wiring only. (8.3)
+2. ✅ Extract the app shell both apps duplicate: project session wiring, start-screen handling, `showMessage` and the status bar, undo/redo button state, and zoom readouts. Move it into `@foundry2d/workspace` (an `AppShell` helper) or `@foundry2d/ui`. (8.3: shared file workflow)
+3. ✅ Share the theme. Both apps carry their own copy of the design tokens and panel CSS; move them into one stylesheet in `@foundry2d/ui`. (8.3)
+4. ✅ Review the store. The pixel editor keeps preferences in the Ajv/Immer store but the sprite outside it; the level designer is similar. Document the rule (the store holds UI state only, never cell data) and remove leftover actions. (8.3)
+5. ✅ `compositeRgba` and the layer bitmaps read `Uint32Array` pixels as RGBA bytes, which assumes a little-endian host. That holds for every browser today; add a startup assertion and a note. (8.1)
 
 **Files and storage**
 
-6. Saved level files embed tileset images as data URLs. Big tilesets make big JSON. Offer an optional packaged format (a `.f2dproj` ZIP with `project.json` plus images), reusing the ZIP writer from the exporter.
-7. Tilesets imported from a pixel-editor sprite are one-time copies. Remember the source file (handle or library id) and offer **Re-import**.
-8. Not done in Phase 5: a choice between file and library when using "Save as", duplicating a project in the library, and showing storage quota and usage.
-9. Definition edits are not undoable (by design, like LDtk). Consider snapshot-based undo for them, since the project JSON is cheap to serialize.
+6. ⏸️ Saved level files embed tileset images as data URLs. Big tilesets make big JSON. Offer an optional packaged format (a `.f2dproj` ZIP with `project.json` plus images), reusing the ZIP writer from the exporter. (moved to 8.7)
+7. ✅ Tilesets imported from a pixel-editor sprite are one-time copies. Remember the source file (handle or library id) and offer **Re-import**. (8.4)
+8. ✅ Not done in Phase 5: a choice between file and library when using "Save as", duplicating a project in the library, and showing storage quota and usage. (8.4)
+9. ✅ Definition edits are not undoable (by design, like LDtk). Consider snapshot-based undo for them, since the project JSON is cheap to serialize. (8.5)
 
 **Pixel editor**
 
-10. The mirror guide is 1px and easy to miss at low zoom. Draw it thicker and label the axis (**earlier**, one line).
-11. Moving a selection on a locked or hidden layer silently does nothing. Show the not-allowed cursor and a status message (**earlier**).
-12. Decide what happens to the selection when switching layer or frame. It is kept today, which is useful but surprising when the new layer is empty there.
-13. Selection handles for resizing, plus flip and rotate of the selected pixels. (Flip and rotate ✅ in 8.5; handles still open.)
-14. From Phase 6b: paste images from the system clipboard (and copy as PNG), lasso and magic wand selections. (Clipboard images, lasso and magic wand ✅ in 8.5; adding to and subtracting from selections still open.)
-15. The GIF encoder is exact up to 255 colours. Above that it needs a proper quantizer (median cut or octree), with optional dithering. ✅ Done in 8.5 (median cut, optional dithering).
-16. The export dialog was tested through unit tests and the dialog UI, but no download was clicked in a real browser session. Do one manual pass per format.
+10. ✅ The mirror guide is 1px and easy to miss at low zoom. Draw it thicker and label the axis (**earlier**, one line). (8.1)
+11. ✅ Moving a selection on a locked or hidden layer silently does nothing. Show the not-allowed cursor and a status message (**earlier**). (8.1)
+12. ✅ Decide what happens to the selection when switching layer or frame. It is kept today, which is useful but surprising when the new layer is empty there. (8.5)
+13. ⚠️ Selection handles for resizing, plus flip and rotate of the selected pixels. (Flip and rotate done in 8.5; handles open.)
+14. ⚠️ From Phase 6b: paste images from the system clipboard (and copy as PNG), lasso and magic wand selections. (Clipboard images, lasso and magic wand done in 8.5; adding to and subtracting from selections open.)
+15. ✅ The GIF encoder is exact up to 255 colours. Above that it needs a proper quantizer (median cut or octree), with optional dithering. (8.5)
+16. ⚠️ The export dialog was tested through unit tests and the dialog UI, but no download was clicked in a real browser session. Do one manual pass per format. (8.6)
 
 **Level designer**
 
-17. Per-layer grid sizes (LDtk allows them). Today one grid size covers every layer. ✅ Done in 8.5.
-18. Level background colour and level custom fields (LDtk has both). This reuses the Phase 7 field editor. ✅ Done in 8.5 (see the 8.5 status).
-19. Entity reference fields (a door pointing at a switch) and array fields. Deferred from Phase 7 to keep its scope. ✅ Done in 8.5.
-20. Game JSON import cannot recreate entities (the file has no definitions). Map known identifiers when importing over an existing project. ✅ Done in 8.5.
-21. Project settings has grown to five sections in one scrolling dialog. Split it into tabs (General, Layers, Tilesets, Entities, Enums), so the header and close button stay in view.
-22. Entity tiles are chosen by numeric tile id. Reuse the tileset picker for a visual choice.
-23. Auto-layers regenerate the whole layer on every source change, because `cells:changed` carries no region. Add dirty rectangles to the event and regenerate only the area around them (pattern radius). This matters on 256×256 levels with many rules.
-24. Game JSON import still treats a `spawns` key as a generic IntGrid layer (values named `value_n`). Map it to Pac-Man entities, or keep the old names for older exports.
+17. ✅ Per-layer grid sizes (LDtk allows them). Today one grid size covers every layer. (8.5)
+18. ✅ Level background colour and level custom fields (LDtk has both). This reuses the Phase 7 field editor. (8.5)
+19. ✅ Entity reference fields (a door pointing at a switch) and array fields. Deferred from Phase 7 to keep its scope. (8.5)
+20. ✅ Game JSON import cannot recreate entities (the file has no definitions). Map known identifiers when importing over an existing project. (8.5)
+21. ✅ Project settings has grown to five sections in one scrolling dialog. Split it into tabs (General, Layers, Tilesets, Entities, Enums), so the header and close button stay in view. (8.1)
+22. ✅ Entity tiles are chosen by numeric tile id. Reuse the tileset picker for a visual choice. (8.1)
+23. ✅ Auto-layers regenerate the whole layer on every source change, because `cells:changed` carries no region. Add dirty rectangles to the event and regenerate only the area around them (pattern radius). This matters on 256×256 levels with many rules. (8.5)
+24. ✅ Game JSON import still treats a `spawns` key as a generic IntGrid layer (values named `value_n`). Map it to Pac-Man entities, or keep the old names for older exports. (8.1)
 
 **Quality**
 
-25. Add browser end-to-end smoke tests for both apps: open, draw, undo, save, reload, recover. Use Vitest browser mode or Playwright, so regressions like the stale zoom readout get caught. Canvas tests need real pointer events (synthetic ones were what exposed the pointer-capture bug in Phase 7).
-26. Toolchain quirk seen in Phase 7b on Windows: the dev server kept serving a stale module after a file was appended to from a shell, and the test runner kept a stale `import.meta.glob` result until the importing file's content changed. Restarting the dev server, or editing the importing file, fixes it. Check whether a newer Vite+ fixes it, and otherwise document it in the contributor notes.
-27. Accessibility pass: focus order, visible focus rings, `aria` labels on canvas-adjacent controls, and keyboard access to every panel action.
-28. Performance check on big levels (256×256 with several layers) and long animations (100+ frames): thumbnails, onion skin and autosave serialization.
+25. ✅ Add browser end-to-end smoke tests for both apps: open, draw, undo, save, reload, recover. Use Vitest browser mode or Playwright, so regressions like the stale zoom readout get caught. Canvas tests need real pointer events (synthetic ones were what exposed the pointer-capture bug in Phase 7). (8.2)
+26. ⚠️ Toolchain quirk seen in Phase 7b on Windows: the dev server kept serving a stale module after a file was appended to from a shell, and the test runner kept a stale `import.meta.glob` result until the importing file's content changed. Restarting the dev server, or editing the importing file, fixes it. Check whether a newer Vite+ fixes it, and otherwise document it in the contributor notes. (8.6)
+27. ⚠️ Accessibility pass: focus order, visible focus rings, `aria` labels on canvas-adjacent controls, and keyboard access to every panel action. (8.6)
+28. ⚠️ Performance check on big levels (256×256 with several layers) and long animations (100+ frames): thumbnails, onion skin and autosave serialization. (8.6)
 
 **Collected from earlier phases' "not done" notes**
 
-29. Phase 1 kept `locked` in core but never exposed it. Add a lock toggle to `<layers-panel>` for both apps. The level designer's generated auto-layers show as locked and can't be unlocked.
-30. Phase 7b auto-layer gaps (LDtk has them): several tiles stacked in one cell (rules that don't stop at the first match), rule groups that can be toggled together, per-rule out-of-bounds handling, tile offsets, and auto-layers fed by other auto-layers. ✅ Done in 8.5, except auto-layers fed by other auto-layers (still open, see the 8.5 status).
-31. The target architecture planned shared `@foundry2d/ui` components (tool bar, palette, panel section, property grid, modal, status bar). Both apps still build these in plain HTML. Extract them alongside items 2 and 3. ✅ Done in 8.5 as shared styles and DOM helpers (see the 8.5 status).
+29. ✅ Phase 1 kept `locked` in core but never exposed it. Add a lock toggle to `<layers-panel>` for both apps. The level designer's generated auto-layers show as locked and can't be unlocked. (8.1)
+30. ✅ Phase 7b auto-layer gaps (LDtk has them): several tiles stacked in one cell (rules that don't stop at the first match), rule groups that can be toggled together, per-rule out-of-bounds handling, tile offsets, and auto-layers fed by other auto-layers. (8.5; auto-layers fed by other auto-layers deferred)
+31. ✅ The target architecture planned shared `@foundry2d/ui` components (tool bar, palette, panel section, property grid, modal, status bar). Both apps still build these in plain HTML. Extract them alongside items 2 and 3. (8.5)
 
 **Work files versus export files** (requested 2026-11-14; to check during 8.4)
 
@@ -426,79 +430,79 @@ Tools like Photoshop, Piskel, Tiled and LDtk keep two kinds of output apart:
 
 Foundry2D already has both, but the line between them isn't drawn deliberately yet.
 
-32. **Define the work file as the full editing state.** Today it stores the document only.
+32. ✅ **Define the work file as the full editing state.** Today it stores the document only. (8.4)
     - Add view and editor state: camera (zoom and position, per level in the level designer), active layer, frame, tool and colours, grid and onion-skin toggles, the open view (world or level), panel sizes, and the last export settings and target.
     - Keep this state in a separate `editor` block, so the document data stays clean and tools that read the file can ignore it.
     - Restoring it on open makes a work file reopen exactly as it was left.
-33. **Branded work-file extensions** that the OS can associate with the apps, for example `.f2dsprite` and `.f2dlevel`.
+33. ✅ **Branded work-file extensions** that the OS can associate with the apps, for example `.f2dsprite` and `.f2dlevel`. (8.4)
     - Today the names end in `.json` (`.f2d.json`, `.f2dlevel.json`), so the OS treats them as plain JSON.
     - The content can stay JSON, as Piskel's and LDtk's files do; the extension is what links the file to the app.
     - Give each format a registered-style MIME type (e.g. `application/vnd.foundry2d.sprite+json`) for the save picker.
     - Keep opening the old `.json` names.
-34. **OS file association for a web app.** Add a web app manifest to each app. Once a user installs the app (Chromium desktop), its `file_handlers` entry associates the branded extensions with it, and the `launchQueue` API then opens files double-clicked in the OS.
+34. ⚠️ **OS file association for a web app.** Add a web app manifest to each app. Once a user installs the app (Chromium desktop), its `file_handlers` entry associates the branded extensions with it, and the `launchQueue` API then opens files double-clicked in the OS. (8.7)
     - Without installing, the apps keep working through Open and drag-and-drop.
     - This is also the natural point to add an app icon and offline support (service worker), so check scope then.
-35. **Level designer exports** in their own export dialog (Ctrl+E), mirroring the pixel editor's.
+35. ✅ **Level designer exports** in their own export dialog (Ctrl+E), mirroring the pixel editor's. (8.4, as the Export split button rather than a dialog)
     - Game JSON per level or for the whole world, with only game data: no editor colours, uids or view state. Review what today's export still carries.
     - CSV per IntGrid or Tiles layer (row per line, like Tiled's CSV layer format), optionally as a ZIP with one file per layer.
     - PNG renders of levels or layers, and entities as JSON (or CSV for simple tables).
     - The dialog remembers its settings in the work file (item 32), so re-exporting is one click.
-36. **Pixel editor export formats.** Images, spritesheets and TexturePacker JSON exist. Check which data formats engines actually read, so we add those rather than guess.
+36. ⏸️ **Pixel editor export formats.** Images, spritesheets and TexturePacker JSON exist. Check which data formats engines actually read, so we add those rather than guess. (decide with a target engine; folded into item 40)
     - CSV frame lists (name, x, y, w, h, duration) are rare for spritesheets. Cheap to add, but probably low value.
     - The commonly used ones are Starling/Sparrow XML (Phaser, Starling and others), Aseprite-style JSON with tags, and Godot `SpriteFrames` (`.tres`).
     - Decide with a target engine in mind.
-37. **"Native format versus plain JSON" (the LDtk note).** As I understand LDtk's advice:
+37. ⏸️ **"Native format versus plain JSON" (the LDtk note).** As I understand LDtk's advice (decision to take with a target engine):
     - Its native `.ldtk` file is still JSON, but it is the editor's complete, versioned project: definitions with uids, editor-only settings and layout. The editor migrates it when its format changes.
     - A plain JSON export is a one-way snapshot for games. It can drop editor data and isn't guaranteed to reopen losslessly or to be upgraded.
     - "Better support" therefore means round-tripping and future upgrades, not a different encoding.
     - Apply the same contract here: work files carry a format version with migrations (both formats already have versions); exports are documented and stable for games, but are not meant to be reopened for editing.
     - Also consider LDtk's option to store each level in its own file, which keeps version-control diffs small for big worlds.
 
+**Delivery and engine formats** (requested 2026-11-14)
+
+38. ⚠️ **Offline support (installable web app).** Each app gets a web app manifest, icons and a service worker that caches the app shell, so it installs from the browser and works offline. Items 33–34 (branded files, file association) build on the same manifest. (8.7)
+    - Storage already works offline (IndexedDB, File System Access).
+    - The service worker needs an update flow ("new version available, reload"), so a cached old version never silently edits newer files.
+39. ⚠️ **Standalone desktop and mobile apps.** Decide between packaging the existing web apps and keeping them installable web apps only. (8.7)
+    - **Desktop:** Tauri (small, uses the system web view) or Electron (one Chromium everywhere, bigger). Either gives real file associations, native menus, recent files and plain file-system access without browser pickers.
+    - **Mobile:** Capacitor around the same build, or installable web apps first. Touch input needs its own pass: pinch zoom, a long press for the secondary action, and larger hit targets.
+    - Choose after item 38, because the installable web app may already cover most needs.
+40. ⚠️ **Spritesheet formats for several game engines**, as one shared module (e.g. `@foundry2d/formats`). The pixel editor's exporter and the Sprite Packer (Phase 9) both use it, so a format is written once. (8.7)
+    - Candidates: TexturePacker JSON Hash and Array (done), Phaser (JSON plus multi-atlas), Starling/Sparrow XML, Aseprite JSON with tags, Godot `SpriteFrames` and `AtlasTexture`, Unity sprite metadata, LibGDX `.atlas`, Cocos2d `.plist`, and CSS sprites.
+    - Each format gets a fixture test with a known-good file, checked against the engine's importer where practical.
+    - Supersedes the format question in item 36: pick the first few by target engine, then grow the list.
+
 **Reported issues**
 
-41. **Level designer layers panel had no add or delete buttons** (reported 2026-11-15). Layers could only be moved and renamed there; adding and deleting meant going to Project settings. ✅ Fixed right after 8.3:
+41. ✅ **Level designer layers panel had no add or delete buttons** (reported 2026-11-15). Layers could only be moved and renamed there; adding and deleting meant going to Project settings. Fixed right after 8.3:
     - "+" opens a menu to add an IntGrid, Tiles or Entities layer above the active one. IntGrid layers start with one value, and Tiles layers bind the first tileset.
     - Delete asks first, because layer definitions apply to every level and aren't undoable.
 
-42. **Layers panel and toolbar consistency** (requested 2026-11-15). ✅ Done in 8.4:
+42. ✅ **Layers panel and toolbar consistency** (requested 2026-11-15), done in 8.4:
     - **Layers panels:** the level designer's panel now has duplicate as well (definition plus data in every level; entity copies get new ids), matching the pixel editor.
     - **Export split button:** the level designer's separate "Copy layer" toolbar button (which copies cells as a number array for code, a different thing from duplicating) moved into the Export split button.
     - **Shared `<split-button>` component** in `@foundry2d/ui`: the main part runs the current default, and the arrow opens the alternatives. Picking one makes it the default (the label follows) and runs it. Options are `<option>` children, the default can be remembered per browser, and it is keyboard accessible. The name "split button" is the common one (Microsoft and most design systems); "dropdown button" usually means a button that only opens a menu. Based on the `spritesheet-generator` prototype's SplitButton.
     - **Pixel editor undo/redo:** these existed but were easy to miss, as ↶ ↷ text glyphs at the start of the second toolbar row. They moved next to Export in the top row with the same icons as the level designer, and disabled icon buttons stay more visible.
 
-43. **Three reported issues** (2026-11-15), ✅ fixed:
+43. ✅ **Three reported issues** (2026-11-15), fixed:
     - **Missing redo icon in the pixel editor:** its SVG path was `"redo"`. When the icon was copied from the level designer, the script matched the `d="` inside `data-command="redo"`. It now uses the real path.
     - **Colour picker panel hidden behind the canvas:** the panel was absolutely positioned inside the tools column, which comes before the canvas column, so no `z-index` could lift it out of its stacking context. It is now a manual **popover** in the browser's top layer, placed in viewport coordinates next to the swatch (above it when there's no room below), kept inside the window, and repositioned on resize or scroll.
     - **Blank project by default:** the level designer started with the Pac-Man preset. It now starts with the Blank preset, and Blank is first among the templates. The pixel editor already started blank. The start screen still opens when the browser library has saved work.
 
-44. **Split-button menu stretched the toolbar** (reported 2026-11-15), ✅ fixed. In the level designer, opening the Export menu grew the toolbar and showed a scrollbar instead of floating over the canvas. The toolbar scrolls sideways (`overflow-x: auto`), so it clipped the absolutely positioned menu and scrolled instead of letting it overflow. The `<split-button>` menu is now a top-layer popover placed in viewport coordinates, like the colour picker panel (item 43). An end-to-end check makes sure the toolbar doesn't grow. Rule of thumb for future components: menus and panels that pop out of a control should be popovers, not absolutely positioned children.
+44. ✅ **Split-button menu stretched the toolbar** (reported 2026-11-15), fixed. In the level designer, opening the Export menu grew the toolbar and showed a scrollbar instead of floating over the canvas. The toolbar scrolls sideways (`overflow-x: auto`), so it clipped the absolutely positioned menu and scrolled instead of letting it overflow. The `<split-button>` menu is now a top-layer popover placed in viewport coordinates, like the colour picker panel (item 43). An end-to-end check makes sure the toolbar doesn't grow. Rule of thumb for future components: menus and panels that pop out of a control should be popovers, not absolutely positioned children.
 
-45. **Open question: what the apps show at startup** (raised 2026-11-15, to decide). Today both apps start with a new blank, unsaved project ("untitled"). They restore unsaved work from the last session if there is any; otherwise, when the browser library or recent files have something, the start screen opens on top of the blank project.
+45. ⚠️ **Open question: what the apps show at startup** (raised 2026-11-15, to decide). Today both apps start with a new blank, unsaved project ("untitled"). They restore unsaved work from the last session if there is any; otherwise, when the browser library or recent files have something, the start screen opens on top of the blank project. (open question)
     1. Should the apps always start with a brand-new, blank, unsaved project behind the start screen?
     2. Should the project saved last (if there is one) be open behind the start screen instead?
     3. Should the start screen mark the project that was open last, with its saved changes?
 
     **Suggestion so far (not decided):** combine 1 and 3. Always start with a brand-new project. On the start screen, mark the project that was worked on last, meaning the one with the most recently saved changes, so it is one click away without being opened automatically. This needs a closer look at how the apps should behave as a whole before it is settled.
 
-46. **Guide grid per layer** (requested 2026-11-15, open). LDtk layer definitions have an optional "guide" grid, `guideGridWid` × `guideGridHei` in pixels, next to the layer's real `gridSize`. It only affects how the layer is shown in the editor (helper lines, for example a 16 × 16 room grid over an 8 px layer); cells, tools and exports keep using the real grid. Checked against the LDtk JSON field docs, which describe the fields but not how the editor draws them, so the drawing details are still to be confirmed.
+46. ⚠️ **Guide grid per layer** (requested 2026-11-15). LDtk layer definitions have an optional "guide" grid, `guideGridWid` × `guideGridHei` in pixels, next to the layer's real `gridSize`. It only affects how the layer is shown in the editor (helper lines, for example a 16 × 16 room grid over an 8 px layer); cells, tools and exports keep using the real grid. Checked against the LDtk JSON field docs, which describe the fields but not how the editor draws them, so the drawing details are still to be confirmed. (8.5)
     - **Likely shape here:** two optional numbers on a layer definition ("Guide grid W × H", px) in Project settings → Layers, stored in the work file. When the active layer has them, the level view draws a second, lighter grid at that spacing (another `GridLinesPass` with a step getter, already supported since item 17). No effect on game exports.
     - Small, but left for later, after item 30.
 
-**Delivery and engine formats** (requested 2026-11-14)
-
-38. **Offline support (installable web app).** Each app gets a web app manifest, icons and a service worker that caches the app shell, so it installs from the browser and works offline. Items 33–34 (branded files, file association) build on the same manifest.
-    - Storage already works offline (IndexedDB, File System Access).
-    - The service worker needs an update flow ("new version available, reload"), so a cached old version never silently edits newer files.
-39. **Standalone desktop and mobile apps.** Decide between packaging the existing web apps and keeping them installable web apps only.
-    - **Desktop:** Tauri (small, uses the system web view) or Electron (one Chromium everywhere, bigger). Either gives real file associations, native menus, recent files and plain file-system access without browser pickers.
-    - **Mobile:** Capacitor around the same build, or installable web apps first. Touch input needs its own pass: pinch zoom, a long press for the secondary action, and larger hit targets.
-    - Choose after item 38, because the installable web app may already cover most needs.
-40. **Spritesheet formats for several game engines**, as one shared module (e.g. `@foundry2d/formats`). The pixel editor's exporter and the Sprite Packer (Phase 9) both use it, so a format is written once.
-    - Candidates: TexturePacker JSON Hash and Array (done), Phaser (JSON plus multi-atlas), Starling/Sparrow XML, Aseprite JSON with tags, Godot `SpriteFrames` and `AtlasTexture`, Unity sprite metadata, LibGDX `.atlas`, Cocos2d `.plist`, and CSS sprites.
-    - Each format gets a fixture test with a known-good file, checked against the engine's importer where practical.
-    - Supersedes the format question in item 36: pick the first few by target engine, then grow the list.
-
-### Phase 9: Sprite Packer app (TexturePacker-style)
+### Phase 9: Sprite Packer app (TexturePacker-style) ⚠️ (not started)
 
 A third app in the monorepo that turns many images into optimised spritesheets plus engine data. The pixel editor keeps its own spritesheet export for its sprites, and the packer is for whole asset folders.
 
@@ -523,7 +527,7 @@ A third app in the monorepo that turns many images into optimised spritesheets p
 - **UI:** the shared shell from Phase 8 (workspace canvas, panels, project browser). A sheet preview with zoom, a sprite list with search and overrides, an animation preview, and packing statistics (fill rate, sheet count).
 - **Reuse:** `@foundry2d/workspace` for the preview canvas, the export controller's PNG and ZIP encoders, `compositeRgba` for sprite input, and storage and `ProjectSession` for the library and recovery.
 
-### Phase 10: Documentation, manual and onboarding
+### Phase 10: Documentation, manual and onboarding ⚠️ (not started)
 
 1. **Markdown sources** in `docs/`, the single source of truth:
    - `README.md` at the root: what foundry2d is, screenshots, quick start (`vp install`, `vp dev`), and the repository layout.
