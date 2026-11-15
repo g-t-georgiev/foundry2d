@@ -180,6 +180,8 @@ export class LevelProject {
   public paletteVersion = 0;
   /** How levels are arranged in the world view. */
   public worldLayout: WorldLayout = "free";
+  /** Save work files packaged: a ZIP with the tileset images as files (see io/packagedFile). */
+  public packaged = false;
   /** World grid cell in pixels; levels snap to it in the "gridvania" layout. */
   public worldGrid = { width: 256, height: 256 };
   private nextUid = 1;
@@ -288,6 +290,13 @@ export class LevelProject {
         level.doc.setLayerScale(layerIdFor(def.uid), this.layerScale(def), resample);
       }
     }
+  }
+
+  /** Switches between plain JSON and packaged (ZIP) work files. */
+  setPackaged(packaged: boolean): void {
+    if (packaged === this.packaged) return;
+    this.packaged = packaged;
+    this.events.emit("settings:changed");
   }
 
   setWorldLayout(layout: WorldLayout): void {

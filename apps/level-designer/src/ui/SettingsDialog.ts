@@ -126,6 +126,8 @@ export default class SettingsDialog {
       this.selectedLayerUid = this.project.addEntitiesLayer("entities").uid;
       this.render();
     });
+    const packaged = $<HTMLInputElement>("#packagedToggle");
+    packaged.addEventListener("change", () => this.project?.setPackaged(packaged.checked));
     $("#importTileset").addEventListener("click", () => {
       this.reimportUid = null;
       this.fileInput.click();
@@ -336,6 +338,7 @@ export default class SettingsDialog {
     this.tilesetEditor.replaceChildren(
       ...(tileset ? this.renderTilesetEditor(project, tileset) : [])
     );
+    this.dialog.querySelector<HTMLInputElement>("#packagedToggle")!.checked = project.packaged;
     // Tilesets feed the entity tile picker, so keep that section in step.
     this.entityDefs.render();
     this.renderLevelsTab(project);

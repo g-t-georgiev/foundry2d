@@ -10,13 +10,8 @@ import {
   type RgbaImage,
 } from "./raster";
 import { createZip, encodeBmp, encodeGif, type ZipEntry } from "./encoders";
-import {
-  buildSpritesheet,
-  texturePackerJson,
-  type SheetDataFormat,
-  type SheetLayout,
-  type Spritesheet,
-} from "./spritesheet";
+import { sheetFormat, type SheetFormatId } from "@foundry2d/formats";
+import { buildSpritesheet, sheetData, type SheetLayout, type Spritesheet } from "./spritesheet";
 
 export type ImageFormat = "png" | "webp" | "webp-lossy" | "jpeg" | "bmp";
 export type ExportSource = "flattened" | "layer";
@@ -43,8 +38,9 @@ export interface SheetExportOptions {
   trim: boolean;
   scale: number;
   source: ExportSource;
-  data: SheetDataFormat | "none";
-  /** One ZIP, or the PNG and JSON as separate downloads. */
+  /** Data file format (`@foundry2d/formats`), or the image only. */
+  data: SheetFormatId | "none";
+  /** One ZIP, or the image and data file as separate downloads. */
   output: "zip" | "files";
 }
 
@@ -220,41 +216,29 @@ export class ExportController {
     );
   }
 
-  /** Exports the spritesheet PNG plus TexturePacker JSON. Returns a summary. */
+  /** Exports the spritesheet PNG plus its data file in the chosen format. Returns a summary. */
   async exportSpritesheet(options: SheetExportOptions): Promise<string> {
     const base = safeName(this.getName());
     const sheet = this.buildSheet(options);
     const png = await this.encode(sheet.image, "png", 1, "#000000");
     const imageName = `${base}.png`;
-    const json =
-      options.data === "none"
-        ? null
-        : JSON.stringify(
-            texturePackerJson(sheet, {
-              format: options.data,
-              image: imageName,
-              scale: options.scale,
-              frameTags: [
-                {
-                  name: base,
-                  from: 0,
-                  to: this.sprite.frames.length - 1,
-                  direction: "forward",
-                },
-              ],
-            }),
-            null,
-            2
-          );
+    const format = options.data === "none" ? null : sheetFormat(options.data);
+    const data = format?.write(sheetData(sheet), {
+      image: imageName,
+      scale: options.scale,
+      frameTags: [{ name: base, from: 0, to: this.sprite.frames.length - 1, direction: "forward" }],
+    });
+    const dataName = format ? `${base}${format.extension}` : "";
 
-    if (options.output === "files" || json === null) {
+    if (options.output === "files" || !format || data === undefined) {
       downloadBlob(png, imageName);
-      if (json) downloadBlob(new Blob([json], { type: "application/json" }), `${base}.json`);
-      return json ? `${imageName} + ${base}.json` : imageName;
+      if (format && data !== undefined)
+        downloadBlob(new Blob([data], { type: format.mime }), dataName);
+      return format ? `${imageName} + ${dataName}` : imageName;
     }
     const zip = createZip([
       { name: imageName, data: new Uint8Array(await png.arrayBuffer()) },
-      { name: `${base}.json`, data: new TextEncoder().encode(json) },
+      { name: dataName, data: new TextEncoder().encode(data) },
     ]);
     const zipName = `${base}-spritesheet.zip`;
     downloadBlob(new Blob([zip as Uint8Array<ArrayBuffer>], { type: "application/zip" }), zipName);

@@ -1,4 +1,7 @@
+import type { SheetData, SheetFrame } from "@foundry2d/formats";
 import { blit, createImage, cropImage, opaqueBounds, type Rect, type RgbaImage } from "./raster";
+
+export type { FrameTag, SheetFrame } from "@foundry2d/formats";
 
 export type SheetLayout = "horizontal" | "vertical" | "grid" | "packed";
 
@@ -22,21 +25,18 @@ export interface SheetInput {
   duration: number;
 }
 
-/** One frame's placement, using TexturePacker's field names. */
-export interface SheetFrame {
-  filename: string;
-  frame: { x: number; y: number; w: number; h: number };
-  rotated: false;
-  trimmed: boolean;
-  spriteSourceSize: { x: number; y: number; w: number; h: number };
-  sourceSize: { w: number; h: number };
-  duration: number;
-}
-
+/** The packed image plus its frames; `sheetData` turns it into what the data formats read. */
 export interface Spritesheet {
   image: RgbaImage;
   frames: SheetFrame[];
 }
+
+/** Size and frames of a sheet, for the `@foundry2d/formats` writers. */
+export const sheetData = (sheet: Spritesheet): SheetData => ({
+  width: sheet.image.width,
+  height: sheet.image.height,
+  frames: sheet.frames,
+});
 
 interface Piece {
   input: SheetInput;
@@ -164,36 +164,4 @@ export function buildSpritesheet(inputs: SheetInput[], options: SheetOptions): S
     };
   });
   return { image: sheet, frames };
-}
-
-export type SheetDataFormat = "json-hash" | "json-array";
-
-export interface FrameTag {
-  name: string;
-  from: number;
-  to: number;
-  direction: "forward" | "reverse" | "pingpong";
-}
-
-/**
- * TexturePacker "JSON Hash" / "JSON Array" data, as read by Phaser, PixiJS
- * and others (and written by Aseprite, whose `frameTags` we also emit).
- */
-export function texturePackerJson(
-  sheet: Spritesheet,
-  options: { format: SheetDataFormat; image: string; scale: number; frameTags?: FrameTag[] }
-): unknown {
-  const meta = {
-    app: "https://github.com/g-t-georgiev/foundry2d",
-    version: "1.0",
-    image: options.image,
-    format: "RGBA8888",
-    size: { w: sheet.image.width, h: sheet.image.height },
-    scale: String(options.scale),
-    frameTags: options.frameTags ?? [],
-  };
-  if (options.format === "json-array") return { frames: sheet.frames, meta };
-  const frames: Record<string, Omit<SheetFrame, "filename">> = {};
-  for (const { filename, ...rest } of sheet.frames) frames[filename] = rest;
-  return { frames, meta };
 }

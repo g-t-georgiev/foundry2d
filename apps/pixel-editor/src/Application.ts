@@ -263,7 +263,7 @@ export default class Application implements ApplicationContext {
 
     this.showFrame(true);
     this.session.refresh();
-    void this.files.startup();
+    void this.files.startup().then(() => this.files.bindLaunchQueue());
   }
 
   /** The frame document being edited. */

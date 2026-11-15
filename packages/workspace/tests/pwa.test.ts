@@ -1,0 +1,52 @@
+import { describe, it, expect } from "vite-plus/test";
+import { foundryPwa } from "../vite/pwa";
+
+describe("installable app build plugin (items 34 and 38)", () => {
+  const plugin = foundryPwa({
+    name: "Foundry2D Test",
+    shortName: "Test",
+    description: "test",
+    themeColor: "#000000",
+    backgroundColor: "#111111",
+    iconSvg: "<svg/>",
+    fileTypes: { "application/vnd.foundry2d.sprite+json": [".f2dsprite"] },
+  });
+  const build = (files: string[]) => {
+    const emitted = new Map<string, string>();
+    plugin.generateBundle.call(
+      { emitFile: (f) => emitted.set(f.fileName, f.source) },
+      {},
+      Object.fromEntries(files.map((f) => [f, {}]))
+    );
+    return emitted;
+  };
+
+  it("writes a manifest with file handlers, the icon and a service worker", () => {
+    const out = build(["assets/index-abc.js", "assets/index-abc.js.map", "index.html"]);
+    const manifest = JSON.parse(out.get("manifest.webmanifest")!) as {
+      display: string;
+      file_handlers: { accept: Record<string, string[]> }[];
+    };
+    expect(manifest.display).toBe("standalone");
+    expect(manifest.file_handlers[0].accept).toEqual({
+      "application/vnd.foundry2d.sprite+json": [".f2dsprite"],
+    });
+    expect(out.get("icon.svg")).toBe("<svg/>");
+    const sw = out.get("sw.js")!;
+    expect(sw).toContain('"./assets/index-abc.js"');
+    expect(sw).not.toContain("index-abc.js.map");
+  });
+
+  it("gives every build with other files a new worker version", () => {
+    const version = (files: string[]) =>
+      /const VERSION = "([^"]+)"/.exec(build(files).get("sw.js")!)![1];
+    expect(version(["assets/a-1.js"])).toBe(version(["assets/a-1.js"]));
+    expect(version(["assets/a-1.js"])).not.toBe(version(["assets/a-2.js"]));
+  });
+
+  it("adds the manifest link to the page", () => {
+    expect(plugin.transformIndexHtml("<head></head>")).toContain(
+      '<link rel="manifest" href="./manifest.webmanifest" />'
+    );
+  });
+});

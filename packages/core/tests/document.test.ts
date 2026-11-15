@@ -218,3 +218,25 @@ describe("layers with their own cell size (scale)", () => {
     expect(layer.get(3, 1)).toBe(5);
   });
 });
+
+describe("ZIP reading", () => {
+  it("reads back what createZip writes", async () => {
+    const { createZip, readZip, isZip } = await import("../src");
+    const text = new TextEncoder().encode("hello");
+    const zip = createZip([
+      { name: "a.txt", data: text },
+      { name: "images/b.bin", data: new Uint8Array([1, 2, 3]) },
+    ]);
+    expect(isZip(zip)).toBe(true);
+    expect(isZip(text)).toBe(false);
+    const entries = await readZip(zip);
+    expect(entries.map((e) => e.name)).toEqual(["a.txt", "images/b.bin"]);
+    expect(new TextDecoder().decode(entries[0].data)).toBe("hello");
+    expect([...entries[1].data]).toEqual([1, 2, 3]);
+  });
+
+  it("rejects data that isn't a ZIP", async () => {
+    const { readZip } = await import("../src");
+    await expect(readZip(new Uint8Array(40))).rejects.toThrow(/Not a ZIP/);
+  });
+});

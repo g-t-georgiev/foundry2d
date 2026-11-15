@@ -14,7 +14,8 @@
     "@foundry2d/render": "workspace:*",
     "@foundry2d/workspace": "workspace:*",
     "@foundry2d/ui": "workspace:*",
-    "@foundry2d/store": "workspace:*"
+    "@foundry2d/store": "workspace:*",
+    "@foundry2d/formats": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",

@@ -1,5 +1,6 @@
 import type { ProjectMeta, RecentFileRecord } from "@foundry2d/core";
 import type { OpenedProject, ProjectSession } from "./ProjectSession";
+import type { FileHandleLike } from "./files";
 
 /** What the start screen shows (structurally the `<project-browser>` data). */
 export interface StartScreenData {
@@ -114,6 +115,37 @@ export class ProjectFiles<Project> {
       this.options.load(this.options.parse(picked));
       await this.session.adoptFile(picked.name, picked.handle);
       this.options.notify(`Opened ${picked.handle?.name ?? picked.name}`);
+    });
+  }
+
+  /** Opens a file handed over by the OS (an installed app's file handler). */
+  async openHandle(handle: FileHandleLike): Promise<void> {
+    if (!this.confirmDiscard(this.openAction)) return;
+    await this.attempt(async () => {
+      const opened = await this.session.readHandle(handle);
+      this.options.load(this.options.parse(opened));
+      await this.session.adoptFile(opened.name, opened.handle);
+      this.options.notify(`Opened ${opened.handle.name}`);
+    });
+  }
+
+  /**
+   * Opens the files the OS launches an installed app with (double-clicking a
+   * work file, "Open with"). Uses the Launch Handler API where the browser
+   * has it (Chromium on desktop); elsewhere this does nothing. Call after
+   * `startup()`, so a launched file wins over the start screen.
+   */
+  bindLaunchQueue(): void {
+    const queue = (
+      globalThis as {
+        launchQueue?: {
+          setConsumer(consumer: (params: { files: readonly FileHandleLike[] }) => void): void;
+        };
+      }
+    ).launchQueue;
+    queue?.setConsumer((params) => {
+      const [first] = params.files;
+      if (first) void this.openHandle(first);
     });
   }
 

@@ -12,6 +12,21 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--dir", "apps/level-designer", "dev"],
       "port": 3001
+    },
+    {
+      "name": "pixel-editor-build",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--dir",
+        "apps/pixel-editor",
+        "exec",
+        "vp",
+        "preview",
+        "--port",
+        "4180",
+        "--strictPort"
+      ],
+      "port": 4180
     }
   ]
 }

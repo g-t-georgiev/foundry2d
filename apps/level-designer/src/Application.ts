@@ -62,6 +62,7 @@ import AutoRulesDialog from "./ui/AutoRulesDialog";
 import AddLayerMenu from "./ui/AddLayerMenu";
 import { WorldScene } from "./world/WorldScene";
 import { LevelBackgroundPass } from "./render/levelBackground";
+import { decodeWorkFile, encodeWorkFile } from "./io/packagedFile";
 import { GridLinesPass } from "@foundry2d/render";
 import { LevelOperations } from "./world/LevelOperations";
 import {
@@ -230,6 +231,8 @@ export default class Application {
         ...serializeProject(this.project),
         editor: this.captureEditorState(),
       }),
+      encodeFile: (json) => Promise.resolve(encodeWorkFile(json)),
+      decodeFile: (file) => decodeWorkFile(file),
       toStored: (json) => externalizeAssets(json, storage.assets),
       fromStored: (json) => internalizeAssets(json, storage.assets),
       getName: () => this.project.name,
@@ -312,7 +315,7 @@ export default class Application {
     // Only refresh the title here: resetIdentity() would discard the recovery
     // snapshot that startup() is about to restore.
     this.session.refresh();
-    void this.files.startup();
+    void this.files.startup().then(() => this.files.bindLaunchQueue());
   }
 
   get view(): EditorView {

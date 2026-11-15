@@ -84,6 +84,8 @@ export interface LevelProjectFile {
   };
   /** Background of levels without their own colour. */
   defaultLevelBg?: string;
+  /** Saved as a packaged ZIP (images as files) rather than plain JSON. */
+  packaged?: boolean;
   levels: SerializedLevel[];
 }
 
@@ -100,6 +102,7 @@ export function serializeProject(project: LevelProject): LevelProjectFile {
     worldLayout: project.worldLayout,
     worldGrid: { ...project.worldGrid },
     defaultLevelBg: project.defaultLevelBg,
+    ...(project.packaged ? { packaged: true } : {}),
     nextUid: project.uidCounter,
     defs: {
       layers: structuredClone(project.defs.layers),
@@ -396,6 +399,7 @@ export function deserializeProject(json: unknown): LevelProject {
     project.reserveUid(field.uid);
   }
   if (isHexColor(json.defaultLevelBg)) project.defaultLevelBg = json.defaultLevelBg.toLowerCase();
+  project.packaged = json.packaged === true;
 
   const rawEntities = isRecord(json.defs) ? json.defs.entities : undefined;
   for (const [i, raw] of (Array.isArray(rawEntities) ? rawEntities : []).entries()) {

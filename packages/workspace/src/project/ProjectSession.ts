@@ -20,6 +20,13 @@ export interface ProjectSessionOptions {
   titleSuffix: string;
   /** The project as a self-contained file (what Save to file writes). */
   serialize(): unknown;
+  /**
+   * The bytes or text written to a file for `serialize()`'s result. Defaults
+   * to JSON text; the level designer can write a packaged ZIP instead.
+   */
+  encodeFile?(json: unknown): Promise<Blob | string>;
+  /** Reads a work file (`encodeFile`'s inverse). Defaults to parsing JSON. */
+  decodeFile?(file: File): Promise<unknown>;
   /** Converts the file form for the library/recovery (e.g. moves images to the asset store). */
   toStored?(json: unknown): Promise<unknown>;
   /** Inverse of `toStored`. */
@@ -144,7 +151,7 @@ export class ProjectSession {
       if (!(await ensurePermission(this.handle, "readwrite"))) {
         throw new Error("Permission to write the file was denied.");
       }
-      await writeFileHandle(this.handle, JSON.stringify(json));
+      await writeFileHandle(this.handle, await this.encode(json));
       await this.touchRecent(this.handle);
     }
     this.dirty = false;
@@ -158,7 +165,7 @@ export class ProjectSession {
    */
   async saveAsFile(): Promise<boolean> {
     const json = this.options.serialize();
-    const text = JSON.stringify(json);
+    const content = await this.encode(json);
     const suggested = `${this.options.getName()}${this.options.fileType.extensions[0] ?? ".json"}`;
     let handle: FileHandleLike | null;
     try {
@@ -168,18 +175,34 @@ export class ProjectSession {
       throw error;
     }
     if (handle) {
-      await writeFileHandle(handle, text);
+      await writeFileHandle(handle, content);
       this.handle = handle;
       this.fileName = handle.name;
       await this.touchRecent(handle);
     } else {
-      downloadBlob(new Blob([text], { type: this.options.fileType.mimeType }), suggested);
+      const blob =
+        typeof content === "string"
+          ? new Blob([content], { type: this.options.fileType.mimeType })
+          : content;
+      downloadBlob(blob, suggested);
     }
     await this.saveToLibrary(json);
     this.dirty = false;
     await this.clearRecovery();
     this.changed();
     return true;
+  }
+
+  /** A work file's content (`encodeFile`, or JSON text). */
+  private encode(json: unknown): Promise<Blob | string> {
+    return this.options.encodeFile?.(json) ?? Promise.resolve(JSON.stringify(json));
+  }
+
+  /** Reads a work file (`decodeFile`, or JSON). */
+  private async decode(file: File): Promise<unknown> {
+    return this.options.decodeFile
+      ? this.options.decodeFile(file)
+      : (JSON.parse(await file.text()) as unknown);
   }
 
   private async saveToLibrary(json: unknown): Promise<void> {
@@ -206,12 +229,19 @@ export class ProjectSession {
   async pickFile(): Promise<(OpenedProject & { handle: FileHandleLike | null }) | null> {
     const picked = await pickFileToOpen([this.options.fileType, ANY_JSON]);
     if (!picked) return null;
-    const json: unknown = JSON.parse(await picked.file.text());
+    const json = await this.decode(picked.file);
     return {
       json,
       name: stripFileExtension(picked.file.name, this.options.fileType),
       handle: picked.handle,
     };
+  }
+
+  /** Reads a file the OS handed to the installed app (see `ProjectFiles.bindLaunchQueue`). */
+  async readHandle(handle: FileHandleLike): Promise<OpenedProject & { handle: FileHandleLike }> {
+    const file = await handle.getFile();
+    const json = await this.decode(file);
+    return { json, name: stripFileExtension(file.name, this.options.fileType), handle };
   }
 
   /** Binds a successfully opened file (its handle, if any) as the save target. */
@@ -253,7 +283,7 @@ export class ProjectSession {
     if (!(await ensurePermission(handle, "read"))) return null;
     const file = await handle.getFile();
     return {
-      json: JSON.parse(await file.text()) as unknown,
+      json: await this.decode(file),
       name: stripFileExtension(file.name, this.options.fileType),
       handle,
     };

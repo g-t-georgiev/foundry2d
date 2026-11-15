@@ -6,7 +6,8 @@ import type {
   ImageFormat,
   SheetExportOptions,
 } from "../export/ExportController";
-import type { SheetDataFormat, SheetLayout } from "../export/spritesheet";
+import type { SheetLayout } from "../export/spritesheet";
+import type { SheetFormatId } from "@foundry2d/formats";
 
 type Tab = "image" | "sheet" | "gif";
 
@@ -82,7 +83,7 @@ export default class ExportDialog {
       padding: this.int("#exPadding", 0),
       extrude: this.int("#exExtrude", 0),
       trim: this.checked("#exSheetTrim"),
-      data: this.value("#exData") as SheetDataFormat | "none",
+      data: this.value("#exData") as SheetFormatId | "none",
       output: this.value("#exOutput") as "zip" | "files",
     };
   }

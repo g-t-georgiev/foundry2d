@@ -254,7 +254,7 @@ LDtk's signature feature, simplified: a Tiles layer can be **generated** from an
 
 **Not done (LDtk has them):** several tiles stacked in one cell (rules that don't stop at the first match), rule groups, per-rule out-of-bounds handling, tile offsets, and auto-layers built on top of other auto-layers. ✅ Done in 8.5 (item 30), apart from auto-layers fed by other auto-layers (deferred).
 
-### Phase 8: Refactor and polish ⚠️ (in progress: 8.1–8.6 done, 8.7 to do)
+### Phase 8: Refactor and polish ✅ (2026-11-15)
 
 Issues, improvements and polish candidates collected along the way, including everything earlier phases marked "not done" or "later". Items marked **earlier** are cheap enough, or annoying enough, to fold into whichever phase touches that code first.
 
@@ -380,7 +380,12 @@ Issues, improvements and polish candidates collected along the way, including ev
     - **Fixed:** with the whole level in view, a frame took 56 ms (about 17 fps while panning), because each of 26,000 tiles was a separate `drawImage`. Tiles layers now draw from a one-pixel-per-cell overview (each tile's average colour, cached per layer version) when a cell is under 3 screen pixels: 0.4 ms per frame. World thumbnails went from 105 ms to 16 ms.
     - Pixel editor: saving 35 ms (6.3 MB of JSON), loading 25 ms, switching frames with onion skin 0.7 ms; an edit redraws only its own frame's thumbnail.
     - Nothing else needed work at these sizes. Big sprites make big work files (RLE does little on noisy pixels); the packaged format (item 6) is the place to address that.
-- **8.7 Engine formats and distribution** ⚠️: items 38–40, plus item 34 (OS file association) and item 6 (packaged project format). Item 40 is shared with Phase 9, so it can move there if the packer starts first.
+- **8.7 Engine formats and distribution** ✅ (2026-11-15): items 38–40, plus item 34 (OS file association) and item 6 (packaged project format).
+  - ✅ **Spritesheet formats (40):** new package `@foundry2d/formats` with one writer per data format, all reading the same placement data (TexturePacker field names): TexturePacker JSON Hash and Array (Phaser, PixiJS), Starling/Sparrow XML, Godot 4 `SpriteFrames` (`.tres`, an `AtlasTexture` per frame, durations relative to the shortest frame, one animation per frame tag including ping-pong), LibGDX `.atlas`, and CSS sprites. Each has a fixture test against hand-checked output; trimmed frames are covered. The pixel editor's export dialog lists them all and downloads the matching file (`.json`, `.xml`, `.tres`, `.atlas`, `.css`); an end-to-end test downloads the Godot one. The frame layout code stays in the pixel editor until the Sprite Packer needs it. Not written: Unity metadata (needs `.meta` GUIDs), Cocos2d `.plist` and Phaser multi-atlas; they fit the same registry when a target engine asks for them.
+  - ✅ **Installable apps and offline use (38):** a build plugin (`packages/workspace/vite/pwa.ts`) writes each app's `manifest.webmanifest`, `icon.svg` and `sw.js`. The service worker precaches every built file (versioned by a hash of the build's file names; caches are per app scope) and serves pages network-first, files cache-first. A new version waits: `registerAppUpdates` in `@foundry2d/ui` shows "A new version … is ready" with Reload and Later, so an open tab never switches versions mid-edit. Checked in Chromium against a production build: the worker activates and caches everything, and changing the worker brings up the banner, Reload switches over and the old cache is deleted. Development (`vp dev`) has no worker.
+  - ✅ **OS file association (34):** the manifests declare `file_handlers` (`.f2dsprite` and `.f2dlevel` with their MIME types) and `launch_handler: focus-existing`. Once a user installs an app (Chromium desktop), double-clicking a work file opens it there: `ProjectFiles.bindLaunchQueue()` takes the file from the Launch Handler API and opens it like Open file (with the unsaved-changes check, and as the save target). Not testable without installing; the reading path is shared with Open file.
+  - ✅ **Packaged project format (6):** a `.f2dlevel` can now be a ZIP with `project.json` and the tileset images under `images/`, chosen per project with "Packaged file" in Project settings → Tilesets (saved with the project). Same extension and file association; reading tells ZIP from JSON by the first bytes, so both kinds open everywhere. The session gained `encodeFile`/`decodeFile` hooks, and core a ZIP reader (`readZip`, `isZip`) for stored and deflated entries, so ZIPs from other tools open too. Library and recovery copies are unchanged (images in the asset store). The pixel editor keeps plain JSON: it has no separate images.
+  - ⏸️ **Standalone desktop and mobile apps (39), decided: not now.** The installable web apps (38, 34) already give an app window, offline use, file association and the File System Access API in Chromium-based browsers. Packaging adds value only for native needs these lack (watching files on disk, native menus, Firefox and Safari users wanting an app). If that comes up, **Tauri** is the choice for desktop (small, system web view; the apps need nothing Chromium-only beyond File System Access, which Tauri replaces with its own file API). **Mobile** waits for a touch pass (pinch zoom, long press for the secondary action, larger hit targets); then Capacitor around the same build, or the installable web app on Android.
 
 **Architecture**
 
@@ -392,7 +397,7 @@ Issues, improvements and polish candidates collected along the way, including ev
 
 **Files and storage**
 
-6. ⏸️ Saved level files embed tileset images as data URLs. Big tilesets make big JSON. Offer an optional packaged format (a `.f2dproj` ZIP with `project.json` plus images), reusing the ZIP writer from the exporter. (moved to 8.7)
+6. ✅ Saved level files embed tileset images as data URLs. Big tilesets make big JSON. Offer an optional packaged format (a `.f2dproj` ZIP with `project.json` plus images), reusing the ZIP writer from the exporter. (8.7)
 7. ✅ Tilesets imported from a pixel-editor sprite are one-time copies. Remember the source file (handle or library id) and offer **Re-import**. (8.4)
 8. ✅ Not done in Phase 5: a choice between file and library when using "Save as", duplicating a project in the library, and showing storage quota and usage. (8.4)
 9. ✅ Definition edits are not undoable (by design, like LDtk). Consider snapshot-based undo for them, since the project JSON is cheap to serialize. (8.5)
@@ -449,7 +454,7 @@ Foundry2D already has both, but the line between them isn't drawn deliberately y
     - The content can stay JSON, as Piskel's and LDtk's files do; the extension is what links the file to the app.
     - Give each format a registered-style MIME type (e.g. `application/vnd.foundry2d.sprite+json`) for the save picker.
     - Keep opening the old `.json` names.
-34. ⚠️ **OS file association for a web app.** Add a web app manifest to each app. Once a user installs the app (Chromium desktop), its `file_handlers` entry associates the branded extensions with it, and the `launchQueue` API then opens files double-clicked in the OS. (8.7)
+34. ✅ **OS file association for a web app.** Add a web app manifest to each app. Once a user installs the app (Chromium desktop), its `file_handlers` entry associates the branded extensions with it, and the `launchQueue` API then opens files double-clicked in the OS. (8.7)
     - Without installing, the apps keep working through Open and drag-and-drop.
     - This is also the natural point to add an app icon and offline support (service worker), so check scope then.
 35. ✅ **Level designer exports** in their own export dialog (Ctrl+E), mirroring the pixel editor's. (8.4, as the Export split button rather than a dialog)
@@ -457,7 +462,7 @@ Foundry2D already has both, but the line between them isn't drawn deliberately y
     - CSV per IntGrid or Tiles layer (row per line, like Tiled's CSV layer format), optionally as a ZIP with one file per layer.
     - PNG renders of levels or layers, and entities as JSON (or CSV for simple tables).
     - The dialog remembers its settings in the work file (item 32), so re-exporting is one click.
-36. ⏸️ **Pixel editor export formats.** Images, spritesheets and TexturePacker JSON exist. Check which data formats engines actually read, so we add those rather than guess. (decide with a target engine; folded into item 40)
+36. ✅ **Pixel editor export formats.** Images, spritesheets and TexturePacker JSON exist. Check which data formats engines actually read, so we add those rather than guess. (folded into item 40, done in 8.7)
     - CSV frame lists (name, x, y, w, h, duration) are rare for spritesheets. Cheap to add, but probably low value.
     - The commonly used ones are Starling/Sparrow XML (Phaser, Starling and others), Aseprite-style JSON with tags, and Godot `SpriteFrames` (`.tres`).
     - Decide with a target engine in mind.
@@ -470,14 +475,14 @@ Foundry2D already has both, but the line between them isn't drawn deliberately y
 
 **Delivery and engine formats** (requested 2026-11-14)
 
-38. ⚠️ **Offline support (installable web app).** Each app gets a web app manifest, icons and a service worker that caches the app shell, so it installs from the browser and works offline. Items 33–34 (branded files, file association) build on the same manifest. (8.7)
+38. ✅ **Offline support (installable web app).** Each app gets a web app manifest, icons and a service worker that caches the app shell, so it installs from the browser and works offline. Items 33–34 (branded files, file association) build on the same manifest. (8.7)
     - Storage already works offline (IndexedDB, File System Access).
     - The service worker needs an update flow ("new version available, reload"), so a cached old version never silently edits newer files.
-39. ⚠️ **Standalone desktop and mobile apps.** Decide between packaging the existing web apps and keeping them installable web apps only. (8.7)
+39. ⏸️ **Standalone desktop and mobile apps.** Decide between packaging the existing web apps and keeping them installable web apps only. (8.7: decided, not now)
     - **Desktop:** Tauri (small, uses the system web view) or Electron (one Chromium everywhere, bigger). Either gives real file associations, native menus, recent files and plain file-system access without browser pickers.
     - **Mobile:** Capacitor around the same build, or installable web apps first. Touch input needs its own pass: pinch zoom, a long press for the secondary action, and larger hit targets.
     - Choose after item 38, because the installable web app may already cover most needs.
-40. ⚠️ **Spritesheet formats for several game engines**, as one shared module (e.g. `@foundry2d/formats`). The pixel editor's exporter and the Sprite Packer (Phase 9) both use it, so a format is written once. (8.7)
+40. ✅ **Spritesheet formats for several game engines**, as one shared module (e.g. `@foundry2d/formats`). The pixel editor's exporter and the Sprite Packer (Phase 9) both use it, so a format is written once. (8.7)
     - Candidates: TexturePacker JSON Hash and Array (done), Phaser (JSON plus multi-atlas), Starling/Sparrow XML, Aseprite JSON with tags, Godot `SpriteFrames` and `AtlasTexture`, Unity sprite metadata, LibGDX `.atlas`, Cocos2d `.plist`, and CSS sprites.
     - Each format gets a fixture test with a known-good file, checked against the engine's importer where practical.
     - Supersedes the format question in item 36: pick the first few by target engine, then grow the list.

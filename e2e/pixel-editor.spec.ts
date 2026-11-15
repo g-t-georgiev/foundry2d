@@ -400,6 +400,19 @@ test.describe("export downloads (item 16)", () => {
       1
     );
     expect(imageOnly[0].name).toMatch(/\.png$/);
+
+    // Engine formats come from @foundry2d/formats, e.g. Godot SpriteFrames.
+    const godot = await runExport(
+      page,
+      "Spritesheet",
+      async () => {
+        await page.locator("#exData").selectOption("godot-tres");
+        await page.locator("#exOutput").selectOption("files");
+      },
+      2
+    );
+    const tres = godot.find((f) => f.name.endsWith(".tres"))!;
+    expect(tres.bytes.toString("utf8")).toContain('[gd_resource type="SpriteFrames"');
   });
 
   test("animated GIF", async ({ page }) => {

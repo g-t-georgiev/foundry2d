@@ -9,7 +9,8 @@ import {
   type RgbaImage,
 } from "../src/export/raster";
 import { crc32, createZip, encodeBmp, encodeGif } from "../src/export/encoders";
-import { buildSpritesheet, texturePackerJson } from "../src/export/spritesheet";
+import { texturePackerJson } from "@foundry2d/formats";
+import { buildSpritesheet, sheetData } from "../src/export/spritesheet";
 import { applyPattern } from "../src/export/ExportController";
 
 const rgba = (r: number, g: number, b: number, a = 255) =>
@@ -210,14 +211,22 @@ describe("spritesheets", () => {
       extrude: 0,
       trim: false,
     });
-    const hash = texturePackerJson(sheet, { format: "json-hash", image: "f.png", scale: 2 }) as {
+    const hash = texturePackerJson(sheetData(sheet), {
+      format: "json-hash",
+      image: "f.png",
+      scale: 2,
+    }) as {
       frames: Record<string, { frame: { x: number }; duration: number }>;
       meta: { image: string; size: { w: number; h: number }; scale: string };
     };
     expect(Object.keys(hash.frames)).toEqual(["f_0.png", "f_1.png", "f_2.png"]);
     expect(hash.frames["f_1.png"]).toMatchObject({ frame: { x: 2 }, duration: 200 });
     expect(hash.meta).toMatchObject({ image: "f.png", size: { w: 6, h: 2 }, scale: "2" });
-    const array = texturePackerJson(sheet, { format: "json-array", image: "f.png", scale: 1 }) as {
+    const array = texturePackerJson(sheetData(sheet), {
+      format: "json-array",
+      image: "f.png",
+      scale: 1,
+    }) as {
       frames: { filename: string }[];
     };
     expect(array.frames.map((f) => f.filename)).toEqual(["f_0.png", "f_1.png", "f_2.png"]);
