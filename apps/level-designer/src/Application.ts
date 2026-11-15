@@ -62,6 +62,7 @@ import AutoRulesDialog from "./ui/AutoRulesDialog";
 import AddLayerMenu from "./ui/AddLayerMenu";
 import { WorldScene } from "./world/WorldScene";
 import { LevelBackgroundPass } from "./render/levelBackground";
+import { GridLinesPass } from "@foundry2d/render";
 import { LevelOperations } from "./world/LevelOperations";
 import {
   LEGACY_EXTENSIONS,
@@ -456,7 +457,19 @@ export default class Application {
       getColorizer: (layer) => project.colorizerFor(layer.id),
       getLayerRenderer: (layer) => renderers(layer, level),
       getPointerDelegate: () => (this.entities.isActive ? this.entities : null),
-      overlayPasses: [this.entities.overlay],
+      overlayPasses: [
+        new GridLinesPass({
+          id: "guide-grid",
+          // Shown with the grid toggle, while the active layer has a guide grid.
+          getBounds: () =>
+            this.activeDef()?.guideGrid && levelStore.getState().grid.enabled
+              ? this.levelScene.getBounds()
+              : null,
+          step: () => this.activeDef()?.guideGrid ?? { width: 1, height: 1 },
+          color: "rgba(96, 205, 255, 0.6)",
+        }),
+        this.entities.overlay,
+      ],
       getPaletteVersion: () => project.paletteVersion,
       getCursorFill: () => {
         if (this.activeDef()?.type === "Tiles") return "rgba(56, 189, 248, 0.25)";

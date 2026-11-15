@@ -9,3 +9,4 @@ export * from "./StampTool";
 export * from "./SelectTool";
 export * from "./ToolManager";
 export * from "./SelectionTools";
+export * from "./selectionShapes";

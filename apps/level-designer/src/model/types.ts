@@ -57,6 +57,12 @@ export interface LayerDef {
    * per-layer grid). Auto-layers always use their source's grid.
    */
   gridSize?: number;
+  /**
+   * Optional "guide" grid in pixels (LDtk's `guideGridWid` / `guideGridHei`):
+   * helper lines drawn over the layer while it is active. Cells, tools and
+   * exports keep using the layer's real grid.
+   */
+  guideGrid?: { width: number; height: number };
 }
 
 export interface ProjectDefs {

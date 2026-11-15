@@ -456,6 +456,12 @@ export function deserializeProject(json: unknown): LevelProject {
     if (isInt(raw.gridSize) && raw.gridSize > 0 && raw.gridSize !== project.gridSize) {
       project.defs.layers.at(-1)!.gridSize = raw.gridSize;
     }
+    const guide = raw.guideGrid;
+    if (isRecord(guide) && isInt(guide.width) && isInt(guide.height)) {
+      if (guide.width > 0 && guide.height > 0) {
+        project.defs.layers.at(-1)!.guideGrid = { width: guide.width, height: guide.height };
+      }
+    }
     project.reserveUid(raw.uid);
   }
 

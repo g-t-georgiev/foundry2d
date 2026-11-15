@@ -6,6 +6,7 @@ import { Tool } from "./Tool";
 import { DrawCommand } from "../history/DrawCommand";
 import { CompositeCommand } from "../history/CompositeCommand";
 import EventEmitter from "../utils/EventEmitter";
+import { combineShapes, selectionOp, type SelectionOp } from "./selectionShapes";
 
 /** A rectangular block of cell values, row-major (clipboard contents, moved pixels). */
 export interface Region {
@@ -190,14 +191,56 @@ export function pasteRegionChanges(
   return changes;
 }
 
+/** A resize handle of a selection: a corner or the middle of an edge. */
+export type SelectionHandle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
+
+/**
+ * Where the resize handles of a selection sit: in the cells just outside
+ * its corners and edge midpoints, so a press there can't be confused with
+ * one inside (which moves the pixels).
+ */
+export function selectionHandles(rect: Rect): { id: SelectionHandle; x: number; y: number }[] {
+  const left = rect.x - 1;
+  const right = rect.x + rect.width;
+  const top = rect.y - 1;
+  const bottom = rect.y + rect.height;
+  const midX = rect.x + Math.floor((rect.width - 1) / 2);
+  const midY = rect.y + Math.floor((rect.height - 1) / 2);
+  return [
+    { id: "nw", x: left, y: top },
+    { id: "n", x: midX, y: top },
+    { id: "ne", x: right, y: top },
+    { id: "e", x: right, y: midY },
+    { id: "se", x: right, y: bottom },
+    { id: "s", x: midX, y: bottom },
+    { id: "sw", x: left, y: bottom },
+    { id: "w", x: left, y: midY },
+  ];
+}
+
+/** `region` scaled to `width` × `height` cells (nearest neighbour). */
+export function scaleRegion(region: Region, width: number, height: number): Region {
+  const values: number[] = [];
+  for (let y = 0; y < height; y++) {
+    const sy = Math.min(region.height - 1, Math.floor(((y + 0.5) * region.height) / height));
+    for (let x = 0; x < width; x++) {
+      const sx = Math.min(region.width - 1, Math.floor(((x + 0.5) * region.width) / width));
+      values.push(region.values[sy * region.width + sx]);
+    }
+  }
+  return { width, height, values };
+}
+
 /**
  * Drag to select a rectangle; drag inside the selection to move its pixels
- * (live preview, one undo step that also restores the selection). A click
- * without dragging clears the selection.
+ * (live preview, one undo step that also restores the selection). Shift
+ * adds the rectangle to the selection and Alt subtracts it (they never
+ * move). A click without dragging clears the selection.
  */
 export class SelectTool<Buffer extends CellBuffer = CellBuffer> extends Tool<Buffer> {
   public override readonly modifiesLayer = false;
-  private mode: "select" | "move" | null = null;
+  private mode: "select" | "move" | "scale" | null = null;
+  private handle: SelectionHandle | null = null;
   private anchor: Position = { x: 0, y: 0 };
   private dragged = false;
   private source: Rect | null = null;
@@ -206,6 +249,7 @@ export class SelectTool<Buffer extends CellBuffer = CellBuffer> extends Tool<Buf
   private startSelection: SelectionShape | null = null;
   /** The mask carried along while moving a non-rectangular selection. */
   private moveMask: Uint8Array | null = null;
+  private op: SelectionOp = "replace";
 
   constructor(
     private readonly selection: Selection,
@@ -222,12 +266,27 @@ export class SelectTool<Buffer extends CellBuffer = CellBuffer> extends Tool<Buf
     this.anchor = coords;
     this.dragged = false;
     this.startSelection = this.selection.shape;
+    this.op = selectionOp(ctx);
     const rect = this.selection.rect;
-    const inside = !!rect && this.selection.contains(coords.x, coords.y);
-    if (inside && !ctx.layer.isEditable) {
+    // With Shift or Alt the press always draws a new rectangle to combine.
+    const handle =
+      this.op === "replace" && rect
+        ? (selectionHandles(rect).find((h) => h.x === coords.x && h.y === coords.y)?.id ?? null)
+        : null;
+    const inside = this.op === "replace" && !!rect && this.selection.contains(coords.x, coords.y);
+    if ((handle || inside) && !ctx.layer.isEditable) {
       // Keep the selection (a new drag would silently replace it) and say why.
       this.mode = null;
       this.options.onBlocked?.(ctx.layer);
+      return;
+    }
+    if (rect && handle) {
+      this.mode = "scale";
+      this.handle = handle;
+      this.source = rect;
+      this.moveMask = this.selection.mask?.slice() ?? null;
+      this.block = readRegion(ctx.layer, rect, this.moveMask);
+      this.applied = [];
       return;
     }
     if (rect && inside) {
@@ -238,7 +297,7 @@ export class SelectTool<Buffer extends CellBuffer = CellBuffer> extends Tool<Buf
       this.applied = [];
     } else {
       this.mode = "select";
-      this.selection.set(rectBetween(coords, coords, ctx.layer));
+      this.selectTo(coords, ctx);
     }
   }
 
@@ -246,7 +305,9 @@ export class SelectTool<Buffer extends CellBuffer = CellBuffer> extends Tool<Buf
     if (!this.mode || !ctx.isDrawing) return;
     if (coords.x !== this.anchor.x || coords.y !== this.anchor.y) this.dragged = true;
     if (this.mode === "select") {
-      this.selection.set(rectBetween(this.anchor, coords, ctx.layer));
+      this.selectTo(coords, ctx);
+    } else if (this.mode === "scale") {
+      this.previewScale(coords, ctx);
     } else {
       this.previewMove(coords.x - this.anchor.x, coords.y - this.anchor.y, ctx);
     }
@@ -254,17 +315,30 @@ export class SelectTool<Buffer extends CellBuffer = CellBuffer> extends Tool<Buf
 
   onMouseUp(coords: Position, ctx: ToolContext<Buffer>): void {
     if (this.mode === "select") {
-      if (!this.dragged) this.selection.set(null);
-    } else if (this.mode === "move") {
-      this.previewMove(coords.x - this.anchor.x, coords.y - this.anchor.y, ctx);
+      // A plain click clears; with Shift or Alt it leaves the selection as it was.
+      if (!this.dragged) {
+        this.selection.setShape(this.op === "replace" ? null : this.startSelection);
+      }
+    } else if (this.mode === "move" || this.mode === "scale") {
+      if (this.mode === "move") {
+        this.previewMove(coords.x - this.anchor.x, coords.y - this.anchor.y, ctx);
+      } else if (this.dragged) {
+        this.previewScale(coords, ctx);
+      }
       if (this.applied.length > 0) {
+        const scaled = this.mode === "scale";
         ctx.history.record(
           new CompositeCommand(
             [
-              new DrawCommand<Buffer>(ctx.doc, ctx.layer.id, this.applied, "Move pixels"),
+              new DrawCommand<Buffer>(
+                ctx.doc,
+                ctx.layer.id,
+                this.applied,
+                scaled ? "Scale pixels" : "Move pixels"
+              ),
               new SetSelectionCommand(this.selection, this.startSelection, this.selection.shape),
             ],
-            "Move selection"
+            scaled ? "Scale selection" : "Move selection"
           )
         );
       }
@@ -273,7 +347,7 @@ export class SelectTool<Buffer extends CellBuffer = CellBuffer> extends Tool<Buf
   }
 
   cancel(ctx: ToolContext<Buffer>): void {
-    if (this.mode === "move" && this.applied.length) {
+    if ((this.mode === "move" || this.mode === "scale") && this.applied.length) {
       ctx.layer.applyChanges(this.applied, "backward");
       ctx.doc.notifyCellsChanged(ctx.layer.id);
     }
@@ -281,11 +355,66 @@ export class SelectTool<Buffer extends CellBuffer = CellBuffer> extends Tool<Buf
     this.reset();
   }
 
+  /** The rectangle from the anchor to `coords`, combined with the selection at the press. */
+  private selectTo(coords: Position, ctx: ToolContext<Buffer>): void {
+    const rect = rectBetween(this.anchor, coords, ctx.layer);
+    const shape = rect ? { rect, mask: null } : null;
+    this.selection.setShape(combineShapes(this.startSelection, shape, this.op, ctx.layer));
+  }
+
   private reset(): void {
     this.mode = null;
+    this.handle = null;
     this.source = null;
     this.block = null;
     this.applied = [];
+  }
+
+  /**
+   * Scales the lifted pixels into the rectangle the dragged handle gives:
+   * the handle's edges follow the pointer (the handle sits one cell outside),
+   * the opposite edges stay, and the size never drops below one cell.
+   */
+  private previewScale(coords: Position, ctx: ToolContext<Buffer>): void {
+    const { source, block, handle } = this;
+    if (!source || !block || !handle) return;
+    let left = source.x;
+    let top = source.y;
+    let right = source.x + source.width - 1;
+    let bottom = source.y + source.height - 1;
+    if (handle.includes("w")) left = Math.min(coords.x + 1, right);
+    if (handle.includes("e")) right = Math.max(coords.x - 1, left);
+    if (handle.includes("n")) top = Math.min(coords.y + 1, bottom);
+    if (handle.includes("s")) bottom = Math.max(coords.y - 1, top);
+    const rect = { x: left, y: top, width: right - left + 1, height: bottom - top + 1 };
+
+    const { layer } = ctx;
+    if (this.applied.length) layer.applyChanges(this.applied, "backward");
+    const scaled = scaleRegion(block, rect.width, rect.height);
+    const mask = this.moveMask
+      ? Uint8Array.from(
+          scaleRegion(
+            { width: source.width, height: source.height, values: Array.from(this.moveMask) },
+            rect.width,
+            rect.height
+          ).values
+        )
+      : null;
+    const byIndex = new Map<number, CellChange<number>>();
+    const apply = (changes: CellChange<number>[]) => {
+      for (const change of changes) {
+        const index = layer.getIndex(change.x, change.y);
+        const existing = byIndex.get(index);
+        if (existing) existing.newValue = change.newValue;
+        else byIndex.set(index, { ...change });
+        layer.set(change.x, change.y, change.newValue);
+      }
+    };
+    apply(clearRegionChanges(layer, source, this.moveMask));
+    apply(pasteRegionChanges(layer, scaled, { x: rect.x, y: rect.y }));
+    this.applied = [...byIndex.values()].filter((c) => c.oldValue !== c.newValue);
+    ctx.doc.notifyCellsChanged(layer.id);
+    this.selection.set(rect, mask);
   }
 
   private previewMove(dx: number, dy: number, ctx: ToolContext<Buffer>): void {

@@ -118,3 +118,17 @@ describe("per-layer grid sizes", () => {
     expect(importGameLevel(other, file).warnings.join(" ")).toMatch(/another grid size/);
   });
 });
+
+describe("guide grid per layer (item 46)", () => {
+  it("is stored on the definition, undoable and saved", () => {
+    const { project, history, def } = setup();
+    project.setLayerGuideGrid(def.uid, { width: 128, height: 96 });
+    expect(def.guideGrid).toEqual({ width: 128, height: 96 });
+    const loaded = deserializeProject(serializeProject(project));
+    expect(loaded.getLayerDef(def.uid)?.guideGrid).toEqual({ width: 128, height: 96 });
+    history.undo();
+    expect(project.getLayerDef(def.uid)?.guideGrid).toBeUndefined();
+    // Display only: the layer's cells don't change.
+    expect(project.levels[0].doc.getLayer(layerIdFor(def.uid))!.scale).toBe(1);
+  });
+});

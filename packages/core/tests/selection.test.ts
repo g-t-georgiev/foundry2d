@@ -275,3 +275,97 @@ describe("non-rectangular selections", () => {
     expect(selection.mask).toBeNull();
   });
 });
+
+describe("adding to and subtracting from selections (item 14)", () => {
+  const shift = { shift: true, alt: false, mod: false };
+  const alt = { shift: false, alt: true, mod: false };
+  const cells = (selection: Selection, width = 6, height = 4) =>
+    Array.from({ length: height }, (_, y) =>
+      Array.from({ length: width }, (_, x) => (selection.contains(x, y) ? "#" : ".")).join("")
+    );
+
+  it("Shift adds a rectangle and Alt subtracts one, even inside the selection", () => {
+    const { selection, tools, ctx, drag } = setup();
+    tools.setTool("select");
+    drag([0, 0], [2, 1]);
+    drag([4, 2], [5, 3], ctx({ modifiers: shift }));
+    expect(cells(selection)).toEqual(["###...", "###...", "....##", "....##"]);
+    // Alt inside the selection subtracts instead of moving pixels.
+    drag([1, 0], [1, 1], ctx({ modifiers: alt }));
+    expect(cells(selection)).toEqual(["#.#...", "#.#...", "....##", "....##"]);
+  });
+
+  it("a click with Shift or Alt keeps the selection", () => {
+    const { selection, tools, ctx } = setup();
+    tools.setTool("select");
+    selection.set({ x: 0, y: 0, width: 2, height: 2 });
+    tools.executePointerAction("down", { x: 4, y: 3 }, ctx({ modifiers: shift }));
+    tools.executePointerAction("up", { x: 4, y: 3 }, ctx({ modifiers: shift }));
+    expect(selection.rect).toEqual({ x: 0, y: 0, width: 2, height: 2 });
+  });
+
+  it("combines shapes and drops everything when all is subtracted", async () => {
+    const { combineShapes } = await import("../src");
+    const bounds = { width: 6, height: 4 };
+    const a = { rect: { x: 0, y: 0, width: 2, height: 2 }, mask: null };
+    expect(combineShapes(a, a, "subtract", bounds)).toBeNull();
+    expect(combineShapes(null, a, "add", bounds)).toEqual(a);
+    expect(combineShapes(a, null, "add", bounds)).toEqual(a);
+  });
+
+  it("the magic wand adds with Shift and selects everywhere with Ctrl", async () => {
+    const { MagicWandTool } = await import("../src");
+    const { layer, selection, tools, ctx } = setup();
+    tools.registerTool(new MagicWandTool<Int32Array>(selection));
+    tools.setTool("wand");
+    layer.set(0, 0, 3);
+    layer.set(5, 3, 3);
+    layer.set(2, 0, 4);
+    const click = (x: number, y: number, modifiers = { shift: false, alt: false, mod: false }) => {
+      tools.executePointerAction("down", { x, y }, ctx({ modifiers }));
+      tools.executePointerAction("up", { x, y }, ctx({ modifiers }));
+    };
+    click(0, 0);
+    expect(cells(selection)[0]).toBe("#.....");
+    click(2, 0, shift);
+    expect(cells(selection)[0]).toBe("#.#...");
+    click(0, 0, { shift: false, alt: false, mod: true });
+    expect(cells(selection)).toEqual(["#.....", "......", "......", ".....#"]);
+  });
+});
+
+describe("selection resize handles (item 13)", () => {
+  it("places handles one cell outside the corners and edge midpoints", async () => {
+    const { selectionHandles } = await import("../src");
+    const handles = selectionHandles({ x: 2, y: 1, width: 3, height: 2 });
+    expect(handles.find((h) => h.id === "nw")).toMatchObject({ x: 1, y: 0 });
+    expect(handles.find((h) => h.id === "se")).toMatchObject({ x: 5, y: 3 });
+    expect(handles.find((h) => h.id === "n")).toMatchObject({ x: 3, y: 0 });
+  });
+
+  it("dragging a handle scales the pixels as one undo step", () => {
+    const { layer, selection, tools, history, drag, row } = setup(8, 4);
+    tools.setTool("select");
+    layer.set(0, 0, 5);
+    layer.set(1, 0, 6);
+    selection.set({ x: 0, y: 0, width: 2, height: 1 });
+    // The east handle is at (2, 0); dragging it to (4, 0) makes the selection 4 wide.
+    drag([2, 0], [4, 0]);
+    expect(selection.rect).toEqual({ x: 0, y: 0, width: 4, height: 1 });
+    expect(row(0)).toEqual([5, 5, 6, 6, 0, 0, 0, 0]);
+    history.undo();
+    expect(row(0)).toEqual([5, 6, 0, 0, 0, 0, 0, 0]);
+    expect(selection.rect).toEqual({ x: 0, y: 0, width: 2, height: 1 });
+  });
+
+  it("never shrinks below one cell", () => {
+    const { layer, selection, tools, drag } = setup(8, 4);
+    tools.setTool("select");
+    // Shrinking samples the source cell under each new cell's centre: here (3, 2).
+    layer.set(3, 2, 9);
+    selection.set({ x: 2, y: 1, width: 2, height: 2 });
+    drag([4, 3], [0, 0]); // south-east handle dragged past the opposite corner
+    expect(selection.rect).toEqual({ x: 2, y: 1, width: 1, height: 1 });
+    expect(layer.get(2, 1)).toBe(9);
+  });
+});

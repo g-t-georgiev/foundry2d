@@ -369,6 +369,9 @@ export default class Application implements ApplicationContext {
 
   /** Alt held: pick colours until released. */
   beginTemporaryEyedropper(): void {
+    // Selection tools use Alt to subtract from the selection instead.
+    const tool = applicationStore.getState().currentTool;
+    if (tool === "select" || tool === "lasso" || tool === "wand") return;
     this.altHeld = true;
     applicationStore.dispatch(ApplicationStateActions.SetTool, "eyedropper");
   }
@@ -488,7 +491,10 @@ export default class Application implements ApplicationContext {
           },
           () => ({ width: this.sprite.width, height: this.sprite.height })
         ),
-        new SelectionPass(this.selection),
+        new SelectionPass(
+          this.selection,
+          () => applicationStore.getState().currentTool === "select"
+        ),
       ],
     });
     const camera = fit ? undefined : this.workspace.camera.getState();

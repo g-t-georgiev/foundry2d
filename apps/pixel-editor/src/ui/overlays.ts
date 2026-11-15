@@ -1,4 +1,4 @@
-import type { Selection } from "@foundry2d/core";
+import { selectionHandles, type Selection } from "@foundry2d/core";
 import type { RenderContext, RenderPass } from "@foundry2d/render";
 
 /**
@@ -10,11 +10,16 @@ export class SelectionPass implements RenderPass {
   readonly space = "screen";
   enabled = true;
 
-  constructor(private readonly selection: Selection) {}
+  constructor(
+    private readonly selection: Selection,
+    /** Whether to draw the resize handles (the select tool is active). */
+    private readonly showHandles: () => boolean = () => false
+  ) {}
 
   render(rc: RenderContext): void {
     const r = this.selection.rect;
     if (!r) return;
+    if (this.showHandles()) this.renderHandles(rc, r);
     if (this.selection.mask) {
       this.renderMask(rc, r, this.selection.mask);
       return;
@@ -35,6 +40,25 @@ export class SelectionPass implements RenderPass {
     ctx.strokeRect(x, y, w, h);
     ctx.setLineDash([]);
     ctx.lineDashOffset = 0;
+  }
+
+  /** Small squares in the cells around the selection that resize it. */
+  private renderHandles(
+    rc: RenderContext,
+    r: { x: number; y: number; width: number; height: number }
+  ): void {
+    const { ctx, camera } = rc;
+    const size = Math.max(5, Math.min(9, camera.zoom * 0.6));
+    for (const h of selectionHandles(r)) {
+      const c = camera.worldToLocal(h.x + 0.5, h.y + 0.5);
+      const x = Math.round(c.x - size / 2) + 0.5;
+      const y = Math.round(c.y - size / 2) + 0.5;
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(x, y, size, size);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "#000";
+      ctx.strokeRect(x, y, size, size);
+    }
   }
 
   /**

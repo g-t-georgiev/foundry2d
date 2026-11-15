@@ -2,12 +2,16 @@ import type { Rect } from "@foundry2d/core";
 import type { RenderContext, RenderPass } from "../types";
 
 export interface GridLinesPassOptions {
+  /** Pass id (default `"grid"`); set it when a scene has several grids. */
+  id?: string;
   /** World-space rectangle covered by the grid. */
   getBounds: () => Rect | null;
   /** World size of one grid step (a function when it varies, e.g. per active layer). */
   step: { width: number; height: number } | (() => { width: number; height: number });
   /** Every Nth line is drawn with the major color (0 disables). */
   majorEvery?: number;
+  /** Line colour for every line, instead of the theme's grid colours (e.g. a guide grid). */
+  color?: string;
   /** Hide the grid when a cell is smaller than this many CSS pixels on screen. */
   minScreenSpacing?: number;
 }
@@ -17,11 +21,13 @@ export interface GridLinesPassOptions {
  * one pixel wide and crisp at every zoom level. Only visible lines are drawn.
  */
 export class GridLinesPass implements RenderPass {
-  readonly id = "grid";
+  readonly id: string;
   readonly space = "screen";
   enabled = true;
 
-  constructor(private readonly options: GridLinesPassOptions) {}
+  constructor(private readonly options: GridLinesPassOptions) {
+    this.id = options.id ?? "grid";
+  }
 
   render(rc: RenderContext): void {
     const bounds = this.options.getBounds();
@@ -72,7 +78,7 @@ export class GridLinesPass implements RenderPass {
         ctx.moveTo(left, y);
         ctx.lineTo(right, y);
       }
-      ctx.strokeStyle = major ? theme.gridLineMajor : theme.gridLine;
+      ctx.strokeStyle = this.options.color ?? (major ? theme.gridLineMajor : theme.gridLine);
       ctx.stroke();
     };
 

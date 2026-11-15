@@ -267,6 +267,20 @@ export class LevelProject {
     this.defsChanged();
   }
 
+  /** Sets a layer's guide grid in pixels (`null` removes it). Display only. */
+  setLayerGuideGrid(uid: number, size: { width: number; height: number } | null): void {
+    const def = this.getLayerDef(uid);
+    if (!def) return;
+    const next =
+      size && size.width >= 1 && size.height >= 1
+        ? { width: Math.round(size.width), height: Math.round(size.height) }
+        : undefined;
+    if (JSON.stringify(next) === JSON.stringify(def.guideGrid)) return;
+    if (next) def.guideGrid = next;
+    else delete def.guideGrid;
+    this.defsChanged();
+  }
+
   /** Brings every level layer to its definition's scale. */
   private syncLayerScales(resample: boolean): void {
     for (const level of this.levels) {
@@ -1740,6 +1754,7 @@ const DEFINITION_EDITS: Partial<Record<keyof LevelProject, string>> = {
   removeTileset: "Delete tileset",
   setAutoSource: "Change auto-tiling",
   setLayerGridSize: "Change layer grid",
+  setLayerGuideGrid: "Change guide grid",
   addAutoRule: "Add rule",
   addAutoGroup: "Add rule group",
   updateAutoGroup: "Edit rule group",

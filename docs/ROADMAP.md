@@ -254,7 +254,7 @@ LDtk's signature feature, simplified: a Tiles layer can be **generated** from an
 
 **Not done (LDtk has them):** several tiles stacked in one cell (rules that don't stop at the first match), rule groups, per-rule out-of-bounds handling, tile offsets, and auto-layers built on top of other auto-layers. ✅ Done in 8.5 (item 30), apart from auto-layers fed by other auto-layers (deferred).
 
-### Phase 8: Refactor and polish ⚠️ (in progress: 8.1–8.4 done, 8.5 nearly)
+### Phase 8: Refactor and polish ⚠️ (in progress: 8.1–8.5 done, 8.6–8.7 to do)
 
 Issues, improvements and polish candidates collected along the way, including everything earlier phases marked "not done" or "later". Items marked **earlier** are cheap enough, or annoying enough, to fold into whichever phase touches that code first.
 
@@ -308,7 +308,7 @@ Issues, improvements and polish candidates collected along the way, including ev
     - The start screen shows storage use ("2.1 MB used of 1.2 GB").
   - ⏸️ **Packaged project format (6) moved to 8.7.** It is a third file format next to `.f2dsprite` and `.f2dlevel`, so the choice of replacing or adding to them belongs with the OS file association and installable app (34, 38). The Sprite Packer (Phase 9) will need the same machinery: reading ZIPs, including compressed ones from other tools, folder input and asset files. Today only files saved to disk embed tileset images; library and recovery copies already keep them in the asset store.
   - **8.4 is done** apart from item 6 (moved). Items 36–37 are deferred until there is a target engine.
-- **8.5 Features** ⚠️ (in progress): items 9, 12–15, 17–20, 23, 30, 31 and 46, in the order below.
+- **8.5 Features** ✅ (2026-11-15): items 9, 12–15, 17–20, 23, 30, 31 and 46, in the order below.
   - ✅ **Undo for definition edits (9):** This went simpler than first expected. Undo steps refer to levels by object and to layers by document plus layer id. A `DefinitionEditCommand` can therefore restore before/after snapshots _in place_: same `Level` and document objects, with layers recreated under their old ids. All earlier undo steps stay valid.
     - **Recording:** every definition-editing method of `LevelProject` is wrapped once (a central list with undo labels), so all edits are recorded, whether from Project settings, the layers panel or the rules editor. Nested edits join the outer step, and no-ops record nothing.
     - **Cost:** layer data the edit didn't change is shared between snapshots.
@@ -322,7 +322,7 @@ Issues, improvements and polish candidates collected along the way, including ev
   - ✅ **System clipboard images (14, partly):** Copy and Cut also put the selection on the system clipboard as a PNG, so other apps can paste it. Ctrl+V accepts images copied in other apps: they paste like internal copies, at the selection's top-left, selected, as one undo step. Fully transparent pixels become empty cells, and anything outside the sprite is cut off with a message.
     - **Paste event:** pasting uses the browser's `paste` event, which carries the clipboard without a permission prompt. Ctrl+V is therefore no longer a keymap binding, because cancelling the key press would also cancel the event.
     - **Which copy wins:** an image on the system clipboard wins over the internal copy only when our last copy reached the system clipboard. Then the image is either ours or newer. If the write failed, the internal copy is used, since an image there could be older.
-    - **Tests:** end-to-end tests in Chromium with clipboard permissions check both directions, using a synthetic paste event for "copied in another app". Lasso and magic wand (the rest of 14) are still open.
+    - **Tests:** end-to-end tests in Chromium with clipboard permissions check both directions, using a synthetic paste event for "copied in another app". Lasso and magic wand followed (below).
   - ✅ **Lasso and magic wand (14):** selections no longer have to be rectangles.
     - **Model:** a `Selection` is a bounding rect plus an optional per-cell mask (`SelectionShape`). Rectangular selections have no mask, so existing code paths are unchanged. `SetSelectionCommand` restores whole shapes, so undoing a move of a lasso selection brings the lasso back.
     - **Everything respects the mask:** moving (only selected cells move, neighbours inside the rect stay), copy, cut, paste, flip and rotate (the mask turns with the pixels), Delete, and the outline, which traces the mask's real edge with the same dashes.
@@ -333,7 +333,7 @@ Issues, improvements and polish candidates collected along the way, including ev
   - ✅ **Flip and rotate (13, partly):** Shift+H and Shift+V flip, and Shift+R rotates 90° clockwise. They act on the selected pixels, or the whole active layer without a selection, and each is one undo step.
     - Rotation turns around the selection's centre, swaps its width and height, and is kept on the canvas.
     - There is a Transform section next to Mirror, and `transformRegion` lives in core.
-    - Still open: handles to resize or scale the selection.
+    - Resize handles followed later in 8.5 (item 13, below).
   - ✅ **Level background and level fields (18):**
     - **Background:** Project settings has a new Levels tab with the project's default level background. Each level can set its own colour in the Level panel, and "Default" switches it back. The level view draws it over the checkerboard, and the world view and start-screen thumbnails fill levels with it.
     - **Fields:** level fields are defined in the same Levels tab, with the field table shared with entity types (type, identifier, default, enum, min/max). Values are edited per level in the Level panel, with the same inputs as the entity inspector; Point fields take x/y numbers there.
@@ -367,7 +367,9 @@ Issues, improvements and polish candidates collected along the way, including ev
     - **Pixel editor on the shared classes:** it styled bare `button` and `select` elements and had its own copies of the dialog, status bar and section label rules. Its markup now uses the shared classes, those copies are gone, and it looks like the level designer (blue primary button, the same inputs, buttons and status bar).
     - **DOM helpers:** `el()` and `fieldRow()` in `@foundry2d/ui` replace six copies in the level designer.
     - **Decided against wrapping these as web components.** Native `<dialog>`, buttons and inputs with shared classes cover the tool bar, panel sections, modals and status bar without the cost of custom elements. The existing components (`<layers-panel>`, `<split-button>`, `<project-browser>`, the colour picker) stay. A shared palette or property grid can follow once both apps need the same one; their palettes differ today (colours versus IntGrid values).
-  - ⚠️ **Still open in 8.5:** selection handles to resize the selection (13), adding to and subtracting from selections (14), and the guide grid (46).
+  - ✅ **Guide grid per layer (46):** Project settings → Layers has "Guide grid (px)", width × height (one value makes it square). While that layer is active, the level view draws light blue helper lines at that spacing over the cell grid, with the grid toggle. Display only: cells, tools and exports keep the real grid. Saved in the work file; undoable like other definition edits. `GridLinesPass` gained `id` and `color` options for it.
+  - ✅ **Adding to and subtracting from selections (14):** with the select, lasso and magic wand tools, Shift adds to the selection and Alt subtracts from it (as in Photoshop and Aseprite). With Shift or Alt the select tool always draws a new rectangle, even inside the selection, instead of moving pixels, and a plain click keeps the selection. Alt no longer switches to the eyedropper while a selection tool is active. The magic wand's "this colour everywhere" moved from Shift to **Ctrl** (Cmd). Core: `combineShapes` and `selectionOp` (`tools/selectionShapes.ts`).
+  - ✅ **Selection resize handles (13):** with the select tool, eight handles sit in the cells just outside the selection's corners and edge midpoints. Dragging one scales the selected pixels (nearest neighbour; masks of lasso and wand selections scale too) with a live preview, as one undo step that also restores the selection. The opposite edges stay put and the size never drops below one cell. Core: `selectionHandles` and `scaleRegion`.
   - ⏸️ **Deferred from 8.5:** auto-layers fed by other auto-layers (part of 30), until there is a concrete use for it.
 - **8.6 Quality** ⚠️: items 16, 26–28.
 - **8.7 Engine formats and distribution** ⚠️: items 38–40, plus item 34 (OS file association) and item 6 (packaged project format). Item 40 is shared with Phase 9, so it can move there if the packer starts first.
@@ -392,8 +394,8 @@ Issues, improvements and polish candidates collected along the way, including ev
 10. ✅ The mirror guide is 1px and easy to miss at low zoom. Draw it thicker and label the axis (**earlier**, one line). (8.1)
 11. ✅ Moving a selection on a locked or hidden layer silently does nothing. Show the not-allowed cursor and a status message (**earlier**). (8.1)
 12. ✅ Decide what happens to the selection when switching layer or frame. It is kept today, which is useful but surprising when the new layer is empty there. (8.5)
-13. ⚠️ Selection handles for resizing, plus flip and rotate of the selected pixels. (Flip and rotate done in 8.5; handles open.)
-14. ⚠️ From Phase 6b: paste images from the system clipboard (and copy as PNG), lasso and magic wand selections. (Clipboard images, lasso and magic wand done in 8.5; adding to and subtracting from selections open.)
+13. ✅ Selection handles for resizing, plus flip and rotate of the selected pixels. (8.5)
+14. ✅ From Phase 6b: paste images from the system clipboard (and copy as PNG), lasso and magic wand selections, plus adding to and subtracting from selections. (8.5)
 15. ✅ The GIF encoder is exact up to 255 colours. Above that it needs a proper quantizer (median cut or octree), with optional dithering. (8.5)
 16. ⚠️ The export dialog was tested through unit tests and the dialog UI, but no download was clicked in a real browser session. Do one manual pass per format. (8.6)
 
@@ -498,9 +500,8 @@ Foundry2D already has both, but the line between them isn't drawn deliberately y
 
     **Suggestion so far (not decided):** combine 1 and 3. Always start with a brand-new project. On the start screen, mark the project that was worked on last, meaning the one with the most recently saved changes, so it is one click away without being opened automatically. This needs a closer look at how the apps should behave as a whole before it is settled.
 
-46. ⚠️ **Guide grid per layer** (requested 2026-11-15). LDtk layer definitions have an optional "guide" grid, `guideGridWid` × `guideGridHei` in pixels, next to the layer's real `gridSize`. It only affects how the layer is shown in the editor (helper lines, for example a 16 × 16 room grid over an 8 px layer); cells, tools and exports keep using the real grid. Checked against the LDtk JSON field docs, which describe the fields but not how the editor draws them, so the drawing details are still to be confirmed. (8.5)
-    - **Likely shape here:** two optional numbers on a layer definition ("Guide grid W × H", px) in Project settings → Layers, stored in the work file. When the active layer has them, the level view draws a second, lighter grid at that spacing (another `GridLinesPass` with a step getter, already supported since item 17). No effect on game exports.
-    - Small, but left for later, after item 30.
+46. ✅ **Guide grid per layer** (requested 2026-11-15). LDtk layer definitions have an optional "guide" grid, `guideGridWid` × `guideGridHei` in pixels, next to the layer's real `gridSize`. It only affects how the layer is shown in the editor (helper lines, for example a 16 × 16 room grid over an 8 px layer); cells, tools and exports keep using the real grid. Checked against the LDtk JSON field docs, which describe the fields but not how the editor draws them, so the drawing details are still to be confirmed. (8.5)
+    - **Built as:** two optional numbers on a layer definition ("Guide grid W × H", px) in Project settings → Layers, stored in the work file. When the active layer has them, the level view draws a second, lighter grid at that spacing (another `GridLinesPass` with a step getter, already supported since item 17). No effect on game exports.
 
 ### Phase 9: Sprite Packer app (TexturePacker-style) ⚠️ (not started)
 

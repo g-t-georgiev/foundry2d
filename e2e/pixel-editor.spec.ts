@@ -205,7 +205,9 @@ test.describe("system clipboard", () => {
   });
 });
 
-test("the magic wand selects connected colour; Delete clears only that", async ({ page }) => {
+test("the magic wand selects connected colour; Delete clears only that; Shift adds, Alt subtracts", async ({
+  page,
+}) => {
   // A 2×1 block at (1,1)-(2,1) and a lone pixel of the same colour at (5,5).
   await drag(page, await at(page, 1, 1), await at(page, 2, 1));
   const lone = await at(page, 5, 5);
@@ -219,15 +221,30 @@ test("the magic wand selects connected colour; Delete clears only that", async (
   expect(await pixel(page, 2, 1)).toBe(0);
   expect(await pixel(page, 5, 5)).not.toBe(0); // not connected: untouched
 
-  // Shift+click: the colour everywhere on the layer.
+  const selectionRect = () =>
+    page.evaluate(
+      () => (window.foundry as unknown as { selection: { rect: unknown } }).selection.rect
+    );
+
+  // Ctrl+click: the colour everywhere on the layer.
   await page.keyboard.press("Control+z");
-  await page.keyboard.down("Shift");
+  await page.keyboard.down("Control");
   await page.mouse.click(block.x, block.y);
+  await page.keyboard.up("Control");
+  expect(await selectionRect()).toEqual({ x: 1, y: 1, width: 5, height: 5 });
+
+  // Plain click on the block, then Shift adds the lone pixel and Alt takes it away again
+  // (Alt doesn't switch to the eyedropper while a selection tool is active).
+  await page.mouse.click(block.x, block.y);
+  expect(await selectionRect()).toEqual({ x: 1, y: 1, width: 2, height: 1 });
+  await page.keyboard.down("Shift");
+  await page.mouse.click(lone.x, lone.y);
   await page.keyboard.up("Shift");
-  const rect = await page.evaluate(
-    () => (window.foundry as unknown as { selection: { rect: unknown } }).selection.rect
-  );
-  expect(rect).toEqual({ x: 1, y: 1, width: 5, height: 5 });
+  expect(await selectionRect()).toEqual({ x: 1, y: 1, width: 5, height: 5 });
+  await page.keyboard.down("Alt");
+  await page.mouse.click(lone.x, lone.y);
+  await page.keyboard.up("Alt");
+  expect(await selectionRect()).toEqual({ x: 1, y: 1, width: 2, height: 1 });
 });
 
 test("the lasso selects a freehand shape; cut and paste keep its shape", async ({ page }) => {

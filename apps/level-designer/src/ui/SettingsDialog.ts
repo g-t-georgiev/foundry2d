@@ -380,6 +380,47 @@ export default class SettingsDialog {
     );
   }
 
+  /** Helper lines over the layer (LDtk's guide grid); display only. */
+  private guideGridField(project: LevelProject, def: LayerDef): HTMLElement {
+    const input = (axis: "width" | "height") => {
+      const el2 = el("input", {
+        className: "input input-small",
+        type: "number",
+        min: "1",
+        step: "1",
+        placeholder: "none",
+        value: def.guideGrid ? String(def.guideGrid[axis]) : "",
+      });
+      el2.setAttribute("aria-label", `Guide grid ${axis} in pixels`);
+      return el2;
+    };
+    const w = input("width");
+    const h = input("height");
+    const apply = () => {
+      const width = Number(w.value.trim() || h.value.trim());
+      const height = Number(h.value.trim() || w.value.trim());
+      const valid = Number.isInteger(width) && width > 0 && Number.isInteger(height) && height > 0;
+      project.setLayerGuideGrid(def.uid, valid ? { width, height } : null);
+      this.render();
+    };
+    w.addEventListener("change", apply);
+    h.addEventListener("change", apply);
+    return field(
+      "Guide grid (px)",
+      el(
+        "span",
+        { className: "button-row" },
+        w,
+        el("span", { textContent: "×" }),
+        h,
+        el("span", {
+          className: "hint",
+          textContent: "Helper lines while this layer is active, e.g. a room size. Display only.",
+        })
+      )
+    );
+  }
+
   private renderLayerEditor(project: LevelProject, def: LayerDef): HTMLElement[] {
     const nameInput = el("input", { className: "input", value: def.identifier, spellcheck: false });
     nameInput.addEventListener("change", () => {
@@ -403,6 +444,7 @@ export default class SettingsDialog {
     const parts: HTMLElement[] = [
       field("Identifier (used as the export key)", nameInput),
       this.layerGridField(project, def),
+      this.guideGridField(project, def),
     ];
 
     if (def.type === "Entities") {
