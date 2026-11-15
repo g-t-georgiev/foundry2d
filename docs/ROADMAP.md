@@ -254,7 +254,7 @@ LDtk's signature feature, simplified: a Tiles layer can be **generated** from an
 
 **Not done (LDtk has them):** several tiles stacked in one cell (rules that don't stop at the first match), rule groups, per-rule out-of-bounds handling, tile offsets, and auto-layers built on top of other auto-layers. ✅ Done in 8.5 (item 30), apart from auto-layers fed by other auto-layers (deferred).
 
-### Phase 8: Refactor and polish ⚠️ (in progress: 8.1–8.5 done, 8.6–8.7 to do)
+### Phase 8: Refactor and polish ⚠️ (in progress: 8.1–8.6 done, 8.7 to do)
 
 Issues, improvements and polish candidates collected along the way, including everything earlier phases marked "not done" or "later". Items marked **earlier** are cheap enough, or annoying enough, to fold into whichever phase touches that code first.
 
@@ -371,7 +371,15 @@ Issues, improvements and polish candidates collected along the way, including ev
   - ✅ **Adding to and subtracting from selections (14):** with the select, lasso and magic wand tools, Shift adds to the selection and Alt subtracts from it (as in Photoshop and Aseprite). With Shift or Alt the select tool always draws a new rectangle, even inside the selection, instead of moving pixels, and a plain click keeps the selection. Alt no longer switches to the eyedropper while a selection tool is active. The magic wand's "this colour everywhere" moved from Shift to **Ctrl** (Cmd). Core: `combineShapes` and `selectionOp` (`tools/selectionShapes.ts`).
   - ✅ **Selection resize handles (13):** with the select tool, eight handles sit in the cells just outside the selection's corners and edge midpoints. Dragging one scales the selected pixels (nearest neighbour; masks of lasso and wand selections scale too) with a live preview, as one undo step that also restores the selection. The opposite edges stay put and the size never drops below one cell. Core: `selectionHandles` and `scaleRegion`.
   - ⏸️ **Deferred from 8.5:** auto-layers fed by other auto-layers (part of 30), until there is a concrete use for it.
-- **8.6 Quality** ⚠️: items 16, 26–28.
+- **8.6 Quality** ✅ (2026-11-15): items 16, 26–28.
+  - ✅ **Export downloads (16):** end-to-end tests now click Export in Chromium for every format and check the downloaded files' signatures: PNG, WebP (lossless and lossy), JPEG, BMP, all frames as ZIP, the spritesheet as one ZIP, as a PNG plus TexturePacker JSON (two frames listed), and image only, and the animated GIF. All passed on the first run, so no export bug turned up.
+  - ✅ **Toolchain quirk (26):** documented in the new [contributor notes](CONTRIBUTING.md) (stale dev-server modules and stale `import.meta.glob` results after shell edits on Windows, and the fixes). The project pins Vite+ 1.4.0 and 1.6.0 is out; whether it fixes the watcher can't be tested without reproducing the quirk, so the notes say how to check when upgrading.
+  - ✅ **Accessibility pass (27):** a script listed every button without an accessible name and every input or select without a label in both apps, including all Project settings tabs and the rules dialog. Two selects were unlabelled (the entity field type and the rule pattern size) and now have labels. Since item 31 the pixel editor's frame thumbnails, swatches and checkboxes had lost their focus ring; `components.css` now gives every focusable control the shared ring (zero specificity, so components can restyle it), and the levels list shows when it has the keyboard. Keyboard access was already there for panel actions (buttons, the levels listbox, keys 1–9 and tool keys). Still mouse-only: picking tiles in the tileset picker and painting on the canvas.
+  - ✅ **Performance check (28):** measured in Chromium on a 256×256 platformer level with an auto-layer and four extra IntGrid layers, and a 64×64 sprite with 120 frames.
+    - Level designer: full auto-layer regeneration 39 ms, a 3×3 edit 0.1 ms; single-cell edits with a redraw 0.2 ms; saving 6 ms (0.7 MB of JSON), loading 49 ms.
+    - **Fixed:** with the whole level in view, a frame took 56 ms (about 17 fps while panning), because each of 26,000 tiles was a separate `drawImage`. Tiles layers now draw from a one-pixel-per-cell overview (each tile's average colour, cached per layer version) when a cell is under 3 screen pixels: 0.4 ms per frame. World thumbnails went from 105 ms to 16 ms.
+    - Pixel editor: saving 35 ms (6.3 MB of JSON), loading 25 ms, switching frames with onion skin 0.7 ms; an edit redraws only its own frame's thumbnail.
+    - Nothing else needed work at these sizes. Big sprites make big work files (RLE does little on noisy pixels); the packaged format (item 6) is the place to address that.
 - **8.7 Engine formats and distribution** ⚠️: items 38–40, plus item 34 (OS file association) and item 6 (packaged project format). Item 40 is shared with Phase 9, so it can move there if the packer starts first.
 
 **Architecture**
@@ -397,7 +405,7 @@ Issues, improvements and polish candidates collected along the way, including ev
 13. ✅ Selection handles for resizing, plus flip and rotate of the selected pixels. (8.5)
 14. ✅ From Phase 6b: paste images from the system clipboard (and copy as PNG), lasso and magic wand selections, plus adding to and subtracting from selections. (8.5)
 15. ✅ The GIF encoder is exact up to 255 colours. Above that it needs a proper quantizer (median cut or octree), with optional dithering. (8.5)
-16. ⚠️ The export dialog was tested through unit tests and the dialog UI, but no download was clicked in a real browser session. Do one manual pass per format. (8.6)
+16. ✅ The export dialog was tested through unit tests and the dialog UI, but no download was clicked in a real browser session. Do one manual pass per format. (8.6)
 
 **Level designer**
 
@@ -413,9 +421,9 @@ Issues, improvements and polish candidates collected along the way, including ev
 **Quality**
 
 25. ✅ Add browser end-to-end smoke tests for both apps: open, draw, undo, save, reload, recover. Use Vitest browser mode or Playwright, so regressions like the stale zoom readout get caught. Canvas tests need real pointer events (synthetic ones were what exposed the pointer-capture bug in Phase 7). (8.2)
-26. ⚠️ Toolchain quirk seen in Phase 7b on Windows: the dev server kept serving a stale module after a file was appended to from a shell, and the test runner kept a stale `import.meta.glob` result until the importing file's content changed. Restarting the dev server, or editing the importing file, fixes it. Check whether a newer Vite+ fixes it, and otherwise document it in the contributor notes. (8.6)
-27. ⚠️ Accessibility pass: focus order, visible focus rings, `aria` labels on canvas-adjacent controls, and keyboard access to every panel action. (8.6)
-28. ⚠️ Performance check on big levels (256×256 with several layers) and long animations (100+ frames): thumbnails, onion skin and autosave serialization. (8.6)
+26. ✅ Toolchain quirk seen in Phase 7b on Windows: the dev server kept serving a stale module after a file was appended to from a shell, and the test runner kept a stale `import.meta.glob` result until the importing file's content changed. Restarting the dev server, or editing the importing file, fixes it. Check whether a newer Vite+ fixes it, and otherwise document it in the contributor notes. (8.6)
+27. ✅ Accessibility pass: focus order, visible focus rings, `aria` labels on canvas-adjacent controls, and keyboard access to every panel action. (8.6)
+28. ✅ Performance check on big levels (256×256 with several layers) and long animations (100+ frames): thumbnails, onion skin and autosave serialization. (8.6)
 
 **Collected from earlier phases' "not done" notes**
 

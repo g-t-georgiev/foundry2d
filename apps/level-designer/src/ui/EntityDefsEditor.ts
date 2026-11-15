@@ -275,6 +275,7 @@ export default class EntityDefsEditor {
 
     const typeSelect = el("select", { className: "input input-small" });
     for (const t of FIELD_TYPES) typeSelect.append(new Option(t, t));
+    typeSelect.setAttribute("aria-label", "Type of the new field");
     const addField = el("button", { className: "btn btn-small", textContent: "+ Field" });
     addField.addEventListener("click", () => {
       project.addField(def.uid, typeSelect.value as FieldType);

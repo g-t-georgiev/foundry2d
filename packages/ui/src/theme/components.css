@@ -49,6 +49,12 @@
   outline-offset: 1px;
 }
 
+/* Every other focusable control gets the same ring (zero specificity, so components can restyle it). */
+:where(button, select, input, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--theme-color-accent);
+  outline-offset: 1px;
+}
+
 .btn-primary {
   background: var(--theme-color-primary);
   border-color: var(--theme-color-primary);

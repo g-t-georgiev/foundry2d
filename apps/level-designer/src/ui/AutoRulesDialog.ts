@@ -425,6 +425,7 @@ export default class AutoRulesDialog {
     });
 
     const size = el("select", { className: "input input-small" });
+    size.setAttribute("aria-label", "Pattern size");
     for (const s of AUTO_RULE_SIZES)
       size.append(new Option(`${s}×${s}`, String(s), false, s === rule.size));
     size.addEventListener("change", () =>

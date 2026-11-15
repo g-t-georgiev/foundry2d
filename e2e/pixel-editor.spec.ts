@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Download, type Page } from "@playwright/test";
 import { drag, openApp, reloadAfterRecovery, toScreen, type FoundryApp } from "./helpers";
 
 const CANVAS = "#paintCanvas";
@@ -274,4 +274,137 @@ test("the lasso selects a freehand shape; cut and paste keep its shape", async (
   await expect.poll(() => pixel(page, 1, 1)).toBe(0);
   expect(await pixel(page, 5, 5)).not.toBe(0);
   expect(await pixel(page, 4, 4)).not.toBe(0);
+});
+
+test.describe("export downloads (item 16)", () => {
+  type File = { name: string; bytes: Buffer };
+
+  /** Runs the export dialog with `setup` and returns every file it downloaded. */
+  async function runExport(
+    page: Page,
+    tab: "Image" | "Spritesheet" | "GIF",
+    setup: () => Promise<void>,
+    expected: number
+  ): Promise<File[]> {
+    const files: Promise<File>[] = [];
+    const listener = (download: Download) =>
+      files.push(
+        download.path().then(async (path) => {
+          const { readFile } = await import("node:fs/promises");
+          return { name: download.suggestedFilename(), bytes: await readFile(path) };
+        })
+      );
+    page.on("download", listener);
+    await page.keyboard.press("Control+e");
+    const dialog = page.locator("#exportDialog");
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("tab", { name: tab }).click();
+    await setup();
+    await dialog.locator("#exRun").click();
+    await expect.poll(() => files.length).toBe(expected);
+    page.off("download", listener);
+    await expect(dialog).toBeHidden();
+    return Promise.all(files);
+  }
+
+  const startsWith = (bytes: Buffer, ...sig: number[]) => sig.every((b, i) => bytes[i] === b);
+  const ascii = (bytes: Buffer, from: number, to: number) =>
+    bytes.subarray(from, to).toString("latin1");
+
+  test.beforeEach(async ({ page }) => {
+    // Something to export on two frames.
+    const p = await at(page, 3, 3);
+    await page.mouse.click(p.x, p.y);
+    await page.locator('[data-frame-action="add"]').click();
+    await page.mouse.click(p.x + 20, p.y);
+  });
+
+  test("image formats: PNG, WebP, JPEG, BMP and all frames as ZIP", async ({ page }) => {
+    const format = async (value: string) => {
+      await page.locator("#exFormat").selectOption(value);
+    };
+
+    const [png] = await runExport(page, "Image", () => format("png"), 1);
+    expect(png.name).toMatch(/\.png$/);
+    expect(startsWith(png.bytes, 0x89, 0x50, 0x4e, 0x47)).toBe(true);
+
+    const [webp] = await runExport(page, "Image", () => format("webp"), 1);
+    expect(webp.name).toMatch(/\.webp$/);
+    expect(ascii(webp.bytes, 0, 4) + ascii(webp.bytes, 8, 12)).toBe("RIFFWEBP");
+
+    const [lossy] = await runExport(page, "Image", () => format("webp-lossy"), 1);
+    expect(ascii(lossy.bytes, 8, 12)).toBe("WEBP");
+
+    const [jpeg] = await runExport(page, "Image", () => format("jpeg"), 1);
+    expect(jpeg.name).toMatch(/\.jpe?g$/);
+    expect(startsWith(jpeg.bytes, 0xff, 0xd8, 0xff)).toBe(true);
+
+    const [bmp] = await runExport(page, "Image", () => format("bmp"), 1);
+    expect(bmp.name).toMatch(/\.bmp$/);
+    expect(ascii(bmp.bytes, 0, 2)).toBe("BM");
+
+    const [zip] = await runExport(
+      page,
+      "Image",
+      async () => {
+        await format("png");
+        await page.locator("#exFrames").selectOption("all");
+      },
+      1
+    );
+    expect(zip.name).toMatch(/\.zip$/);
+    expect(startsWith(zip.bytes, 0x50, 0x4b, 0x03, 0x04)).toBe(true);
+  });
+
+  test("spritesheet as one ZIP, as separate files, and image only", async ({ page }) => {
+    const [zip] = await runExport(
+      page,
+      "Spritesheet",
+      () =>
+        page
+          .locator("#exOutput")
+          .selectOption("zip")
+          .then(() => {}),
+      1
+    );
+    expect(zip.name).toMatch(/\.zip$/);
+    expect(startsWith(zip.bytes, 0x50, 0x4b, 0x03, 0x04)).toBe(true);
+
+    const separate = await runExport(
+      page,
+      "Spritesheet",
+      () =>
+        page
+          .locator("#exOutput")
+          .selectOption("files")
+          .then(() => {}),
+      2
+    );
+    const png = separate.find((f) => f.name.endsWith(".png"))!;
+    const json = separate.find((f) => f.name.endsWith(".json"))!;
+    expect(startsWith(png.bytes, 0x89, 0x50, 0x4e, 0x47)).toBe(true);
+    const data = JSON.parse(json.bytes.toString("utf8")) as {
+      frames: object;
+      meta: { size: { w: number } };
+    };
+    expect(Object.keys(data.frames)).toHaveLength(2);
+    expect(data.meta.size.w).toBeGreaterThan(0);
+
+    const imageOnly = await runExport(
+      page,
+      "Spritesheet",
+      async () => {
+        await page.locator("#exData").selectOption("none");
+        await page.locator("#exOutput").selectOption("files");
+      },
+      1
+    );
+    expect(imageOnly[0].name).toMatch(/\.png$/);
+  });
+
+  test("animated GIF", async ({ page }) => {
+    const [gif] = await runExport(page, "GIF", async () => {}, 1);
+    expect(gif.name).toMatch(/\.gif$/);
+    expect(ascii(gif.bytes, 0, 6)).toBe("GIF89a");
+  });
 });
