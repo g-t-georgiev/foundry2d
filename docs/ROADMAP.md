@@ -254,7 +254,7 @@ LDtk's signature feature, simplified: a Tiles layer can be **generated** from an
 
 **Not done (LDtk has them):** several tiles stacked in one cell (rules that don't stop at the first match), rule groups, per-rule out-of-bounds handling, tile offsets, and auto-layers built on top of other auto-layers. ✅ Done in 8.5 (item 30), apart from auto-layers fed by other auto-layers (deferred).
 
-### Phase 8: Refactor and polish ✅ (2026-11-15)
+### Phase 8: Refactor and polish ⚠️ (8.1–8.7 done 2026-11-15; follow-up 8.8 open)
 
 Issues, improvements and polish candidates collected along the way, including everything earlier phases marked "not done" or "later". Items marked **earlier** are cheap enough, or annoying enough, to fold into whichever phase touches that code first.
 
@@ -386,6 +386,7 @@ Issues, improvements and polish candidates collected along the way, including ev
   - ✅ **OS file association (34):** the manifests declare `file_handlers` (`.f2dsprite` and `.f2dlevel` with their MIME types) and `launch_handler: focus-existing`. Once a user installs an app (Chromium desktop), double-clicking a work file opens it there: `ProjectFiles.bindLaunchQueue()` takes the file from the Launch Handler API and opens it like Open file (with the unsaved-changes check, and as the save target). Not testable without installing; the reading path is shared with Open file.
   - ✅ **Packaged project format (6):** a `.f2dlevel` can now be a ZIP with `project.json` and the tileset images under `images/`, chosen per project with "Packaged file" in Project settings → Tilesets (saved with the project). Same extension and file association; reading tells ZIP from JSON by the first bytes, so both kinds open everywhere. The session gained `encodeFile`/`decodeFile` hooks, and core a ZIP reader (`readZip`, `isZip`) for stored and deflated entries, so ZIPs from other tools open too. Library and recovery copies are unchanged (images in the asset store). The pixel editor keeps plain JSON: it has no separate images.
   - ⏸️ **Standalone desktop and mobile apps (39), decided: not now.** The installable web apps (38, 34) already give an app window, offline use, file association and the File System Access API in Chromium-based browsers. Packaging adds value only for native needs these lack (watching files on disk, native menus, Firefox and Safari users wanting an app). If that comes up, **Tauri** is the choice for desktop (small, system web view; the apps need nothing Chromium-only beyond File System Access, which Tauri replaces with its own file API). **Mobile** waits for a touch pass (pinch zoom, long press for the secondary action, larger hit targets); then Capacitor around the same build, or the installable web app on Android.
+- **8.8 Follow-ups** ⚠️ (reported 2026-11-15): item 47. Item 48 (naming) comes last, after Phase 10.
 
 **Architecture**
 
@@ -515,6 +516,17 @@ Foundry2D already has both, but the line between them isn't drawn deliberately y
 
 46. ✅ **Guide grid per layer** (requested 2026-11-15). LDtk layer definitions have an optional "guide" grid, `guideGridWid` × `guideGridHei` in pixels, next to the layer's real `gridSize`. It only affects how the layer is shown in the editor (helper lines, for example a 16 × 16 room grid over an 8 px layer); cells, tools and exports keep using the real grid. Checked against the LDtk JSON field docs, which describe the fields but not how the editor draws them, so the drawing details are still to be confirmed. (8.5)
     - **Built as:** two optional numbers on a layer definition ("Guide grid W × H", px) in Project settings → Layers, stored in the work file. When the active layer has them, the level view draws a second, lighter grid at that spacing (another `GridLinesPass` with a step getter, already supported since item 17). No effect on game exports.
+
+47. ⚠️ **Rulers on tile grids** (reported 2026-11-15, 8.8). The rulers pick a "nice" label step of 1, 2 or 5 × 10ⁿ and split it into 10 ticks (`niceStep` in `packages/render/src/passes/RulersPass.ts`). That suits pixels (with quirks at some zoom levels there too), but in the level designer, which labels in tiles, it doesn't match how people count tiles:
+    - **Example:** Pac-Man preset (28 × 36 cells of 8 px), 259% zoom, 1920 × 1080 screen. Labels and grid lines land on the same pixels (checked: ruler and grid both put line 28 at the same x), so this isn't an offset. The confusion comes from the subdivision: at that zoom, labels every 5 tiles with ticks every half tile, while the grid's stronger lines come every 4 cells (`majorGridEvery: 4`). Counting along the ruler (from label 25 between tiles 25 and 26, two ticks on) lands elsewhere than counting tiles on the grid, and the 28th tile appears to line up with "31".
+    - **To rethink for tile units:**
+      - Ticks only on tile boundaries, never fractions of a tile.
+      - Steps from tile-friendly sets (1, 2, 4, 8, 16… or multiples of the major grid), so labels and the stronger grid lines agree.
+      - Whether to label boundaries (0-based, as now: "25" is the line after the 25th tile) or tiles themselves (1-based, centred on the cell). At least make the convention visible.
+      - Layers with their own grid (item 17) and guide grids (46): the ruler should follow the active layer's grid, like the cell grid does.
+    - Also review the pixel rulers' step choice at the zoom levels where it looks odd.
+
+48. ⚠️ **Naming and branding** (requested 2026-11-15, **last**, after Phase 10). Make each app's name consistent everywhere: package name (`package.json`), directory, page title, work-file extension and MIME type. Today they differ, e.g. the level designer is `@apps/level-designer` in `apps/level-designer/`, "Foundry2D · Level Designer" as the title, `.f2dlevel` files with `application/vnd.foundry2d.level+json`. The request is to use one short lower-case name per app in all of these, the level designer as "levels". The pixel editor's name, the exact title format, and how to keep existing `.f2dsprite`/`.f2dlevel` files and their MIME types opening (as `.f2d.json` still does) are to be decided. File handlers in the manifests (item 34) follow the new names.
 
 ### Phase 9: Sprite Packer app (TexturePacker-style) ⚠️ (not started)
 
