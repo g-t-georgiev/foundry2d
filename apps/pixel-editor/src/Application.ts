@@ -145,7 +145,11 @@ export default class Application implements ApplicationContext {
       })
     );
 
-    this.workspace = new Workspace(elements.viewport, { canvas: elements.canvas });
+    this.workspace = new Workspace(elements.viewport, {
+      canvas: elements.canvas,
+      // Pixels counted in 1, 2, 4, 8… so labels meet the grid's stronger lines (every 8).
+      rulers: { steps: () => "binary" },
+    });
     this.ui = new UIManager(this);
     this.layers = new LayersController(elements.layersPanel, this.sprite, this.history);
     this.timeline = new TimelineView(elements.timeline, {

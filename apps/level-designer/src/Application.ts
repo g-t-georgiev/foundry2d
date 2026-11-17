@@ -181,8 +181,11 @@ export default class Application {
     this.workspace = new Workspace($("#viewport"), {
       canvas: $<HTMLCanvasElement>("#levelCanvas"),
       rulers: {
-        unitScale: () => (this.view === "level" ? this.project.gridSize : 1),
+        // Level view: cells of the active layer (its own grid, item 17), counted 1, 2, 4, 8…
+        // so labels meet the grid's stronger lines; world view: pixels, 1, 2, 5, 10….
+        unitScale: () => (this.view === "level" ? this.project.layerGridSize(this.activeDef()) : 1),
         unitLabel: () => (this.view === "level" ? "t" : "px"),
+        steps: () => (this.view === "level" ? "binary" : "decimal"),
       },
       theme: {
         workspaceBackground: "#0e0e11",
