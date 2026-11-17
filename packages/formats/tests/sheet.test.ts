@@ -118,3 +118,17 @@ describe("spritesheet data formats", () => {
     );
   });
 });
+
+describe("rotated sprites", () => {
+  const rotated: SheetData = { ...sheet, frames: [{ ...sheet.frames[0], rotated: true }] };
+
+  it("TexturePacker JSON passes the flag through; formats without rotation refuse", () => {
+    const json = JSON.parse(sheetFormat("json-array").write(rotated, options)) as {
+      frames: { rotated: boolean }[];
+    };
+    expect(json.frames[0].rotated).toBe(true);
+    for (const f of SHEET_FORMATS.filter((f) => !f.supportsRotation)) {
+      expect(() => f.write(rotated, options)).toThrow(/rotated/);
+    }
+  });
+});

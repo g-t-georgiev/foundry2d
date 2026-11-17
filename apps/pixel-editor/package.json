@@ -15,7 +15,8 @@
     "@foundry2d/workspace": "workspace:*",
     "@foundry2d/ui": "workspace:*",
     "@foundry2d/store": "workspace:*",
-    "@foundry2d/formats": "workspace:*"
+    "@foundry2d/formats": "workspace:*",
+    "@foundry2d/atlas": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",

@@ -529,7 +529,19 @@ Foundry2D already has both, but the line between them isn't drawn deliberately y
 
 48. ⚠️ **Naming and branding** (requested 2026-11-15, **last**, after Phase 10). Make each app's name consistent everywhere: package name (`package.json`), directory, page title, work-file extension and MIME type. Today they differ, e.g. the level designer is `@apps/level-designer` in `apps/level-designer/`, "Foundry2D · Level Designer" as the title, `.f2dlevel` files with `application/vnd.foundry2d.level+json`. The request is to use one short lower-case name per app in all of these, the level designer as "levels". The pixel editor's name, the exact title format, and how to keep existing `.f2dsprite`/`.f2dlevel` files and their MIME types opening (as `.f2d.json` still does) are to be decided. File handlers in the manifests (item 34) follow the new names.
 
-### Phase 9: Sprite Packer app (TexturePacker-style) ⚠️ (not started)
+### Phase 9: Sprite Packer app (TexturePacker-style) ⚠️ (in progress)
+
+**Stages** (planned 2026-11-17, like Phase 8):
+
+- **9.1 Packing engine** ✅ (2026-11-17): new package `@foundry2d/atlas`.
+  - **Raster helpers** moved out of the pixel editor (crop, copy, scale, flatten, trim bounds), plus `rotateImageCW`, `extrudeEdges`, `imageHash` and `sameImage`.
+  - **`pack`:** MaxRects with the four usual fit heuristics (best short side, best long side, best area, bottom-left), shelves, grids and horizontal or vertical strips. Optional 90° rotation (MaxRects and shelves), padding between sprites and a border around the sheet, power-of-two and square sheets, and a maximum sheet size. Each MaxRects sheet starts at the smallest near-square size that could hold the remaining sprites and grows about 10% at a time; what doesn't fit at the maximum goes on further sheets (multi-atlas).
+  - **`buildAtlas`:** trims, stores identical sprites once (their frames share one rectangle), extrudes edges, packs and draws the sheets, and reports the fill rate. Frames follow TexturePacker's conventions: a rotated sprite is stored turned 90° clockwise and its frame keeps the unrotated size.
+  - **Formats:** `SheetFrame.rotated` is now a boolean and each format says whether it `supportsRotation`. TexturePacker JSON does; Starling XML, Godot, LibGDX and CSS refuse rotated frames instead of writing wrong data (their rotation conventions are to be checked against the engines before enabling it).
+  - **Tests:** a randomised check that every algorithm and heuristic keeps sprites inside the sheet and apart (padding included), over 80% fill for MaxRects on 120 random sprites, overflow into more sheets, power-of-two and square sizes, trimming, aliasing, extrusion and rotated pixels.
+  - **Pixel editor:** its spritesheet export now runs on the engine; "Packed" uses MaxRects instead of shelves. Output is otherwise unchanged (one sheet, padding also around the edge).
+- **9.2 The app** ⚠️: `apps/sprite-packer` (dev server on port 3002; end-to-end port 4172): image and folder input, the sprite list, the sheet preview on the shared workspace, packing settings, export through `@foundry2d/formats`, and the `.f2dpack` work file on `ProjectSession` (library, recovery, start screen).
+- **9.3 Extras** ⚠️: animation sequences from numeric suffixes with a preview, live folders (re-pack on change), pixel-editor sprites as input, unpacking existing atlases, WebP, premultiplied alpha and scale variants, pivots, and the installable-app build (item 38).
 
 A third app in the monorepo that turns many images into optimised spritesheets plus engine data. The pixel editor keeps its own spritesheet export for its sprites, and the packer is for whole asset folders.
 

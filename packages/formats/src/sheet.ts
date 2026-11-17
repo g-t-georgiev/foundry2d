@@ -12,8 +12,12 @@
 export interface SheetFrame {
   /** Frame key, e.g. "walk_0.png". */
   filename: string;
+  /**
+   * The sprite's rectangle on the sheet, with its unrotated width and height.
+   * A `rotated` sprite is stored turned 90° clockwise, covering `h × w`.
+   */
   frame: { x: number; y: number; w: number; h: number };
-  rotated: false;
+  rotated: boolean;
   trimmed: boolean;
   spriteSourceSize: { x: number; y: number; w: number; h: number };
   sourceSize: { w: number; h: number };
@@ -62,7 +66,16 @@ export interface SheetFormat {
   /** Data file extension, with the dot. */
   extension: string;
   mime: string;
+  /** Can describe sprites stored rotated (TexturePacker's 90° clockwise convention). */
+  supportsRotation: boolean;
   write(sheet: SheetData, options: SheetWriteOptions): string;
+}
+
+/** For formats that can't describe rotated sprites: fail loudly rather than write wrong data. */
+function noRotation(format: string, sheet: SheetData): void {
+  if (sheet.frames.some((f) => f.rotated)) {
+    throw new Error(`${format} can't describe rotated sprites; pack without rotation.`);
+  }
 }
 
 /** Strips the extension: "walk_0.png" → "walk_0". */
@@ -114,6 +127,7 @@ export function texturePackerJson(
  * (negative offset of the trimmed rect) and the untrimmed `frameWidth/Height`.
  */
 function starlingXml(sheet: SheetData, options: SheetWriteOptions): string {
+  noRotation("Starling XML", sheet);
   const lines = sheet.frames.map((f) => {
     const attrs = [
       `name="${xmlEscape(stem(f.filename))}"`,
@@ -154,6 +168,7 @@ const godotFloat = (n: number) => (Number.isInteger(n) ? n.toFixed(1) : String(n
  * next to the resource.
  */
 function godotTres(sheet: SheetData, options: SheetWriteOptions): string {
+  noRotation("Godot SpriteFrames", sheet);
   const frames = sheet.frames;
   const base = Math.max(1, Math.min(...frames.map((f) => f.duration || 100)));
   const fps = Math.round((1000 / base) * 1000) / 1000;
@@ -205,6 +220,7 @@ function godotTres(sheet: SheetData, options: SheetWriteOptions): string {
  * the original image.
  */
 function libgdxAtlas(sheet: SheetData, options: SheetWriteOptions): string {
+  noRotation("The LibGDX atlas writer", sheet);
   const out = [
     "",
     options.image,
@@ -236,6 +252,7 @@ function libgdxAtlas(sheet: SheetData, options: SheetWriteOptions): string {
  * shifted by the trim offset, so they line up like the original frames.
  */
 function cssSprites(sheet: SheetData, options: SheetWriteOptions): string {
+  noRotation("CSS sprites", sheet);
   const base = cssName(stem(options.image));
   const rules = sheet.frames.map((f) => {
     const x = f.frame.x - f.spriteSourceSize.x;
@@ -269,6 +286,7 @@ export const SHEET_FORMATS: readonly SheetFormat[] = [
     readers: "Phaser, PixiJS, Aseprite-style tools",
     extension: ".json",
     mime: "application/json",
+    supportsRotation: true,
     write: texturePacker("hash"),
   },
   {
@@ -277,6 +295,7 @@ export const SHEET_FORMATS: readonly SheetFormat[] = [
     readers: "Phaser, PixiJS",
     extension: ".json",
     mime: "application/json",
+    supportsRotation: true,
     write: texturePacker("array"),
   },
   {
@@ -285,6 +304,7 @@ export const SHEET_FORMATS: readonly SheetFormat[] = [
     readers: "Starling, Phaser (atlasXML), HaxeFlixel",
     extension: ".xml",
     mime: "application/xml",
+    supportsRotation: false,
     write: starlingXml,
   },
   {
@@ -293,6 +313,7 @@ export const SHEET_FORMATS: readonly SheetFormat[] = [
     readers: "Godot 4 (AnimatedSprite2D)",
     extension: ".tres",
     mime: "text/plain",
+    supportsRotation: false,
     write: godotTres,
   },
   {
@@ -301,6 +322,7 @@ export const SHEET_FORMATS: readonly SheetFormat[] = [
     readers: "LibGDX TextureAtlas",
     extension: ".atlas",
     mime: "text/plain",
+    supportsRotation: false,
     write: libgdxAtlas,
   },
   {
@@ -309,6 +331,7 @@ export const SHEET_FORMATS: readonly SheetFormat[] = [
     readers: "Web pages",
     extension: ".css",
     mime: "text/css",
+    supportsRotation: false,
     write: cssSprites,
   },
 ];
