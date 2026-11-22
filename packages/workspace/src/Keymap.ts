@@ -6,6 +6,11 @@ export interface KeyBinding {
   handler: KeyHandler;
   /** Fire on key repeat as well. Defaults to `false`. */
   repeat?: boolean;
+  /**
+   * Also fire while the user types into a form field (e.g. Save). The field
+   * is left first, so it commits its value. Defaults to `false`.
+   */
+  whileTyping?: boolean;
 }
 
 interface ParsedCombo {
@@ -44,14 +49,19 @@ export function parseCombo(combo: string): ParsedCombo {
 
 /**
  * Keyboard shortcut registry. "mod" means Cmd on macOS and Ctrl elsewhere.
- * Bindings are ignored while the user types into a form field.
+ * Bindings are ignored while the user types into a form field, unless they
+ * are `whileTyping`. Dropdowns only keep plain keys (type-ahead) to themselves.
  */
 export class Keymap {
   private bindings: { parsed: ParsedCombo; binding: KeyBinding }[] = [];
   private holds: { key: string; onPress: () => void; onRelease: () => void; held: boolean }[] = [];
   private readonly isMac = isMacPlatform();
 
-  bind(combo: string, handler: KeyHandler, options: { repeat?: boolean } = {}): () => void {
+  bind(
+    combo: string,
+    handler: KeyHandler,
+    options: { repeat?: boolean; whileTyping?: boolean } = {}
+  ): () => void {
     const entry = { parsed: parseCombo(combo), binding: { combo, handler, ...options } };
     this.bindings.push(entry);
     return () => {
@@ -61,13 +71,14 @@ export class Keymap {
 
   /** Dispatches a keydown. Returns `true` when a binding handled it. */
   handle(event: KeyboardEvent): boolean {
-    if (isTypingTarget(event.target)) return false;
     const key = normalizeKey(event.key);
     const mod = this.isMac ? event.metaKey : event.ctrlKey;
+    const typing = isTypingTarget(event.target) && !(mod && isSelect(event.target));
 
     // Prefer the most specific match (most modifiers).
     const matches = this.bindings
-      .filter(({ parsed }) => {
+      .filter(({ parsed, binding }) => {
+        if (typing && !binding.whileTyping) return false;
         if (parsed.key !== key) return false;
         if (parsed.mod !== mod) return false;
         if (parsed.alt !== event.altKey) return false;
@@ -80,6 +91,8 @@ export class Keymap {
 
     for (const { binding } of matches) {
       if (event.repeat && !binding.repeat) return true;
+      // Leaving the field fires its "change", so the handler sees the new value.
+      if (typing) (event.target as HTMLElement).blur();
       if (binding.handler(event) === false) continue;
       event.preventDefault();
       return true;
@@ -100,7 +113,7 @@ export class Keymap {
   }
 
   handleKeyDown(event: KeyboardEvent): boolean {
-    if (isTypingTarget(event.target)) return false;
+    if (isTypingTarget(event.target)) return this.handle(event);
     const key = normalizeKey(event.key);
     let handled = false;
     for (const hold of this.holds) {
@@ -143,6 +156,9 @@ export class Keymap {
     this.holds = [];
   }
 }
+
+const isSelect = (target: EventTarget | null) =>
+  typeof HTMLSelectElement !== "undefined" && target instanceof HTMLSelectElement;
 
 export function isTypingTarget(target: EventTarget | null): boolean {
   if (!target || typeof HTMLElement === "undefined" || !(target instanceof HTMLElement)) {

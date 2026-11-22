@@ -389,3 +389,11 @@ test.describe("with the Pac-Man preset", () => {
     expect(pngSize(layer.bytes)).toEqual({ width: 640, height: 352 });
   });
 });
+
+test("Ctrl+S while typing the name commits it and saves", async ({ page }) => {
+  await openApp(page);
+  await page.locator("#projectName").fill("renamed");
+  await page.keyboard.press("Control+s");
+  await expect(page.locator("#statFile")).toHaveText("browser library");
+  await expect(page).toHaveTitle(/^renamed/);
+});

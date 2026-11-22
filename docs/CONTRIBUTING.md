@@ -8,12 +8,15 @@ Notes for working on the monorepo: setup, the commands that check a change, and 
 | --------------------- | ----------------------------------------------------------------------------------------- |
 | `apps/pixel-editor`   | Piskel-like sprite editor (port 3000 in development)                                      |
 | `apps/level-designer` | LDtk-like level designer (port 3001)                                                      |
+| `apps/sprite-packer`  | Packs images into spritesheets with engine data (port 3002)                               |
 | `packages/core`       | Documents, layers, tools, commands, selection, storage, ZIP writer (no DOM)               |
 | `packages/render`     | Canvas render passes (layers, grid, cursor, rulers…)                                      |
 | `packages/workspace`  | Canvas workspace, input, key map, project session and file workflow                       |
 | `packages/ui`         | Web components, shared theme (`theme/tokens.css`, `theme/components.css`) and DOM helpers |
+| `packages/atlas`      | Rectangle packing and sheet building (no DOM)                                             |
+| `packages/formats`    | Spritesheet data formats for game engines                                                 |
 | `packages/store`      | Small state store for UI preferences                                                      |
-| `e2e`                 | Playwright end-to-end tests for both apps                                                 |
+| `e2e`                 | Playwright end-to-end tests for every app                                                 |
 
 ## Setup and everyday commands
 
@@ -27,6 +30,10 @@ pnpm dev:pixel
 
 ```bash
 pnpm dev:level
+```
+
+```bash
+pnpm dev:packer
 ```
 
 Before committing (the pre-commit hook also runs `vp check --fix` on staged files):
@@ -43,7 +50,7 @@ pnpm -r --if-present test
 vp run test:e2e
 ```
 
-The first end-to-end run on a machine needs the browser: `pnpm exec playwright install chromium`. The tests start their own dev servers on ports 4170 and 4171 and reuse running ones outside CI, so they can also be run from VS Code's Testing tab with the Playwright extension.
+The first end-to-end run on a machine needs the browser: `pnpm exec playwright install chromium`. The tests start their own dev servers on ports 4170 to 4172 and reuse running ones outside CI, so they can also be run from VS Code's Testing tab with the Playwright extension.
 
 ## Conventions
 
@@ -71,4 +78,4 @@ The project pins Vite+ 1.4.0 (`pnpm-workspace.yaml` catalog); 1.6.0 was the late
 
 ### Ports already in use
 
-If ports 4170 or 4171 are taken when running the end-to-end tests, a dev server from an earlier run (or from the VS Code Playwright extension) is probably still running. Outside CI the tests reuse it, which is usually what you want; stop it if it serves old code.
+If a port from 4170 to 4172 is taken when running the end-to-end tests, a dev server from an earlier run (or from the VS Code Playwright extension) is probably still running. Outside CI the tests reuse it, which is usually what you want; stop it if it serves old code.

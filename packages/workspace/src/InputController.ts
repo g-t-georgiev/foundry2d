@@ -198,7 +198,11 @@ export class InputController {
   }
 
   private onKeyDown(ev: KeyboardEvent): void {
-    if (isTypingTarget(ev.target)) return;
+    if (isTypingTarget(ev.target)) {
+      // Only `whileTyping` bindings (e.g. Save) work in form fields.
+      this.workspace.keymap.handleKeyDown(ev);
+      return;
+    }
 
     if (normalizeKey(ev.key) === "space") {
       ev.preventDefault();

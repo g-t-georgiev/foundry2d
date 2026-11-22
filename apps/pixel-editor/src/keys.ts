@@ -40,10 +40,10 @@ export function bindKeys(keymap: Keymap, app: Application): void {
   keymap.bind("mod+z", () => app.undo(), { repeat: true });
   keymap.bind("mod+shift+z", () => app.redo(), { repeat: true });
   keymap.bind("mod+y", () => app.redo(), { repeat: true });
-  keymap.bind("mod+s", () => void files.save());
-  keymap.bind("mod+shift+s", () => void files.saveAs());
-  keymap.bind("mod+o", () => void files.showBrowser());
-  keymap.bind("mod+e", () => app.openExport());
+  keymap.bind("mod+s", () => void files.save(), { whileTyping: true });
+  keymap.bind("mod+shift+s", () => void files.saveAs(), { whileTyping: true });
+  keymap.bind("mod+o", () => void files.showBrowser(), { whileTyping: true });
+  keymap.bind("mod+e", () => app.openExport(), { whileTyping: true });
 
   // Tools.
   keymap.bind("b", setTool("pen"));

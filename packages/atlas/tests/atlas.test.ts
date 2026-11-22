@@ -136,6 +136,87 @@ describe("pack", () => {
   });
 });
 
+describe("sheet limits", () => {
+  const algorithms = ["maxrects", "shelf", "grid", "horizontal", "vertical"] as const;
+  const boxes = (n: number, w: number, h: number) => Array.from({ length: n }, () => ({ w, h }));
+
+  it("finishes and stays inside limits that are wider or taller than square", () => {
+    for (const algorithm of algorithms) {
+      for (const [maxWidth, maxHeight] of [
+        [128, 1024],
+        [1024, 128],
+        [100, 333],
+      ]) {
+        checkLayout(sizes(60, 11), { algorithm, maxWidth, maxHeight, padding: 1, border: 2 });
+      }
+    }
+  });
+
+  it("square and power-of-two sheets never go past the maximum", () => {
+    for (const algorithm of algorithms) {
+      for (const [maxWidth, maxHeight] of [
+        [512, 128],
+        [128, 512],
+        [1000, 1000],
+      ]) {
+        for (const powerOfTwo of [false, true]) {
+          for (const square of [false, true]) {
+            const { bins } = checkLayout(boxes(30, 30, 30), {
+              algorithm,
+              maxWidth,
+              maxHeight,
+              powerOfTwo,
+              square,
+              border: 1,
+              padding: 1,
+            });
+            for (const b of bins) {
+              if (square) expect(b.width).toBe(b.height);
+              if (powerOfTwo) expect(Number.isInteger(Math.log2(b.width))).toBe(true);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it("turns a sprite only where that fits", () => {
+    const upright = checkLayout([{ w: 20, h: 100 }], {
+      algorithm: "shelf",
+      allowRotation: true,
+      maxWidth: 64,
+      maxHeight: 128,
+    });
+    expect(upright.placements[0].rotated).toBe(false);
+    for (const algorithm of ["maxrects", "shelf"] as const) {
+      const turned = checkLayout([{ w: 100, h: 20 }], {
+        algorithm,
+        allowRotation: true,
+        maxWidth: 64,
+        maxHeight: 128,
+      });
+      expect(turned.placements[0].rotated).toBe(true);
+    }
+  });
+
+  it("uses a power-of-two sheet fully, border included", () => {
+    // 4 × 4 sprites of 14 px with 2 px gaps and a 1 px border fill 64 px exactly.
+    const { bins } = checkLayout(boxes(16, 14, 14), {
+      algorithm: "maxrects",
+      powerOfTwo: true,
+      padding: 2,
+      border: 1,
+    });
+    expect(bins).toEqual([{ width: 64, height: 64 }]);
+  });
+
+  it("packs 800 sprites in reasonable time", () => {
+    const started = performance.now();
+    checkLayout(sizes(800, 3), { algorithm: "maxrects", allowRotation: true, padding: 2 });
+    expect(performance.now() - started).toBeLessThan(10_000);
+  });
+});
+
 describe("buildAtlas", () => {
   const red = [255, 0, 0, 255];
   const clear = [0, 0, 0, 0];

@@ -65,6 +65,7 @@ interface Free {
 }
 
 const nextPow2 = (n: number) => (n <= 1 ? 1 : 2 ** Math.ceil(Math.log2(n)));
+const floorPow2 = (n: number) => (n < 1 ? 0 : 2 ** Math.floor(Math.log2(n)));
 
 /** One MaxRects bin of a fixed size. */
 class MaxRectsBin {
@@ -157,7 +158,7 @@ class MaxRectsBin {
   }
 }
 
-/** Sheet size from the space used, rounded per the options and capped. */
+/** Sheet size for the space used: border added, then rounded and squared per the options. */
 function sheetSize(usedW: number, usedH: number, options: Required<PackOptions>) {
   let width = usedW + options.border * 2;
   let height = usedH + options.border * 2;
@@ -170,7 +171,7 @@ function sheetSize(usedW: number, usedH: number, options: Required<PackOptions>)
 }
 
 function withDefaults(options: PackOptions): Required<PackOptions> {
-  return {
+  const o: Required<PackOptions> = {
     heuristic: "short-side",
     allowRotation: false,
     padding: 0,
@@ -182,7 +183,22 @@ function withDefaults(options: PackOptions): Required<PackOptions> {
     columns: 0,
     ...options,
   };
+  o.padding = Math.max(0, Math.floor(o.padding));
+  o.border = Math.max(0, Math.floor(o.border));
+  o.maxWidth = Math.floor(o.maxWidth);
+  o.maxHeight = Math.floor(o.maxHeight);
+  // The largest sheet these options can really produce, so rounding never goes past the maximum:
+  // square sheets are limited by the smaller side, power-of-two ones by the next lower power.
+  if (o.square) o.maxWidth = o.maxHeight = Math.min(o.maxWidth, o.maxHeight);
+  if (o.powerOfTwo) {
+    o.maxWidth = floorPow2(o.maxWidth);
+    o.maxHeight = floorPow2(o.maxHeight);
+  }
+  return o;
 }
+
+const tooBig = (w: number, h: number) =>
+  new Error(`A ${w}×${h} sprite is bigger than the maximum sheet size.`);
 
 /** Inner capacity of a sheet for padded sprites (the last sprite needs no trailing gap). */
 const capacity = (max: number, o: Required<PackOptions>) => max - o.border * 2 + o.padding;
@@ -201,24 +217,31 @@ function packMaxRects(sizes: PackSize[], o: Required<PackOptions>): PackResult {
     .sort((a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h) || b.w * b.h - a.w * a.h);
   for (const s of order) {
     const fits = (s.w <= capW && s.h <= capH) || (o.allowRotation && s.h <= capW && s.w <= capH);
-    if (!fits) {
-      throw new Error(`A ${s.w - pad}×${s.h - pad} sprite is bigger than the maximum sheet size.`);
-    }
+    if (!fits) throw tooBig(s.w - pad, s.h - pad);
   }
+
+  /** The space inside the sheet that a `w × h` space rounds up to (never past the maximum). */
+  const roundUp = (w: number, h: number) => {
+    const sheet = sheetSize(w - pad, h - pad, o);
+    return {
+      w: Math.min(capW, capacity(sheet.width, o)),
+      h: Math.min(capH, capacity(sheet.height, o)),
+    };
+  };
 
   const bins: PackResult["bins"] = [];
   const placements: Placement[] = [];
   let remaining = order;
   while (remaining.length) {
     const area = remaining.reduce((sum, s) => sum + s.w * s.h, 0);
-    const widest = Math.max(...remaining.map((s) => (o.allowRotation ? Math.min(s.w, s.h) : s.w)));
-    const tallest = Math.max(...remaining.map((s) => (o.allowRotation ? Math.min(s.w, s.h) : s.h)));
-    let w = Math.min(capW, Math.max(widest, Math.ceil(Math.sqrt(area))));
-    let h = Math.min(capH, Math.max(tallest, Math.ceil(area / w)));
+    const narrowest = (s: PackSize, side: number) => (o.allowRotation ? Math.min(s.w, s.h) : side);
+    let w = Math.max(...remaining.map((s) => narrowest(s, s.w)), Math.ceil(Math.sqrt(area)));
+    w = Math.min(capW, w);
+    let h = Math.max(...remaining.map((s) => narrowest(s, s.h)), Math.ceil(area / w));
+    h = Math.min(capH, h);
     for (;;) {
-      const tryW = o.powerOfTwo ? Math.min(capW, nextPow2(w)) : w;
-      const tryH = o.square ? tryW : o.powerOfTwo ? Math.min(capH, nextPow2(h)) : h;
-      const bin = new MaxRectsBin(tryW, Math.min(capH, tryH), o.heuristic, o.allowRotation);
+      const space = roundUp(w, h);
+      const bin = new MaxRectsBin(space.w, space.h, o.heuristic, o.allowRotation);
       const placed: {
         s: (typeof order)[number];
         at: { x: number; y: number; rotated: boolean };
@@ -229,12 +252,11 @@ function packMaxRects(sizes: PackSize[], o: Required<PackOptions>): PackResult {
         if (at) placed.push({ s, at });
         else left.push(s);
       }
-      // Full size once neither side can grow (square or power-of-two sheets may stop short of the caps).
-      const atMax = w >= capW && h >= capH;
-      if (left.length === 0 || atMax) {
+      const full = w >= capW && h >= capH;
+      if (left.length === 0 || full) {
         if (placed.length === 0) throw new Error("A sprite could not be placed.");
         const index = bins.length;
-        bins.push(sheetSize(Math.max(0, bin.usedW - pad), Math.max(0, bin.usedH - pad), o));
+        bins.push(sheetSize(bin.usedW - pad, bin.usedH - pad, o));
         for (const { s, at } of placed) {
           placements[s.i] = {
             index: s.i,
@@ -247,8 +269,9 @@ function packMaxRects(sizes: PackSize[], o: Required<PackOptions>): PackResult {
         remaining = left;
         break;
       }
-      // Grow the shorter side by about 10%.
-      if (w <= h) w = Math.min(capW, Math.ceil(w * 1.1) + 1);
+      // Grow the shorter side by about 10%, or the other one when it is at its limit.
+      const growWidth = w < capW && (w <= h || h >= capH);
+      if (growWidth) w = Math.min(capW, Math.ceil(w * 1.1) + 1);
       else h = Math.min(capH, Math.ceil(h * 1.1) + 1);
     }
   }
@@ -262,8 +285,10 @@ function packShelf(sizes: PackSize[], o: Required<PackOptions>): PackResult {
   const capH = capacity(o.maxHeight, o);
   const order = sizes
     .map((s, i) => {
-      // With rotation, lay each sprite on its long side to keep shelves low.
-      const rotated = o.allowRotation && s.h > s.w;
+      // With rotation, lay each sprite on its long side to keep shelves low (where that fits).
+      const turnedFits = s.h + pad <= capW && s.w + pad <= capH;
+      const uprightFits = s.w + pad <= capW && s.h + pad <= capH;
+      const rotated = o.allowRotation && turnedFits && (s.h > s.w || !uprightFits);
       return { i, w: (rotated ? s.h : s.w) + pad, h: (rotated ? s.w : s.h) + pad, rotated };
     })
     .sort((a, b) => b.h - a.h || b.w - a.w);
@@ -284,9 +309,7 @@ function packShelf(sizes: PackSize[], o: Required<PackOptions>): PackResult {
     bins.push(sheetSize(usedW - pad, y + rowH - pad, o));
   };
   for (const s of order) {
-    if (s.w > capW || s.h > capH) {
-      throw new Error(`A ${s.w - pad}×${s.h - pad} sprite is bigger than the maximum sheet size.`);
-    }
+    if (s.w > capW || s.h > capH) throw tooBig(s.w - pad, s.h - pad);
     if (x > 0 && x + s.w > limit) {
       y += rowH;
       x = 0;
@@ -315,8 +338,7 @@ function packCells(sizes: PackSize[], o: Required<PackOptions>): PackResult {
   const capH = capacity(o.maxHeight, o);
   const fitCols = Math.max(1, Math.floor(capW / cellW));
   const fitRows = Math.max(1, Math.floor(capH / cellH));
-  if (cellW > capW || cellH > capH)
-    throw new Error("A sprite is bigger than the maximum sheet size.");
+  if (cellW > capW || cellH > capH) throw tooBig(cellW - pad, cellH - pad);
   const n = sizes.length;
   let columns =
     o.algorithm === "horizontal"
@@ -355,8 +377,6 @@ function packCells(sizes: PackSize[], o: Required<PackOptions>): PackResult {
 export function pack(sizes: PackSize[], options: PackOptions): PackResult {
   if (sizes.length === 0) return { bins: [], placements: [] };
   const o = withDefaults(options);
-  o.padding = Math.max(0, Math.floor(o.padding));
-  o.border = Math.max(0, Math.floor(o.border));
   if (o.algorithm === "maxrects") return packMaxRects(sizes, o);
   if (o.algorithm === "shelf") return packShelf(sizes, o);
   return packCells(sizes, o);

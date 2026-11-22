@@ -421,3 +421,10 @@ test.describe("export downloads (item 16)", () => {
     expect(ascii(gif.bytes, 0, 6)).toBe("GIF89a");
   });
 });
+
+test("Ctrl+S while typing the name commits it and saves", async ({ page }) => {
+  await page.locator("#spriteName").fill("renamed");
+  await page.keyboard.press("Control+s");
+  await expect(page.locator("#fileDisplay")).toHaveText("browser library");
+  await expect(page).toHaveTitle(/^renamed/);
+});

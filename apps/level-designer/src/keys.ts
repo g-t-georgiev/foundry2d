@@ -25,10 +25,10 @@ export function bindKeys(keymap: Keymap, app: Application): void {
   keymap.bind("mod+z", () => void app.history.undo(), { repeat: true });
   keymap.bind("mod+shift+z", () => void app.history.redo(), { repeat: true });
   keymap.bind("mod+y", () => void app.history.redo(), { repeat: true });
-  keymap.bind("mod+s", () => void app.files.save());
-  keymap.bind("mod+shift+s", () => void app.files.saveAs());
-  keymap.bind("mod+o", () => void app.files.showBrowser());
-  keymap.bind("mod+e", () => app.runCommand("export"));
+  keymap.bind("mod+s", () => void app.files.save(), { whileTyping: true });
+  keymap.bind("mod+shift+s", () => void app.files.saveAs(), { whileTyping: true });
+  keymap.bind("mod+o", () => void app.files.showBrowser(), { whileTyping: true });
+  keymap.bind("mod+e", () => app.runCommand("export"), { whileTyping: true });
   keymap.bind(
     "mod+shift+c",
     inLevel(() => void app.copyActiveLayer())
