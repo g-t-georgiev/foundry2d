@@ -114,6 +114,22 @@ export function rotateImageCW(image: RgbaImage): RgbaImage {
   return out;
 }
 
+/** The image turned 90° counter-clockwise (undoes `rotateImageCW`). */
+export function rotateImageCCW(image: RgbaImage): RgbaImage {
+  return rotateImageCW(rotateImageCW(rotateImageCW(image)));
+}
+
+/** The image with its colours multiplied by alpha, for engines that blend premultiplied. */
+export function premultiply(image: RgbaImage): RgbaImage {
+  const out = createImage(image.width, image.height);
+  for (let i = 0; i < image.data.length; i += 4) {
+    const a = image.data[i + 3];
+    for (let c = 0; c < 3; c++) out.data[i + c] = Math.round((image.data[i + c] * a) / 255);
+    out.data[i + 3] = a;
+  }
+  return out;
+}
+
 /** Repeats the outermost pixels of the rect `r` of `sheet` outward by `e` pixels (against texture bleeding). */
 export function extrudeEdges(sheet: RgbaImage, r: Rect, e: number): void {
   if (e <= 0) return;

@@ -1,5 +1,6 @@
 import type { Atlas } from "@foundry2d/atlas";
 import type { Position, Rect } from "@foundry2d/core";
+import type { SheetFrame } from "@foundry2d/formats";
 import {
   BoundsPass,
   CheckerboardPass,
@@ -7,7 +8,7 @@ import {
   type RenderPass,
 } from "@foundry2d/render";
 import type { ScenePointerEvent, Workspace, WorkspaceScene } from "@foundry2d/workspace";
-import { toCanvas } from "./export";
+import { spriteOfFrame, toCanvas } from "./export";
 
 /** World pixels between sheets drawn next to each other. */
 const SHEET_GAP = 32;
@@ -16,7 +17,7 @@ interface PlacedSheet {
   canvas: HTMLCanvasElement;
   rect: Rect;
   /** Frame rectangles in world pixels (as stored: rotated frames already turned). */
-  frames: { name: string; rect: Rect; rotated: boolean }[];
+  frames: { name: string; rect: Rect; rotated: boolean; pivot: Position | null }[];
 }
 
 export interface SheetSceneOptions {
@@ -51,6 +52,7 @@ export class SheetScene implements WorkspaceScene {
         frames: sheet.frames.map((f) => ({
           name: f.filename,
           rotated: f.rotated,
+          pivot: pivotOnSheet(f, rect.x),
           rect: {
             x: rect.x + f.frame.x,
             y: rect.y + f.frame.y,
@@ -122,7 +124,7 @@ export class SheetScene implements WorkspaceScene {
   describe(world: Position): string | null {
     const hit = this.hit(world);
     if (hit.length === 0) return null;
-    const names = hit.map((f) => f.name.replace(/\.png$/, "")).join(", ");
+    const names = hit.map((f) => spriteOfFrame(f.name)).join(", ");
     return hit[0].rotated ? `${names} (rotated)` : names;
   }
 
@@ -134,6 +136,16 @@ export class SheetScene implements WorkspaceScene {
       )
     );
   }
+}
+
+/** Where a frame's pivot lies on its sheet (turned with rotated frames), in world pixels. */
+function pivotOnSheet(f: SheetFrame, sheetX: number): Position | null {
+  if (!f.pivot) return null;
+  const u = f.pivot.x * f.sourceSize.w - f.spriteSourceSize.x;
+  const v = f.pivot.y * f.sourceSize.h - f.spriteSourceSize.y;
+  return f.rotated
+    ? { x: sheetX + f.frame.x + f.frame.h - v, y: f.frame.y + u }
+    : { x: sheetX + f.frame.x + u, y: f.frame.y + v };
 }
 
 /** The sheet images. */
@@ -150,7 +162,7 @@ class SheetsPass implements RenderPass {
   }
 }
 
-/** Frame outlines, and the hovered and selected frames, in screen space for crisp lines. */
+/** Frame outlines, the hovered and selected frames and their pivots, in screen space. */
 class FramesPass implements RenderPass {
   readonly id = "frames";
   readonly space = "screen";
@@ -173,10 +185,30 @@ class FramesPass implements RenderPass {
       ctx.lineWidth = width;
       ctx.strokeRect(Math.round(a.x) + 0.5, Math.round(a.y) + 0.5, b.x - a.x - 1, b.y - a.y - 1);
     };
+    const cross = (p: Position) => {
+      const { x, y } = camera.worldToLocal(p.x, p.y);
+      for (const [color, width] of [
+        ["#000", 3],
+        ["#fff", 1],
+      ] as const) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        ctx.moveTo(x - 6, y);
+        ctx.lineTo(x + 6, y);
+        ctx.moveTo(x, y - 6);
+        ctx.lineTo(x, y + 6);
+        ctx.stroke();
+      }
+    };
     for (const { frames } of this.getSheets()) {
       if (outlines) for (const f of frames) stroke(f.rect, "rgba(96, 205, 255, 0.45)", 1);
       for (const f of frames) if (f.name === hovered) stroke(f.rect, "rgba(255, 255, 255, 0.8)", 1);
-      for (const f of frames) if (this.isSelected(f.name)) stroke(f.rect, "#facc15", 2);
+      for (const f of frames) {
+        if (!this.isSelected(f.name)) continue;
+        stroke(f.rect, "#facc15", 2);
+        if (f.pivot) cross(f.pivot);
+      }
     }
   }
 }

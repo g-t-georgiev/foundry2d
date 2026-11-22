@@ -10,8 +10,16 @@ export interface SpriteImage {
   height: number;
 }
 
+/** A point inside the untrimmed sprite, as fractions from the top-left (may lie outside). */
+export interface Pivot {
+  readonly x: number;
+  readonly y: number;
+}
+
 export interface PackSprite extends SpriteImage {
   readonly id: string;
+  /** Unset: the engine's default. */
+  readonly pivot?: Pivot;
 }
 
 /** What undo restores. Sprites are never mutated, so snapshots share them. */
@@ -78,6 +86,15 @@ export class PackProject {
    * (re-importing updated files), keeping its id.
    */
   addImages(images: readonly SpriteImage[]): { added: number; updated: number } {
+    const { added, updated } = this.sync(images, []);
+    return { added, updated };
+  }
+
+  /** Adds or updates `images` and removes the sprites called `removed`, as one undo step. */
+  sync(
+    images: readonly SpriteImage[],
+    removed: readonly string[]
+  ): { added: number; updated: number; removed: number } {
     const byKey = new Map(this.state.sprites.map((s) => [s.name, s]));
     let added = 0;
     let updated = 0;
@@ -87,12 +104,17 @@ export class PackProject {
       if (existing?.dataUrl === image.dataUrl) continue;
       if (existing) updated++;
       else added++;
-      byKey.set(name, { ...image, name, id: existing?.id ?? newId() });
+      const pivot = existing?.pivot ? { pivot: existing.pivot } : {};
+      byKey.set(name, { ...image, name, id: existing?.id ?? newId(), ...pivot });
     }
-    if (added || updated) {
-      this.commit("Add sprites", { sprites: sorted([...byKey.values()]) });
+    let gone = 0;
+    for (const name of removed) if (byKey.delete(cleanName(name))) gone++;
+    if (added || updated || gone) {
+      this.commit(gone ? "Update sprites" : "Add sprites", {
+        sprites: sorted([...byKey.values()]),
+      });
     }
-    return { added, updated };
+    return { added, updated, removed: gone };
   }
 
   remove(ids: Iterable<string>): number {
@@ -115,6 +137,21 @@ export class PackProject {
     return true;
   }
 
+  /** Sets (or with `null` clears) the pivot of some sprites. */
+  setPivot(ids: Iterable<string>, pivot: Pivot | null): void {
+    const targets = new Set(ids);
+    const round = (n: number) => Math.round(Math.min(10, Math.max(-10, n)) * 1000) / 1000;
+    const next = pivot && { x: round(pivot.x), y: round(pivot.y) };
+    let changed = false;
+    const sprites = this.state.sprites.map((s) => {
+      if (!targets.has(s.id) || JSON.stringify(s.pivot ?? null) === JSON.stringify(next)) return s;
+      changed = true;
+      const { pivot: _old, ...rest } = s;
+      return next ? { ...rest, pivot: next } : rest;
+    });
+    if (changed) this.commit("Set pivot", { sprites });
+  }
+
   setSettings(patch: Partial<PackSettings>): void {
     const settings = parseSettings({ ...this.state.settings, ...patch }, this.state.settings);
     if (JSON.stringify(settings) === JSON.stringify(this.state.settings)) return;
@@ -122,7 +159,11 @@ export class PackProject {
   }
 
   /** Opens another pack in place (clears undo). */
-  load(name: string, images: readonly SpriteImage[], settings: PackSettings): void {
+  load(
+    name: string,
+    images: readonly (SpriteImage & { pivot?: Pivot })[],
+    settings: PackSettings
+  ): void {
     this._name = name.trim() || DEFAULT_NAME;
     const byKey = new Map<string, PackSprite>();
     for (const image of images) {

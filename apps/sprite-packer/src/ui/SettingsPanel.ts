@@ -17,6 +17,11 @@ export class SettingsPanel {
 
     root.addEventListener("change", (ev) => {
       const control = ev.target as HTMLInputElement | HTMLSelectElement;
+      if (control.dataset.scale) {
+        const boxes = root.querySelectorAll<HTMLInputElement>("[data-scale]:checked");
+        onChange({ scales: [...boxes].map((b) => Number(b.dataset.scale)) });
+        return;
+      }
       const key = control.dataset.setting;
       if (!key) return;
       const value =
@@ -41,6 +46,9 @@ export class SettingsPanel {
       } else {
         control.value = String(value);
       }
+    }
+    for (const box of this.root.querySelectorAll<HTMLInputElement>("[data-scale]")) {
+      box.checked = settings.scales.includes(Number(box.dataset.scale));
     }
     for (const part of this.root.querySelectorAll<HTMLElement>("[data-for]")) {
       part.hidden = part.dataset.for !== settings.algorithm;

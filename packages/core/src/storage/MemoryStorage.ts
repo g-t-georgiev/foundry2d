@@ -28,6 +28,7 @@ export class MemoryStorage implements Storage {
       this.recoveryMap.delete(key);
       return done();
     },
+    listRecovery: (): Promise<string[]> => Promise.resolve([...this.recoveryMap.keys()]),
   };
 
   readonly projects = {

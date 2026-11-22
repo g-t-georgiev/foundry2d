@@ -1,4 +1,4 @@
-import type { PackProject, SpriteImage } from "../model/PackProject";
+import type { PackProject, Pivot, SpriteImage } from "../model/PackProject";
 import { parseSettings, type PackSettings } from "../model/settings";
 
 export const PACK_FORMAT = "foundry2d.pack";
@@ -16,7 +16,7 @@ export interface PackFile {
   name: string;
   settings: PackSettings;
   /** Each image is the original file as a data URL. */
-  sprites: { name: string; width: number; height: number; image: string }[];
+  sprites: { name: string; width: number; height: number; image: string; pivot?: Pivot }[];
 }
 
 export function toPackFile(project: PackProject): PackFile {
@@ -25,11 +25,12 @@ export function toPackFile(project: PackProject): PackFile {
     version: PACK_VERSION,
     name: project.name,
     settings: { ...project.settings },
-    sprites: project.sprites.map(({ name, width, height, dataUrl }) => ({
+    sprites: project.sprites.map(({ name, width, height, dataUrl, pivot }) => ({
       name,
       width,
       height,
       image: dataUrl,
+      ...(pivot ? { pivot } : {}),
     })),
   };
 }
@@ -42,7 +43,7 @@ const IMAGE_URL = /^data:image\/(png|webp|jpeg|gif|bmp);base64,/;
 export function fromPackFile(json: unknown): {
   name: string;
   settings: PackSettings;
-  images: SpriteImage[];
+  images: (SpriteImage & { pivot?: Pivot })[];
 } {
   if (!isRecord(json) || json.format !== PACK_FORMAT) {
     throw new PackFormatError("Not a Foundry2D sprite pack.");
@@ -51,7 +52,7 @@ export function fromPackFile(json: unknown): {
     throw new PackFormatError(`Unsupported pack version: ${String(json.version)}`);
   }
   if (!Array.isArray(json.sprites)) throw new PackFormatError("The pack has no sprite list.");
-  const images = json.sprites.map((raw: unknown, i): SpriteImage => {
+  const images = json.sprites.map((raw: unknown, i): SpriteImage & { pivot?: Pivot } => {
     if (
       !isRecord(raw) ||
       typeof raw.name !== "string" ||
@@ -62,7 +63,15 @@ export function fromPackFile(json: unknown): {
     ) {
       throw new PackFormatError(`Sprite #${i + 1} in the pack is invalid.`);
     }
-    return { name: raw.name, dataUrl: raw.image, width: raw.width, height: raw.height };
+    const { name, image, width, height, pivot } = raw;
+    const valid = isRecord(pivot) && Number.isFinite(pivot.x) && Number.isFinite(pivot.y);
+    return {
+      name,
+      dataUrl: image,
+      width,
+      height,
+      ...(valid ? { pivot: { x: Number(pivot.x), y: Number(pivot.y) } } : {}),
+    };
   });
   return {
     name: typeof json.name === "string" ? json.name : "",

@@ -9,6 +9,7 @@ import {
   opaqueBounds,
   rotateImageCW,
   sameImage,
+  scaleImage,
   type RgbaImage,
 } from "./raster";
 
@@ -18,6 +19,8 @@ export interface AtlasInput {
   image: RgbaImage;
   /** Milliseconds (animations). */
   duration?: number;
+  /** Pivot inside the untrimmed sprite, 0..1 from the top-left. */
+  pivot?: { x: number; y: number };
 }
 
 export interface AtlasOptions extends PackOptions {
@@ -70,6 +73,26 @@ export const sheetData = (sheet: AtlasSheet): SheetData => ({
   height: sheet.image.height,
   frames: sheet.frames,
 });
+
+/** The sheet enlarged by a whole factor (nearest neighbour), frames included. */
+export function scaleSheet(sheet: AtlasSheet, factor: number): AtlasSheet {
+  const k = Math.max(1, Math.floor(factor));
+  if (k === 1) return sheet;
+  return {
+    image: scaleImage(sheet.image, k),
+    frames: sheet.frames.map((f) => ({
+      ...f,
+      frame: { x: f.frame.x * k, y: f.frame.y * k, w: f.frame.w * k, h: f.frame.h * k },
+      spriteSourceSize: {
+        x: f.spriteSourceSize.x * k,
+        y: f.spriteSourceSize.y * k,
+        w: f.spriteSourceSize.w * k,
+        h: f.spriteSourceSize.h * k,
+      },
+      sourceSize: { w: f.sourceSize.w * k, h: f.sourceSize.h * k },
+    })),
+  };
+}
 
 /**
  * Packs sprites into one or more sheets: trims, aliases identical sprites,
@@ -138,6 +161,7 @@ export function buildAtlas(inputs: AtlasInput[], options: AtlasOptions): Atlas {
       },
       sourceSize: { w: input.image.width, h: input.image.height },
       duration: input.duration ?? 100,
+      ...(input.pivot ? { pivot: { ...input.pivot } } : {}),
     });
   });
 

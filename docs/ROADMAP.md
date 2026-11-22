@@ -529,7 +529,7 @@ Foundry2D already has both, but the line between them isn't drawn deliberately y
 
 48. ⚠️ **Naming and branding** (requested 2026-11-15, **last**, after Phase 10). Make each app's name consistent everywhere: package name (`package.json`), directory, page title, work-file extension and MIME type. Today they differ, e.g. the level designer is `@apps/level-designer` in `apps/level-designer/`, "Foundry2D · Level Designer" as the title, `.f2dlevel` files with `application/vnd.foundry2d.level+json`. The request is to use one short lower-case name per app in all of these, the level designer as "levels". The pixel editor's name, the exact title format, and how to keep existing `.f2dsprite`/`.f2dlevel` files and their MIME types opening (as `.f2d.json` still does) are to be decided. File handlers in the manifests (item 34) follow the new names.
 
-### Phase 9: Sprite Packer app (TexturePacker-style) ⚠️ (in progress)
+### Phase 9: Sprite Packer app (TexturePacker-style) ✅ (2026-11-22)
 
 **Stages** (planned 2026-11-17, like Phase 8):
 
@@ -547,9 +547,18 @@ Foundry2D already has both, but the line between them isn't drawn deliberately y
   - **Preview and settings:** the sheets side by side on the shared workspace, repacked live (500 sprites in about 0.25 s, longest pause 0.14 s). All engine settings; rotation is off where the layout or data format can't describe it, and the choice is kept. Sheet sizes, fill rate and shared sprites are shown, and so is why packing failed.
   - **Export:** ZIP or separate files: one PNG per sheet plus its data in any `@foundry2d/formats` format (`name.png`, or `name-0.png`… for several).
   - **Work file:** `.f2dpack` (JSON with the original image files embedded), library, recovery, start screen with engine templates, undo for every edit.
-  - **Left for 9.3:** sprite images are stored inside library and recovery copies; moving them to the shared asset store needs the level designer's asset clean-up to know about packs first (it prunes whatever no level uses). Packing runs on the main thread; a worker would remove the pause for very large sets. Transparent pixels lose some colour precision when decoded through a canvas.
+  - **Left for 9.3** (done there): sprite images were stored inside library and recovery copies, and transparent pixels lost some colour precision when decoded.
   - **Shared fix:** shortcuts can opt in to working in form fields (`whileTyping`; the field commits first). Save, Save as, Open and Export do in all three apps, and dropdowns no longer swallow Ctrl shortcuts. Before, Ctrl+S in a name field opened the browser's own save dialog.
-- **9.3 Extras** ⚠️: animation sequences from numeric suffixes with a preview, live folders (re-pack on change), pixel-editor sprites as input, unpacking existing atlases, WebP, premultiplied alpha and scale variants, pivots, and the installable-app build (item 38).
+- **9.3 Extras** ✅ (2026-11-22):
+  - ✅ **Animations:** names that only differ in a trailing number (walk_1, walk (2), run/0…) are sequences. They are packed together, exported as frame tags (and PixiJS `animations`), and played in a preview at the project's frame rate, lined up by pivot. An animation that ends up on several sheets is named and left out of the data. Godot: frames outside every animation become single-frame ones, so no sprite is unreachable.
+  - ✅ **Pivots:** per sprite (presets or x and y), shown on the sheet, kept through re-imports and renames. Written as `anchor` in TexturePacker JSON and `pivotX`/`pivotY` in Starling XML; the other formats have none, and the app says so.
+  - ✅ **Live folders** (Chromium): a watched folder's images and sprites are added, updated and removed as files change (checked every 1.5 s while the page is visible), one undo step each. Watching ends when the pack is closed; a folder that can't be read any more stops being watched and its sprites stay.
+  - ✅ **Pixel-editor sprites:** `.f2dsprite` files come in frame by frame. Reading them is now shared with the level designer (core `readSpriteFrames`).
+  - ✅ **Unpacking atlases:** a sheet added with its data (TexturePacker JSON incl. multi-atlas, Starling XML, LibGDX atlas) becomes its single sprites, trimmed borders restored and rotated ones upright. Rotated regions are read from TexturePacker JSON only: Starling and LibGDX turn sprites their own way, which hasn't been checked against the engines, so those are refused by name.
+  - ✅ **Image output:** PNG or lossless WebP, 1× to 4× (`name@2x`), optional premultiplied alpha. PNGs come from an own encoder and images are decoded without premultiplied alpha where the browser can (Chromium), so nearly transparent pixels keep their exact colours; WebP still goes through the canvas encoder.
+  - ✅ **Shared image storage:** library and recovery copies keep images in the asset store. Deleting unused assets (core `pruneUnusedAssets`) now keeps whatever any app's projects and recovery snapshots use; before, the level designer only looked at its own.
+  - ✅ **Installable build:** manifest, icon, offline worker and `.f2dpack` file handling, like the other apps (items 34 and 38).
+  - ⏸️ **Later, when needed:** packing in a worker (500 sprites pause the page for about 0.14 s), remembering live folders with the pack, reading rotated Starling and LibGDX regions, and fractional scales.
 
 A third app in the monorepo that turns many images into optimised spritesheets plus engine data. The pixel editor keeps its own spritesheet export for its sprites, and the packer is for whole asset folders.
 

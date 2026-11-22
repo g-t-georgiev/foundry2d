@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vite-plus/test";
-import { SHEET_FORMATS, sheetFormat, texturePackerJson, type SheetData } from "../src";
+import {
+  readSheetData,
+  SHEET_FORMATS,
+  sheetFormat,
+  SheetReadError,
+  texturePackerJson,
+  type SheetData,
+} from "../src";
 
 /** Two 16×16 frames: the first untrimmed, the second trimmed to 10×12 at (3, 2). */
 const sheet: SheetData = {
@@ -129,6 +136,117 @@ describe("rotated sprites", () => {
     expect(json.frames[0].rotated).toBe(true);
     for (const f of SHEET_FORMATS.filter((f) => !f.supportsRotation)) {
       expect(() => f.write(rotated, options)).toThrow(/rotated/);
+    }
+  });
+});
+
+describe("pivots and animations", () => {
+  const pivoted: SheetData = {
+    ...sheet,
+    frames: [sheet.frames[0], { ...sheet.frames[1], pivot: { x: 0.5, y: 1 } }],
+  };
+
+  it("writes pivots as anchors (JSON) and untrimmed pixels (Starling)", () => {
+    const json = JSON.parse(sheetFormat("json-hash").write(pivoted, options)) as {
+      frames: Record<string, { anchor?: unknown; pivot?: unknown }>;
+      animations: unknown;
+    };
+    expect(json.frames["walk_1.png"].anchor).toEqual({ x: 0.5, y: 1 });
+    expect(json.frames["walk_1.png"].pivot).toBeUndefined();
+    expect("anchor" in json.frames["walk_0.png"]).toBe(false);
+    expect(json.animations).toEqual({ walk: ["walk_0.png", "walk_1.png"] });
+    expect(sheetFormat("starling-xml").write(pivoted, options)).toContain('pivotX="8" pivotY="16"');
+  });
+
+  it("Godot: frames outside every animation become their own, names are escaped", () => {
+    const tres = sheetFormat("godot-tres").write(sheet, {
+      ...options,
+      frameTags: [{ name: 'a"b', from: 0, to: 0, direction: "forward" }],
+    });
+    expect(tres).toContain('"name": &"a\\"b"');
+    expect(tres).toContain('"name": &"walk_1"');
+    const none = sheetFormat("godot-tres").write(sheet, { ...options, frameTags: undefined });
+    expect(none.match(/"name": /g)).toHaveLength(1);
+    expect(none).toContain('"name": &"default"');
+  });
+});
+
+describe("reading sheet data", () => {
+  it("reads back what the writers write", () => {
+    for (const id of ["json-hash", "json-array", "starling-xml", "libgdx-atlas"] as const) {
+      const pages = readSheetData(sheetFormat(id).write(sheet, options))!;
+      expect(pages).toHaveLength(1);
+      expect(pages[0].image).toBe("walk.png");
+      for (const [i, f] of pages[0].frames.entries()) {
+        const { frame, trimmed, spriteSourceSize, sourceSize } = sheet.frames[i];
+        expect(f.filename).toMatch(new RegExp(`^walk_${i}`));
+        expect(f).toMatchObject({ frame, trimmed, spriteSourceSize, sourceSize });
+      }
+    }
+  });
+
+  it("reads multi-atlas JSON, newer LibGDX files with several pages, and escaped XML", () => {
+    const multi = {
+      textures: [
+        { image: "a.png", frames: [sheet.frames[0]] },
+        { image: "b.png", frames: [] },
+      ],
+    };
+    expect(readSheetData(JSON.stringify(multi))!.map((p) => [p.image, p.frames.length])).toEqual([
+      ["a.png", 1],
+      ["b.png", 0],
+    ]);
+    const atlas = [
+      "one.png",
+      "size: 64, 64",
+      "filter: Nearest, Nearest",
+      "run",
+      "bounds: 2, 3, 10, 12",
+      "offsets: 1, 2, 16, 20",
+      "index: 4",
+      "",
+      "two.png",
+      "size: 32, 32",
+      "solo",
+      "bounds: 0, 0, 8, 8",
+    ].join("\n");
+    const pages = readSheetData(atlas)!;
+    expect(pages.map((p) => [p.image, p.frames.map((f) => f.filename)])).toEqual([
+      ["one.png", ["run_4"]],
+      ["two.png", ["solo"]],
+    ]);
+    expect(pages[0].frames[0]).toMatchObject({
+      frame: { x: 2, y: 3, w: 10, h: 12 },
+      spriteSourceSize: { x: 1, y: 6 }, // 20 - 12 - 2 from the top
+      sourceSize: { w: 16, h: 20 },
+    });
+    const xml = `<TextureAtlas imagePath='a&amp;b.png'><SubTexture name="x &lt; y" x="0" y="0" width="1" height="1"/></TextureAtlas>`;
+    expect(readSheetData(xml)).toMatchObject([
+      { image: "a&b.png", frames: [{ filename: "x < y" }] },
+    ]);
+  });
+
+  it("keeps TexturePacker's rotation, refuses it elsewhere, and ignores other files", () => {
+    const rotated = { frames: [{ ...sheet.frames[0], rotated: true }], meta: {} };
+    expect(readSheetData(JSON.stringify(rotated))![0]).toMatchObject({
+      image: "",
+      frames: [{ rotated: true }],
+    });
+    const xml = `<TextureAtlas imagePath="a.png"><SubTexture name="x" x="0" y="0" width="1" height="1" rotated="true"/></TextureAtlas>`;
+    expect(() => readSheetData(xml)).toThrow(SheetReadError);
+    expect(() => readSheetData("a.png\nx\n  rotate: true\n  xy: 0, 0\n  size: 1, 1\n")).toThrow(
+      SheetReadError
+    );
+    expect(() => readSheetData('{"frames":{"x":{"frame":{"x":0}}}}')).toThrow(SheetReadError);
+    for (const other of [
+      "",
+      "{}",
+      "{broken",
+      '{"format":"foundry2d.pixel"}',
+      "<svg/>",
+      "notes: hello",
+    ]) {
+      expect(readSheetData(other)).toBeNull();
     }
   });
 });

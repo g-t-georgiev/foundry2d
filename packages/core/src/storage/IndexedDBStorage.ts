@@ -60,6 +60,7 @@ export class IndexedDBStorage implements Storage {
     clearRecovery: async (key: string) => {
       await (await this.db).delete("recovery", key);
     },
+    listRecovery: async () => (await this.db).getAllKeys("recovery"),
   };
 
   readonly projects = {
@@ -154,5 +155,9 @@ export class IndexedDBStorageDriver {
 
   clearRecovery(key: string): Promise<void> {
     return this.storage.recovery.clearRecovery(key);
+  }
+
+  listRecovery(): Promise<string[]> {
+    return this.storage.recovery.listRecovery();
   }
 }

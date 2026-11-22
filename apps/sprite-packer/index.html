@@ -82,7 +82,13 @@
             </button>
           </div>
           <div class="button-row">
-            <button class="btn btn-small" id="addImages" title="Add image files">+ Images</button>
+            <button
+              class="btn btn-small"
+              id="addImages"
+              title="Add images, Foundry2D sprites, or a sheet with its data to unpack"
+            >
+              + Images
+            </button>
             <button
               class="btn btn-small"
               id="addFolder"
@@ -90,7 +96,15 @@
             >
               + Folder
             </button>
+            <button
+              class="btn btn-small"
+              id="addLive"
+              title="Watch a folder: its images are added, updated and removed as they change"
+            >
+              Live folder
+            </button>
           </div>
+          <ul id="liveFolders" class="live-folders" aria-label="Live folders" hidden></ul>
           <input
             id="spriteSearch"
             class="input"
@@ -128,89 +142,171 @@
         <div class="canvas-hud zoom-hud" id="zoomHud"></div>
       </main>
 
-      <aside class="sidebar right-sidebar" id="settings" aria-label="Packing settings">
-        <section class="panel-section">
-          <h3 class="section-title">Layout</h3>
+      <aside class="sidebar right-sidebar" id="sidePanel" aria-label="Settings">
+        <section class="panel-section" id="selection" hidden>
+          <h3 class="section-title">Selected</h3>
+          <span id="selectionTitle" class="sprite-name"></span>
           <label class="field">
-            <span class="label">Algorithm</span>
-            <select class="input" data-setting="algorithm">
-              <option value="maxrects">MaxRects (tightest)</option>
-              <option value="shelf">Shelves</option>
-              <option value="grid">Grid</option>
-              <option value="horizontal">One row</option>
-              <option value="vertical">One column</option>
-            </select>
-          </label>
-          <label class="field" data-for="maxrects">
-            <span class="label">Fit</span>
-            <select class="input" data-setting="heuristic">
-              <option value="short-side">Best short side</option>
-              <option value="long-side">Best long side</option>
-              <option value="area">Best area</option>
+            <span class="label">Pivot</span>
+            <select class="input" id="pivotPreset">
+              <option value="none">Engine default</option>
+              <option value="center">Centre</option>
+              <option value="bottom">Bottom centre</option>
+              <option value="top-left">Top left</option>
               <option value="bottom-left">Bottom left</option>
+              <option value="custom">Custom</option>
+              <option value="mixed" hidden>Mixed</option>
             </select>
           </label>
-          <label class="field" data-for="grid">
-            <span class="label">Columns (0: automatic)</span>
-            <input class="input" type="number" min="0" data-setting="columns" />
-          </label>
-          <label class="checkbox-field">
-            <input type="checkbox" data-setting="allowRotation" /> Allow 90° rotation
-          </label>
-          <p class="hint" id="rotationHint" hidden></p>
+          <div class="field-pair">
+            <input
+              class="input"
+              id="pivotX"
+              type="number"
+              step="0.05"
+              placeholder="x"
+              aria-label="Pivot x, 0 left to 1 right"
+            />
+            <input
+              class="input"
+              id="pivotY"
+              type="number"
+              step="0.05"
+              placeholder="y"
+              aria-label="Pivot y, 0 top to 1 bottom"
+            />
+          </div>
+          <p class="hint" id="pivotHint">The chosen data format has no pivots.</p>
         </section>
 
-        <section class="panel-section">
-          <h3 class="section-title">Sprites</h3>
-          <label
-            class="checkbox-field"
-            title="Cut transparent edges; the original size and offset are kept in the data"
-          >
-            <input type="checkbox" data-setting="trim" /> Trim transparent edges
-          </label>
-          <label class="checkbox-field" title="Sprites with the same pixels share one place">
-            <input type="checkbox" data-setting="alias" /> Store identical sprites once
-          </label>
-          <label class="field inline">
-            <span class="label">Extrude (px)</span>
-            <input class="input" type="number" min="0" data-setting="extrude" />
-          </label>
+        <section class="panel-section" id="animationPreview" hidden>
+          <div class="section-header">
+            <h3 class="section-title">Animation</h3>
+            <button class="btn btn-small" id="previewToggle">Pause</button>
+          </div>
+          <select class="input" id="previewSelect" aria-label="Animation"></select>
+          <canvas id="previewCanvas" class="preview-canvas"></canvas>
+          <p class="hint" id="animationHint" hidden></p>
         </section>
 
-        <section class="panel-section">
-          <h3 class="section-title">Sheet</h3>
-          <label class="field inline">
-            <span class="label">Padding (px)</span>
-            <input class="input" type="number" min="0" data-setting="padding" />
-          </label>
-          <label class="field inline">
-            <span class="label">Border (px)</span>
-            <input class="input" type="number" min="0" data-setting="border" />
-          </label>
-          <label class="field inline">
-            <span class="label">Max width</span>
-            <input class="input" type="number" min="1" data-setting="maxWidth" />
-          </label>
-          <label class="field inline">
-            <span class="label">Max height</span>
-            <input class="input" type="number" min="1" data-setting="maxHeight" />
-          </label>
-          <label class="checkbox-field">
-            <input type="checkbox" data-setting="powerOfTwo" /> Power-of-two size
-          </label>
-          <label class="checkbox-field">
-            <input type="checkbox" data-setting="square" /> Square
-          </label>
-        </section>
+        <div id="settings">
+          <section class="panel-section">
+            <h3 class="section-title">Layout</h3>
+            <label class="field">
+              <span class="label">Algorithm</span>
+              <select class="input" data-setting="algorithm">
+                <option value="maxrects">MaxRects (tightest)</option>
+                <option value="shelf">Shelves</option>
+                <option value="grid">Grid</option>
+                <option value="horizontal">One row</option>
+                <option value="vertical">One column</option>
+              </select>
+            </label>
+            <label class="field" data-for="maxrects">
+              <span class="label">Fit</span>
+              <select class="input" data-setting="heuristic">
+                <option value="short-side">Best short side</option>
+                <option value="long-side">Best long side</option>
+                <option value="area">Best area</option>
+                <option value="bottom-left">Bottom left</option>
+              </select>
+            </label>
+            <label class="field" data-for="grid">
+              <span class="label">Columns (0: automatic)</span>
+              <input class="input" type="number" min="0" data-setting="columns" />
+            </label>
+            <label class="checkbox-field">
+              <input type="checkbox" data-setting="allowRotation" /> Allow 90° rotation
+            </label>
+            <p class="hint" id="rotationHint" hidden></p>
+          </section>
 
-        <section class="panel-section">
-          <h3 class="section-title">Data</h3>
-          <label class="field">
-            <span class="label">Format</span>
-            <select class="input" data-setting="dataFormat"></select>
-          </label>
-          <p class="hint" id="formatHint"></p>
-        </section>
+          <section class="panel-section">
+            <h3 class="section-title">Sprites</h3>
+            <label
+              class="checkbox-field"
+              title="Cut transparent edges; the original size and offset are kept in the data"
+            >
+              <input type="checkbox" data-setting="trim" /> Trim transparent edges
+            </label>
+            <label class="checkbox-field" title="Sprites with the same pixels share one place">
+              <input type="checkbox" data-setting="alias" /> Store identical sprites once
+            </label>
+            <label class="field inline">
+              <span class="label">Extrude (px)</span>
+              <input class="input" type="number" min="0" data-setting="extrude" />
+            </label>
+          </section>
+
+          <section class="panel-section">
+            <h3 class="section-title">Sheet</h3>
+            <label class="field inline">
+              <span class="label">Padding (px)</span>
+              <input class="input" type="number" min="0" data-setting="padding" />
+            </label>
+            <label class="field inline">
+              <span class="label">Border (px)</span>
+              <input class="input" type="number" min="0" data-setting="border" />
+            </label>
+            <label class="field inline">
+              <span class="label">Max width</span>
+              <input class="input" type="number" min="1" data-setting="maxWidth" />
+            </label>
+            <label class="field inline">
+              <span class="label">Max height</span>
+              <input class="input" type="number" min="1" data-setting="maxHeight" />
+            </label>
+            <label class="checkbox-field">
+              <input type="checkbox" data-setting="powerOfTwo" /> Power-of-two size
+            </label>
+            <label class="checkbox-field">
+              <input type="checkbox" data-setting="square" /> Square
+            </label>
+          </section>
+
+          <section class="panel-section">
+            <h3 class="section-title">Data</h3>
+            <label class="field">
+              <span class="label">Format</span>
+              <select class="input" data-setting="dataFormat"></select>
+            </label>
+            <p class="hint" id="formatHint"></p>
+            <label
+              class="checkbox-field"
+              title="Sprites numbered walk_1, walk_2… become an animation called walk"
+            >
+              <input type="checkbox" data-setting="animations" /> Numbered sprites are animations
+            </label>
+            <label class="field inline">
+              <span class="label">Frames per second</span>
+              <input class="input" type="number" min="1" max="60" data-setting="fps" />
+            </label>
+          </section>
+
+          <section class="panel-section">
+            <h3 class="section-title">Images</h3>
+            <label class="field">
+              <span class="label">Format</span>
+              <select class="input" data-setting="imageFormat">
+                <option value="png">PNG</option>
+                <option value="webp">WebP (lossless)</option>
+              </select>
+            </label>
+            <div class="scales" role="group" aria-label="Scales">
+              <span class="label">Scales</span>
+              <label class="checkbox-field"><input type="checkbox" data-scale="1" /> 1×</label>
+              <label class="checkbox-field"><input type="checkbox" data-scale="2" /> 2×</label>
+              <label class="checkbox-field"><input type="checkbox" data-scale="3" /> 3×</label>
+              <label class="checkbox-field"><input type="checkbox" data-scale="4" /> 4×</label>
+            </div>
+            <label
+              class="checkbox-field"
+              title="For engines that blend with premultiplied alpha; most expect this off"
+            >
+              <input type="checkbox" data-setting="premultiply" /> Premultiplied alpha
+            </label>
+          </section>
+        </div>
 
         <section class="panel-section">
           <h3 class="section-title">Result</h3>

@@ -5,6 +5,8 @@ export interface RecoveryStore {
   saveRecovery(key: string, data: Uint8Array): Promise<void>;
   loadRecovery(key: string): Promise<Uint8Array | null>;
   clearRecovery(key: string): Promise<void>;
+  /** Keys with a snapshot, from every app. */
+  listRecovery(): Promise<string[]>;
 }
 
 /** @deprecated Use `RecoveryStore`. Kept for existing imports. */

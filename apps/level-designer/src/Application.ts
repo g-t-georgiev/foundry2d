@@ -5,6 +5,7 @@ import {
   RectangleTool,
   StampTool,
   type StampPattern,
+  pruneUnusedAssets,
   ResizeCommand,
   ToolManager,
   type CameraState,
@@ -82,7 +83,7 @@ import {
   isGameFormat,
   toGameFormat,
 } from "./io/gameFormat";
-import { collectAssetRefs, externalizeAssets, internalizeAssets } from "./io/assets";
+import { externalizeAssets, internalizeAssets } from "./io/assets";
 import { renderProjectThumbnail } from "./io/thumbnail";
 import { renderLevelPng } from "./io/levelImage";
 
@@ -718,20 +719,9 @@ export default class Application {
    * unsaved work refers to any more.
    */
   private async pruneAssets(): Promise<void> {
-    const storage = this.session.storage;
-    const keep = new Set<string>();
-    for (const meta of await storage.projects.list()) {
-      const record = await storage.projects.get(meta.id);
-      for (const hash of collectAssetRefs(record?.data)) keep.add(hash);
-    }
     // Unsaved work may reference assets too: refresh its snapshot first.
     if (this.session.state.dirty) await this.session.flushRecovery();
-    const recovered = await this.session.loadRecovery();
-    if (recovered) {
-      const stored = await externalizeAssets(recovered.json, storage.assets);
-      for (const hash of collectAssetRefs(stored)) keep.add(hash);
-    }
-    await storage.assets.prune(keep);
+    await pruneUnusedAssets(this.session.storage);
   }
 
   private markDirty(): void {

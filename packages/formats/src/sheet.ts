@@ -23,6 +23,8 @@ export interface SheetFrame {
   sourceSize: { w: number; h: number };
   /** Milliseconds. */
   duration: number;
+  /** Pivot inside the untrimmed sprite (0..1 from the top-left), when one was chosen. */
+  pivot?: { x: number; y: number };
 }
 
 /** A sheet's size and frames: everything a data format needs. */
@@ -45,7 +47,11 @@ export interface SheetWriteOptions {
   image: string;
   /** Export scale (written where the format has a field for it). */
   scale: number;
-  /** Animations; formats without tags use the first one (or all frames). */
+  /**
+   * Animations over frame ranges. Left out, formats made of animations
+   * (Godot) get one with every frame; given, frames outside every tag become
+   * single-frame animations there, so no sprite is unreachable.
+   */
   frameTags?: readonly FrameTag[];
 }
 
@@ -68,6 +74,8 @@ export interface SheetFormat {
   mime: string;
   /** Can describe sprites stored rotated (TexturePacker's 90° clockwise convention). */
   supportsRotation: boolean;
+  /** Writes sprite pivots. */
+  supportsPivot: boolean;
   write(sheet: SheetData, options: SheetWriteOptions): string;
 }
 
@@ -80,6 +88,8 @@ function noRotation(format: string, sheet: SheetData): void {
 
 /** Strips the extension: "walk_0.png" → "walk_0". */
 const stem = (name: string) => name.replace(/\.[^./]+$/, "");
+
+const round = (n: number) => Math.round(n * 1000) / 1000;
 
 const xmlEscape = (text: string) =>
   text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -103,10 +113,22 @@ function texturePacker(format: "hash" | "array") {
       scale: String(options.scale),
       frameTags: options.frameTags ?? [],
     };
-    if (format === "array") return JSON.stringify({ frames: sheet.frames, meta }, null, 2);
-    const frames: Record<string, Omit<SheetFrame, "filename">> = {};
-    for (const { filename, ...rest } of sheet.frames) frames[filename] = rest;
-    return JSON.stringify({ frames, meta }, null, 2);
+    // PixiJS and Phaser read a sprite's pivot as `anchor`; PixiJS reads `animations`.
+    const entries = sheet.frames.map(({ pivot, ...frame }) =>
+      pivot ? { ...frame, anchor: pivot } : frame
+    );
+    const tags = options.frameTags ?? [];
+    const animations = tags.length
+      ? {
+          animations: Object.fromEntries(
+            tags.map((t) => [t.name, sheet.frames.slice(t.from, t.to + 1).map((f) => f.filename)])
+          ),
+        }
+      : {};
+    if (format === "array")
+      return JSON.stringify({ frames: entries, ...animations, meta }, null, 2);
+    const frames = Object.fromEntries(entries.map(({ filename, ...rest }) => [filename, rest]));
+    return JSON.stringify({ frames, ...animations, meta }, null, 2);
   };
 }
 
@@ -144,6 +166,12 @@ function starlingXml(sheet: SheetData, options: SheetWriteOptions): string {
         `frameHeight="${f.sourceSize.h}"`
       );
     }
+    if (f.pivot) {
+      attrs.push(
+        `pivotX="${round(f.pivot.x * f.sourceSize.w)}"`,
+        `pivotY="${round(f.pivot.y * f.sourceSize.h)}"`
+      );
+    }
     return `  <SubTexture ${attrs.join(" ")}/>`;
   });
   return [
@@ -172,9 +200,15 @@ function godotTres(sheet: SheetData, options: SheetWriteOptions): string {
   const frames = sheet.frames;
   const base = Math.max(1, Math.min(...frames.map((f) => f.duration || 100)));
   const fps = Math.round((1000 / base) * 1000) / 1000;
-  const tags: readonly FrameTag[] = options.frameTags?.length
-    ? options.frameTags
+  const given = options.frameTags;
+  const tags: FrameTag[] = given
+    ? [...given]
     : [{ name: "default", from: 0, to: frames.length - 1, direction: "forward" }];
+  frames.forEach((f, i) => {
+    if (tags.some((t) => i >= t.from && i <= t.to)) return;
+    tags.push({ name: stem(f.filename), from: i, to: i, direction: "forward" });
+  });
+  const quoted = (text: string) => JSON.stringify(text);
 
   const out: string[] = [
     `[gd_resource type="SpriteFrames" load_steps=${frames.length + 2} format=3]`,
@@ -206,7 +240,7 @@ function godotTres(sheet: SheetData, options: SheetWriteOptions): string {
       const relative = Math.round(((frames[i].duration || base) / base) * 1000) / 1000;
       return `{\n"duration": ${godotFloat(relative)},\n"texture": SubResource("AtlasTexture_${i}")\n}`;
     });
-    return `{\n"frames": [${entries.join(", ")}],\n"loop": true,\n"name": &"${tag.name}",\n"speed": ${godotFloat(fps)}\n}`;
+    return `{\n"frames": [${entries.join(", ")}],\n"loop": true,\n"name": &${quoted(tag.name)},\n"speed": ${godotFloat(fps)}\n}`;
   };
   out.push("[resource]", `animations = [${tags.map(animation).join(", ")}]`, "");
   return out.join("\n");
@@ -287,6 +321,7 @@ export const SHEET_FORMATS: readonly SheetFormat[] = [
     extension: ".json",
     mime: "application/json",
     supportsRotation: true,
+    supportsPivot: true,
     write: texturePacker("hash"),
   },
   {
@@ -296,6 +331,7 @@ export const SHEET_FORMATS: readonly SheetFormat[] = [
     extension: ".json",
     mime: "application/json",
     supportsRotation: true,
+    supportsPivot: true,
     write: texturePacker("array"),
   },
   {
@@ -305,6 +341,7 @@ export const SHEET_FORMATS: readonly SheetFormat[] = [
     extension: ".xml",
     mime: "application/xml",
     supportsRotation: false,
+    supportsPivot: true,
     write: starlingXml,
   },
   {
@@ -314,6 +351,7 @@ export const SHEET_FORMATS: readonly SheetFormat[] = [
     extension: ".tres",
     mime: "text/plain",
     supportsRotation: false,
+    supportsPivot: false,
     write: godotTres,
   },
   {
@@ -323,6 +361,7 @@ export const SHEET_FORMATS: readonly SheetFormat[] = [
     extension: ".atlas",
     mime: "text/plain",
     supportsRotation: false,
+    supportsPivot: false,
     write: libgdxAtlas,
   },
   {
@@ -332,6 +371,7 @@ export const SHEET_FORMATS: readonly SheetFormat[] = [
     extension: ".css",
     mime: "text/css",
     supportsRotation: false,
+    supportsPivot: false,
     write: cssSprites,
   },
 ];

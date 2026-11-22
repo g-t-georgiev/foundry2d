@@ -106,7 +106,7 @@ test("re-adding a file updates its sprite; unreadable files are reported", async
     { name: "a.png", mimeType: "image/png", buffer: await png(page, 12, 8, "#00f") },
     { name: "bad.png", mimeType: "image/png", buffer: Buffer.from("not an image") },
   ]);
-  await expect(page.locator("#statMessage")).toContainText("updated 1, could not read bad.png");
+  await expect(page.locator("#statMessage")).toHaveText("Updated 1, could not read bad.png");
   expect(await names(page)).toEqual(["a"]);
   await packed(page);
   expect(await sheets(page)).toEqual([[12, 8]]);
@@ -291,4 +291,224 @@ test("unsaved work survives a reload, and saved packs reopen from the start scre
     .click();
   await expect(page.locator("#spriteCount")).toHaveText("4");
   await expect(page.locator("#projectName")).toHaveValue("heroes");
+});
+
+/** Adds files through the + Images button. */
+async function addFiles(page: Page, files: { name: string; buffer: Buffer }[]): Promise<void> {
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "+ Images" }).click();
+  await (
+    await chooser
+  ).setFiles(files.map((f) => ({ ...f, mimeType: "application/octet-stream" })));
+}
+
+/** Runs an export (the ZIP by default) and returns the downloaded bytes by file name. */
+async function exportFiles(page: Page, count: number): Promise<Map<string, Buffer>> {
+  await packed(page);
+  const downloads: Download[] = [];
+  const listener = (d: Download) => downloads.push(d);
+  page.on("download", listener);
+  const button = page.locator("#exportButton");
+  await button.getByRole("button", { name: "More options" }).click();
+  await button.getByRole("menuitemradio", { name: /separate files/ }).click();
+  await expect.poll(() => downloads.length).toBe(count);
+  page.off("download", listener);
+  const out = new Map<string, Buffer>();
+  for (const d of downloads) out.set(d.suggestedFilename(), await readFile(await d.path()));
+  return out;
+}
+
+/** The pixels of a sprite, as the app decoded them. */
+const pixelsOf = (page: Page, name: string) =>
+  page.evaluate(async (name) => {
+    const app = window.foundry as unknown as {
+      project: { sprites: { name: string; dataUrl: string }[] };
+      images: {
+        get(url: string): Promise<{ width: number; height: number; data: Uint8ClampedArray }>;
+      };
+    };
+    const sprite = app.project.sprites.find((s) => s.name === name)!;
+    const { width, height, data } = await app.images.get(sprite.dataUrl);
+    return { width, height, data: [...data] };
+  }, name);
+
+test("numbered sprites play as an animation and are exported as one", async ({ page }) => {
+  await addSprites(page, {
+    "walk_1.png": [10, 20, "#f00"],
+    "walk_2.png": [12, 20, "#0f0"],
+    "idle.png": [8, 8, "#00f"],
+  });
+  await expect(page.locator("#previewSelect option")).toHaveText(["walk (2)"]);
+  const shown = () =>
+    page.locator("#previewCanvas").evaluate((canvas: HTMLCanvasElement) => {
+      const { data } = canvas
+        .getContext("2d")!
+        .getImageData(canvas.width / 2, canvas.height / 2, 1, 1);
+      return [data[0], data[1]].join();
+    });
+  // Both frames come by, then it stands still while paused.
+  await expect.poll(shown).toBe("255,0");
+  await expect.poll(shown).toBe("0,255");
+  await page.getByRole("button", { name: "Pause" }).click();
+  const still = await shown();
+  await page.waitForTimeout(400);
+  expect(await shown()).toBe(still);
+
+  const files = await exportFiles(page, 2);
+  const data = JSON.parse(files.get("untitled.json")!.toString()) as { animations: unknown };
+  expect(data.animations).toEqual({ walk: ["walk_1.png", "walk_2.png"] });
+
+  await setting(page, "animations").uncheck();
+  await expect(page.locator("#animationPreview")).toBeHidden();
+});
+
+test("pivots of the selected sprites are edited, undone and exported", async ({ page }) => {
+  await addSprites(page, { "a.png": [10, 20, "#f00"], "b.png": [10, 10, "#0f0"] });
+  await expect(page.locator("#selection")).toBeHidden();
+  await page.locator("#spriteList").focus();
+  await page.keyboard.press("Control+a");
+  await expect(page.locator("#selectionTitle")).toHaveText("2 sprites");
+  await page.locator("#pivotPreset").selectOption("bottom");
+  await page.locator("#spriteList .sprite-item", { hasText: "a" }).first().click();
+  await expect(page.locator("#pivotPreset")).toHaveValue("bottom");
+  await page.locator("#pivotX").fill("0.25");
+  await page.locator("#pivotX").press("Enter");
+  await expect(page.locator("#pivotPreset")).toHaveValue("custom");
+  const files = await exportFiles(page, 2);
+  const { frames } = JSON.parse(files.get("untitled.json")!.toString()) as {
+    frames: Record<string, { anchor: unknown }>;
+  };
+  expect(frames["a.png"].anchor).toEqual({ x: 0.25, y: 1 });
+  expect(frames["b.png"].anchor).toEqual({ x: 0.5, y: 1 });
+  await page.keyboard.press("Control+z");
+  await expect(page.locator("#pivotPreset")).toHaveValue("bottom");
+  await setting(page, "dataFormat").selectOption("css");
+  await expect(page.locator("#pivotHint")).toBeVisible();
+});
+
+test("scales and WebP", async ({ page }) => {
+  await addSprites(page, { "a.png": [10, 20, "#f00"] });
+  await setting(page, "imageFormat").selectOption("webp");
+  await page.locator('[data-scale="2"]').check();
+  const files = await exportFiles(page, 4);
+  expect([...files.keys()].sort()).toEqual([
+    "untitled.json",
+    "untitled.webp",
+    "untitled@2x.json",
+    "untitled@2x.webp",
+  ]);
+  expect(files.get("untitled@2x.webp")!.subarray(8, 12).toString()).toBe("WEBP");
+  // The last scale can't be unticked.
+  await page.locator('[data-scale="1"]').uncheck();
+  await page.locator('[data-scale="2"]').click();
+  await expect(page.locator('[data-scale="2"]')).toBeChecked();
+});
+
+test("a sheet with its data is unpacked into its sprites, pixel for pixel", async ({ page }) => {
+  await addSprites(page, {
+    "walk_1.png": [10, 21, "#f00"],
+    "walk_2.png": [12, 20, "rgba(0, 255, 0, 0.02)"],
+    "wide.png": [40, 6, "#00f"],
+  });
+  await setting(page, "allowRotation").check();
+  const before = new Map<string, unknown>();
+  for (const name of await names(page)) before.set(name, await pixelsOf(page, name));
+  const files = await exportFiles(page, 2);
+
+  await page.locator('[data-command="open"]').click();
+  await page
+    .locator("project-browser")
+    .getByRole("button", { name: /Empty pack/ })
+    .click();
+  await expect(page.locator("#spriteCount")).toHaveText("0");
+  await addFiles(
+    page,
+    [...files].map(([name, buffer]) => ({ name, buffer }))
+  );
+  await expect.poll(() => names(page)).toEqual(["walk_1", "walk_2", "wide"]);
+  for (const [name, pixels] of before) expect(await pixelsOf(page, name)).toEqual(pixels);
+
+  // Data without its image says what is missing.
+  await addFiles(page, [{ name: "lonely.json", buffer: files.get("untitled.json")! }]);
+  await expect(page.locator("#statMessage")).toContainText(
+    "lonely.json (add untitled.png with it)"
+  );
+});
+
+test("pixel-editor sprites come in frame by frame", async ({ page }) => {
+  const document = (color: number) => ({
+    width: 2,
+    height: 1,
+    activeLayerId: "l",
+    layers: [
+      { id: "l", name: "L", visible: true, locked: false, opacity: 1, data: [1, color, 1, 0] },
+    ],
+  });
+  const sprite = {
+    format: "foundry2d.pixel",
+    version: 2,
+    name: "hero",
+    fps: 8,
+    frames: [
+      { duration: null, document: document(0xff0000ff) },
+      { duration: null, document: document(0xff00ff00) },
+    ],
+  };
+  await addFiles(page, [
+    { name: "hero.f2dsprite", buffer: Buffer.from(JSON.stringify(sprite)) },
+    { name: "package.json", buffer: Buffer.from("{}") },
+  ]);
+  await expect.poll(() => names(page)).toEqual(["hero_0", "hero_1"]);
+  await expect(page.locator("#statMessage")).toHaveText("Added 2 sprites");
+  expect((await pixelsOf(page, "hero_1")).data).toEqual([0, 255, 0, 255, 0, 0, 0, 0]);
+});
+
+test("a live folder adds, updates and removes sprites as files change", async ({ page }) => {
+  // The browser's private file system stands in for a picked folder.
+  await page.evaluate(async () => {
+    const root = await navigator.storage.getDirectory();
+    const dir = await root.getDirectoryHandle("art", { create: true });
+    Object.assign(window, { showDirectoryPicker: () => Promise.resolve(dir) });
+  });
+  const write = async (name: string, data: Buffer | null) => {
+    await page.evaluate(
+      async ({ name, bytes }) => {
+        const root = await navigator.storage.getDirectory();
+        const dir = await root.getDirectoryHandle("art");
+        if (bytes === null) return dir.removeEntry(name);
+        const stream = await (await dir.getFileHandle(name, { create: true })).createWritable();
+        await stream.write(new Uint8Array(bytes));
+        await stream.close();
+      },
+      { name, bytes: data && [...data] }
+    );
+  };
+  await write("a.png", await png(page, 8, 8, "#f00"));
+  await write("b.png", await png(page, 8, 8, "#0f0"));
+  await page.getByRole("button", { name: "Live folder" }).click();
+  await expect.poll(() => names(page)).toEqual(["art/a", "art/b"]);
+  await expect(page.locator("#liveFolders")).toContainText("art");
+
+  await write("b.png", await png(page, 20, 8, "#0f0"));
+  await write("c.png", await png(page, 8, 8, "#00f"));
+  await write("a.png", null);
+  await expect.poll(() => names(page)).toEqual(["art/b", "art/c"]);
+  await expect.poll(async () => (await pixelsOf(page, "art/b")).width).toBe(20);
+
+  // Another file type under the same name keeps the sprite.
+  const webp = await page.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 5;
+    canvas.getContext("2d")!.fillRect(0, 0, 5, 5);
+    return canvas.toDataURL("image/webp", 1).split(",")[1];
+  });
+  await write("c.webp", Buffer.from(webp, "base64"));
+  await write("c.png", null);
+  await expect.poll(async () => (await pixelsOf(page, "art/c")).width).toBe(5);
+  expect(await names(page)).toEqual(["art/b", "art/c"]);
+
+  await page.getByRole("button", { name: /Stop watching art/ }).click();
+  await write("d.png", await png(page, 8, 8, "#fff"));
+  await page.waitForTimeout(2500);
+  expect(await names(page)).toEqual(["art/b", "art/c"]);
 });

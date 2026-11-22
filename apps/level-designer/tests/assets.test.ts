@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vite-plus/test";
-import { MemoryStorage } from "@foundry2d/core";
+import { collectAssetRefs, MemoryStorage } from "@foundry2d/core";
 import { createProjectFromPreset } from "../src/model/presets";
 import { deserializeProject, ProjectFormatError, serializeProject } from "../src/io/projectFile";
-import { collectAssetRefs, externalizeAssets, internalizeAssets } from "../src/io/assets";
+import { externalizeAssets, internalizeAssets } from "../src/io/assets";
 
 const PNG = "data:image/png;base64,iVBORw0KGgo=";
 

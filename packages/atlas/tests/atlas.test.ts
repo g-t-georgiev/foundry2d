@@ -2,8 +2,13 @@ import { describe, it, expect } from "vite-plus/test";
 import {
   buildAtlas,
   createImage,
+  encodePng,
   pack,
+  premultiply,
+  rotateImageCCW,
   rotateImageCW,
+  scaleSheet,
+  unpackFrame,
   type PackOptions,
   type PackSize,
   type RgbaImage,
@@ -283,5 +288,102 @@ describe("buildAtlas", () => {
     expect(w.rotated).toBe(true);
     expect(w.frame).toMatchObject({ w: 3, h: 1 });
     expect(px(atlas.sheets[0].image, w.frame.x, w.frame.y + 2)).toEqual([200, 0, 0, 255]);
+  });
+});
+
+describe("pivots, scales and unpacking", () => {
+  /** Sprites with a transparent margin and a different pixel everywhere. */
+  const sprite = (w: number, h: number, seed: number) =>
+    image(w, h, (x, y) =>
+      x < 2 || y < 1 || x >= w - 1
+        ? [0, 0, 0, 0]
+        : [(x * 31 + seed) & 255, (y * 17) & 255, seed, 255]
+    );
+  const inputs = Array.from({ length: 12 }, (_, i) => ({
+    name: `s${i}.png`,
+    image: sprite(8 + i * 3, 30 - i * 2, i * 20),
+  }));
+
+  it("unpacking a trimmed, rotated, extruded atlas gives the original sprites back", () => {
+    const atlas = buildAtlas(inputs, {
+      algorithm: "maxrects",
+      allowRotation: true,
+      trim: true,
+      alias: true,
+      padding: 1,
+      border: 2,
+      extrude: 1,
+      maxWidth: 80,
+      maxHeight: 64,
+    });
+    expect(atlas.sheets.length).toBeGreaterThan(1);
+    const frames = atlas.sheets.flatMap((s) => s.frames.map((f) => ({ sheet: s.image, f })));
+    expect(frames.some(({ f }) => f.rotated)).toBe(true);
+    for (const { sheet, f } of frames) {
+      const original = inputs.find((i) => i.name === f.filename)!.image;
+      expect(unpackFrame(sheet, f)).toEqual(original);
+    }
+  });
+
+  it("refuses frames outside the sheet or their original size", () => {
+    const atlas = buildAtlas([inputs[0]], { algorithm: "maxrects", trim: true });
+    const [f] = atlas.sheets[0].frames;
+    const sheet = atlas.sheets[0].image;
+    expect(() => unpackFrame(sheet, { ...f, frame: { ...f.frame, x: 5 } })).toThrow(/outside/);
+    expect(() => unpackFrame(sheet, { ...f, sourceSize: { w: 1, h: 1 } })).toThrow(/original size/);
+  });
+
+  it("carries pivots and scales sheets with their frames", () => {
+    const atlas = buildAtlas([{ ...inputs[0], pivot: { x: 0.5, y: 1 } }, inputs[1]], {
+      algorithm: "horizontal",
+      trim: true,
+    });
+    const [a, b] = atlas.sheets[0].frames;
+    expect(a.pivot).toEqual({ x: 0.5, y: 1 });
+    expect("pivot" in b).toBe(false);
+    const doubled = scaleSheet(atlas.sheets[0], 2);
+    expect(doubled.image.width).toBe(atlas.sheets[0].image.width * 2);
+    for (const [i, f] of doubled.frames.entries()) {
+      const small = unpackFrame(atlas.sheets[0].image, atlas.sheets[0].frames[i]);
+      const big = unpackFrame(doubled.image, f);
+      expect([big.width, big.height]).toEqual([small.width * 2, small.height * 2]);
+      expect(px(big, 9, 7)).toEqual(px(small, 4, 3));
+    }
+  });
+
+  it("turns images back and premultiplies", () => {
+    const img = sprite(5, 3, 9);
+    expect(rotateImageCCW(rotateImageCW(img))).toEqual(img);
+    const half = image(1, 1, () => [200, 100, 3, 128]);
+    expect(px(premultiply(half), 0, 0)).toEqual([100, 50, 2, 128]);
+  });
+});
+
+describe("encodePng", () => {
+  it("keeps every byte, nearly transparent pixels included", async () => {
+    const img = image(7, 5, (x, y) => [x * 40, y * 50, (x * y * 13) & 255, (x * 7 + y) & 255]);
+    const png = await encodePng(img);
+    const view = new DataView(png.buffer);
+    expect([view.getUint32(16), view.getUint32(20)]).toEqual([7, 5]);
+    // Undo it by hand: inflate the one IDAT chunk and reverse the row filters.
+    const idat = new TextDecoder("latin1").decode(png).indexOf("IDAT");
+    const data = png.slice(idat + 4, idat + 4 + view.getUint32(idat - 4));
+    const raw = new Uint8Array(
+      await new Response(
+        new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate"))
+      ).arrayBuffer()
+    );
+    const stride = 7 * 4;
+    const out = new Uint8ClampedArray(stride * 5);
+    for (let y = 0; y < 5; y++) {
+      const filter = raw[y * (stride + 1)];
+      for (let i = 0; i < stride; i++) {
+        const left = i >= 4 ? out[y * stride + i - 4] : 0;
+        const above = y > 0 ? out[(y - 1) * stride + i] : 0;
+        const base = filter === 1 ? left : filter === 2 ? above : 0;
+        out[y * stride + i] = (raw[y * (stride + 1) + 1 + i] + base) & 255;
+      }
+    }
+    expect(out).toEqual(img.data);
   });
 });

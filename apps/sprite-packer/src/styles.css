@@ -243,3 +243,44 @@ body.dropping .canvas-viewport::after {
 .right-sidebar .field.inline {
   justify-content: space-between;
 }
+
+.scales {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.scales .label {
+  flex-basis: 100%;
+}
+
+.scales .checkbox-field {
+  gap: 4px;
+}
+
+.preview-canvas {
+  width: 100%;
+  height: 140px;
+  background: repeating-conic-gradient(#2a2d33 0% 25%, #24262b 0% 50%) 0 0 / 12px 12px;
+  border: 1px solid var(--theme-border-color);
+  border-radius: 6px;
+}
+
+.live-folders {
+  padding: 0;
+  list-style: none;
+}
+
+.live-folders li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--theme-color-accent);
+  font-size: 12px;
+}
+
+#selectionTitle {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}

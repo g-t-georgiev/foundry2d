@@ -1,19 +1,21 @@
-import { buildAtlas, type Atlas } from "@foundry2d/atlas";
-import type { Storage } from "@foundry2d/core";
+import { buildAtlas, type Atlas, type RgbaImage } from "@foundry2d/atlas";
+import { pruneUnusedAssets, type Storage } from "@foundry2d/core";
 import {
   bindProjectBrowser,
+  el,
   SplitButtonEvents,
   type ProjectBrowser,
   type SplitButton,
 } from "@foundry2d/ui";
 import { ProjectFiles, ProjectSession, Workspace } from "@foundry2d/workspace";
-import { exportSheets, sheetFiles, toCanvas } from "./export";
+import { exportSheets, frameName, sheetFiles, spriteOfFrame, toCanvas } from "./export";
+import { externalizeSprites, internalizeSprites } from "./io/assets";
 import {
   filesFromDrop,
   filesFromInput,
-  IMAGE_ACCEPT,
   ImageStore,
-  isImagePath,
+  IMPORT_ACCEPT,
+  isImportPath,
   type ImportFile,
 } from "./io/images";
 import {
@@ -23,20 +25,25 @@ import {
   PackFormatError,
   toPackFile,
 } from "./io/packFile";
-import { DEFAULT_NAME, PackProject, type SpriteImage } from "./model/PackProject";
-import { atlasOptions, DEFAULT_SETTINGS, type PackSettings } from "./model/settings";
+import {
+  LiveFolder,
+  pickLiveFolder,
+  supportsLiveFolders,
+  type DirectoryLike,
+} from "./io/liveFolder";
+import { detectAnimations, frameTags, packOrder, type Animation } from "./model/animations";
+import { DEFAULT_NAME, PackProject } from "./model/PackProject";
+import { atlasOptions, DEFAULT_SETTINGS, writesPivots, type PackSettings } from "./model/settings";
 import { SheetScene } from "./SheetScene";
+import { AnimationPreview } from "./ui/AnimationPreview";
+import { PivotEditor } from "./ui/PivotEditor";
 import { SettingsPanel } from "./ui/SettingsPanel";
 import { SpriteList } from "./ui/SpriteList";
 
 const $ = <T extends Element = HTMLElement>(selector: string) =>
   document.querySelector<T>(selector)!;
 
-interface PackWork {
-  name: string;
-  settings: PackSettings;
-  images: SpriteImage[];
-}
+type PackWork = ReturnType<typeof fromPackFile>;
 
 /** Start-screen templates: an empty pack set up for an engine. */
 const TEMPLATES: {
@@ -71,8 +78,14 @@ const TEMPLATES: {
   },
 ];
 
-/** The frame key of a sprite in the data files. */
-const frameName = (name: string) => `${name}.png`;
+/** A folder kept in sync, and the sprites each of its files gave. */
+interface Watched {
+  folder: LiveFolder;
+  names: Map<string, string[]>;
+}
+
+/** How often live folders are checked, in ms. */
+const LIVE_INTERVAL = 1500;
 
 /** Composition root of the sprite packer. */
 export default class Application {
@@ -89,6 +102,13 @@ export default class Application {
   private readonly scene: SheetScene;
   private readonly list: SpriteList;
   private readonly settings: SettingsPanel;
+  /** The animations found among the sprites at the last packing. */
+  animations: Animation[] = [];
+
+  private readonly preview: AnimationPreview;
+  private readonly pivots: PivotEditor;
+  private watched: Watched[] = [];
+  private scanning = false;
   private selected = new Set<string>();
   /** Frame names of the selected sprites, for the sheet's outlines. */
   private selectedFrames = new Set<string>();
@@ -126,6 +146,15 @@ export default class Application {
       this.settings.render(project.settings);
     });
 
+    this.preview = new AnimationPreview(
+      $<HTMLCanvasElement>("#previewCanvas"),
+      $<HTMLSelectElement>("#previewSelect"),
+      $<HTMLButtonElement>("#previewToggle")
+    );
+    this.pivots = new PivotEditor($("#selection"), (pivot) =>
+      project.setPivot(this.selected, pivot)
+    );
+
     this.session = new ProjectSession({
       app: "pack",
       storage,
@@ -136,6 +165,8 @@ export default class Application {
         extensions: [PACK_EXTENSION],
       },
       serialize: () => toPackFile(project),
+      toStored: (json) => externalizeSprites(json, storage.assets),
+      fromStored: (json) => internalizeSprites(json, storage.assets),
       getName: () => project.name,
       thumbnail: () => this.thumbnail(),
       onChange: (state) => {
@@ -169,6 +200,11 @@ export default class Application {
       isUserFacingError: (error) => error instanceof PackFormatError,
       notify: (message, timeout) => this.notify(message, timeout),
       setName: (name) => project.setName(name),
+      afterDelete: async () => {
+        // Unsaved work may use images too: refresh its snapshot first.
+        if (this.session.state.dirty) await this.session.flushRecovery();
+        await pruneUnusedAssets(storage);
+      },
     });
     bindProjectBrowser(browser, this.files);
 
@@ -198,21 +234,91 @@ export default class Application {
 
   /** Imports files (other file types are ignored) as one undo step. */
   async importFiles(files: readonly ImportFile[]): Promise<void> {
-    const usable = files.filter((f) => isImagePath(f.path));
+    const usable = files.filter((f) => isImportPath(f.path));
     if (usable.length === 0) {
-      if (files.length) this.notify("No images there (PNG, WebP, JPEG, GIF or BMP).", 4000);
+      if (files.length) {
+        this.notify("No images there (PNG, WebP, JPEG, GIF, BMP or a Foundry2D sprite).", 4000);
+      }
       return;
     }
     const { images, failed } = await this.images.read(usable);
-    const wasEmpty = this.project.sprites.length === 0;
-    if (wasEmpty) this.fitNext = true;
-    const { added, updated } = this.project.addImages(images);
-    const parts = [
-      added ? `Added ${added} sprite${added === 1 ? "" : "s"}` : "",
-      updated ? `updated ${updated}` : "",
-      failed.length ? `could not read ${failed.join(", ")}` : "",
-    ].filter(Boolean);
-    this.notify(parts.join(", ") || "Nothing new: these sprites are already here.", 4000);
+    if (this.project.sprites.length === 0) this.fitNext = true;
+    const result = this.project.addImages(images);
+    this.notify(
+      summary(result, failed) || "Nothing new: these sprites are already here.",
+      failed.length ? 8000 : 4000
+    );
+  }
+
+  // ------------------------------------------------------------------ live folders
+
+  /** Keeps a folder's images in the pack until it is stopped or another pack opens. */
+  async watch(handle: DirectoryLike): Promise<void> {
+    this.watched.push({ folder: new LiveFolder(handle), names: new Map() });
+    this.renderWatched();
+    await this.scanFolders();
+  }
+
+  private stopWatching(entry: Watched): void {
+    this.watched = this.watched.filter((w) => w !== entry);
+    this.renderWatched();
+  }
+
+  /** Applies what changed in the live folders, one undo step per folder. */
+  private async scanFolders(): Promise<void> {
+    if (this.scanning) return;
+    this.scanning = true;
+    try {
+      for (const entry of this.watched) {
+        try {
+          await this.scanFolder(entry);
+        } catch (error) {
+          // Moved, deleted or no longer allowed: its sprites stay as they are.
+          this.stopWatching(entry);
+          this.notify(`Stopped watching ${entry.folder.name}: ${(error as Error).message}`, 8000);
+        }
+      }
+    } finally {
+      this.scanning = false;
+    }
+  }
+
+  private async scanFolder(entry: Watched): Promise<void> {
+    const { changed, removed } = await entry.folder.scan();
+    if (changed.length === 0 && removed.length === 0) return;
+    const { images, failed, names } = await this.images.read(changed);
+    // Stopped (or another pack opened) while reading.
+    if (!this.watched.includes(entry)) return;
+    const gone = removed.flatMap((path) => entry.names.get(path) ?? []);
+    for (const path of removed) entry.names.delete(path);
+    for (const [path, now] of names) {
+      // A sprite saved with fewer frames gives fewer names than before.
+      gone.push(...(entry.names.get(path) ?? []).filter((n) => !now.includes(n)));
+      entry.names.set(path, now);
+    }
+    // A name another file still gives stays (e.g. a.png replaced by a.webp).
+    const given = new Set(this.watched.flatMap((w) => [...w.names.values()].flat()));
+    const lost = gone.filter((name) => !given.has(name));
+    if (this.project.sprites.length === 0) this.fitNext = true;
+    const text = summary(this.project.sync(images, lost), failed);
+    if (text) this.notify(`${entry.folder.name}: ${text}`, failed.length ? 8000 : 4000);
+  }
+
+  private renderWatched(): void {
+    const list = $("#liveFolders");
+    list.hidden = this.watched.length === 0;
+    list.replaceChildren(
+      ...this.watched.map((entry) => {
+        const stop = el("button", {
+          className: "btn btn-icon btn-small",
+          textContent: "✕",
+          title: `Stop watching ${entry.folder.name} (its sprites stay)`,
+        });
+        stop.setAttribute("aria-label", stop.title);
+        stop.addEventListener("click", () => this.stopWatching(entry));
+        return el("li", {}, el("span", { textContent: `● ${entry.folder.name}` }), stop);
+      })
+    );
   }
 
   private remove(ids: string[]): void {
@@ -247,6 +353,10 @@ export default class Application {
     $("#spriteCount").textContent = String(sprites.length);
     $("#emptyHint").hidden = sprites.length > 0;
     $<HTMLButtonElement>("#removeSprites").disabled = this.selected.size === 0;
+    this.pivots.render(
+      sprites.filter((s) => this.selected.has(s.id)),
+      writesPivots(this.project.settings)
+    );
   }
 
   // ------------------------------------------------------------------ packing
@@ -272,30 +382,52 @@ export default class Application {
   private async pack(): Promise<void> {
     const run = this.packRun;
     const { sprites, settings } = this.project;
+    const animations = settings.animations ? detectAnimations(sprites.map((s) => s.name)) : [];
+    const byName = new Map(sprites.map((s) => [s.name, s]));
+    const pixels = new Map<string, RgbaImage>();
     let atlas: Atlas | null = null;
     let problem: string | null = null;
     try {
-      const inputs = [];
       for (const s of sprites) {
-        let image;
         try {
-          image = await this.images.get(s.dataUrl);
+          pixels.set(s.name, await this.images.get(s.dataUrl));
         } catch {
           throw new Error(`The image of "${s.name}" can't be read.`);
         }
-        inputs.push({ name: frameName(s.name), image });
       }
       if (run !== this.packRun) return; // overtaken by a newer edit
+      const order = packOrder(
+        sprites.map((s) => s.name),
+        animations
+      );
+      const inputs = order.map((name) => ({
+        name: frameName(name),
+        image: pixels.get(name)!,
+        duration: 1000 / settings.fps,
+        pivot: byName.get(name)!.pivot,
+      }));
       if (inputs.length) atlas = buildAtlas(inputs, atlasOptions(settings));
     } catch (error) {
       if (run !== this.packRun) return;
       problem = (error as Error).message;
     }
+    this.animations = animations;
     this.images.keepOnly(sprites.map((s) => s.dataUrl));
     this.atlas = atlas;
     this.packing = false;
     this.scene.setAtlas(atlas);
     this.renderStats(problem);
+    // After the panel is shown, so the preview has its size.
+    this.preview.setClips(
+      animations.map((a) => ({
+        name: a.name,
+        frames: a.frames.flatMap((name) => {
+          const image = pixels.get(name);
+          return image ? [{ image, pivot: byName.get(name)?.pivot }] : [];
+        }),
+      })),
+      settings.fps
+    );
     if (atlas && this.fitNext) {
       this.fitNext = false;
       void this.workspace.fitToView();
@@ -314,6 +446,22 @@ export default class Application {
       : "—";
     $("#statFill").textContent = atlas ? `${Math.round(atlas.fillRate * 100)}%` : "—";
     $("#statShared").textContent = atlas ? String(atlas.aliased) : "—";
+    $("#animationPreview").hidden = this.animations.length === 0;
+    // Data formats describe an animation within one sheet.
+    const tagged = new Set(
+      atlas?.sheets.flatMap((s) =>
+        frameTags(
+          s.frames.map((f) => spriteOfFrame(f.filename)),
+          this.animations
+        ).map((t) => t.name)
+      )
+    );
+    const split = atlas ? this.animations.filter((a) => !tagged.has(a.name)) : [];
+    const warning = $("#animationHint");
+    warning.hidden = split.length === 0;
+    warning.textContent = `Spread over several sheets, so not exported as animations: ${split
+      .map((a) => a.name)
+      .join(", ")}.`;
   }
 
   // ------------------------------------------------------------------ files
@@ -321,6 +469,8 @@ export default class Application {
   private load(work: PackWork): void {
     this.loading = true;
     this.selected.clear();
+    this.watched = [];
+    this.renderWatched();
     this.fitNext = true;
     this.project.load(work.name, work.images, work.settings);
     this.loading = false;
@@ -334,9 +484,14 @@ export default class Application {
     }
     try {
       const { name, settings } = this.project;
-      const files = sheetFiles(name, this.atlas.sheets, settings.dataFormat);
-      const summary = await exportSheets(name, files, output === "files" ? "files" : "zip");
-      this.notify(`Exported ${summary}`, 4000);
+      const files = sheetFiles(name, this.atlas.sheets, settings, this.animations);
+      const exported = await exportSheets(
+        name,
+        files,
+        settings,
+        output === "files" ? "files" : "zip"
+      );
+      this.notify(`Exported ${exported}`, 4000);
     } catch (error) {
       this.notify(`Export failed: ${(error as Error).message}`, 6000);
     }
@@ -388,7 +543,7 @@ export default class Application {
     });
     // Enter commits a name or number and gives the keyboard back to the shortcuts.
     for (const field of document.querySelectorAll<HTMLInputElement>(
-      '#projectName, #settings input[type="number"]'
+      '#projectName, #sidePanel input[type="number"]'
     )) {
       field.addEventListener("keydown", (ev) => {
         if (ev.key === "Enter") field.blur();
@@ -399,7 +554,7 @@ export default class Application {
       ["#addFolder", "#folderInput"],
     ]) {
       const picker = $<HTMLInputElement>(input);
-      if (input === "#imageInput") picker.accept = IMAGE_ACCEPT;
+      if (input === "#imageInput") picker.accept = IMPORT_ACCEPT;
       $(button).addEventListener("click", () => picker.click());
       picker.addEventListener("change", () => {
         const files = filesFromInput(picker.files!);
@@ -407,6 +562,17 @@ export default class Application {
         void this.importFiles(files);
       });
     }
+    const live = $("#addLive");
+    live.hidden = !supportsLiveFolders();
+    live.addEventListener("click", () => {
+      void pickLiveFolder().then(
+        (handle) => handle && this.watch(handle),
+        (error: Error) => this.notify(`Could not open the folder: ${error.message}`, 5000)
+      );
+    });
+    setInterval(() => {
+      if (this.watched.length && document.visibilityState === "visible") void this.scanFolders();
+    }, LIVE_INTERVAL);
     $("#removeSprites").addEventListener("click", () => this.remove([...this.selected]));
     $("#outlinesToggle").addEventListener("change", () => this.workspace.requestRender());
     const zoom = (z: number) => ($("#zoomHud").textContent = `${Math.round(z * 100)}%`);
@@ -451,4 +617,20 @@ export default class Application {
       void filesFromDrop(ev.dataTransfer!).then((files) => this.importFiles(files));
     });
   }
+}
+
+/** "Added 3 sprites, updated 1, could not read x.png"; empty when nothing happened. */
+function summary(
+  result: { added: number; updated: number; removed?: number },
+  failed: readonly string[]
+): string {
+  const { added, updated, removed = 0 } = result;
+  const parts = [
+    added ? `added ${added} sprite${added === 1 ? "" : "s"}` : "",
+    updated ? `updated ${updated}` : "",
+    removed ? `removed ${removed}` : "",
+    failed.length ? `could not read ${failed.join(", ")}` : "",
+  ].filter(Boolean);
+  const text = parts.join(", ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }

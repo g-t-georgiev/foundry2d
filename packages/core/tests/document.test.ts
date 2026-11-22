@@ -240,3 +240,28 @@ describe("ZIP reading", () => {
     await expect(readZip(new Uint8Array(40))).rejects.toThrow(/Not a ZIP/);
   });
 });
+
+describe("shared assets", () => {
+  it("clean-up keeps what any app's projects and recovery snapshots use", async () => {
+    const { MemoryStorage, storeDataUrl, loadDataUrl, pruneUnusedAssets } = await import("../src");
+    const storage = new MemoryStorage();
+    const url = (text: string) => `data:image/png;base64,${btoa(text)}`;
+    const [level, pack, unsaved, unused] = await Promise.all(
+      ["level", "pack", "unsaved", "unused"].map((t) => storeDataUrl(url(t), storage.assets))
+    );
+    const save = (id: string, app: string, data: unknown) =>
+      storage.projects.put({ id, app, name: id, createdAt: 0, updatedAt: 0, data });
+    await save("a", "level", {
+      defs: { tilesets: [{ image: { dataUrl: level } }], cells: [1, 2] },
+    });
+    await save("b", "pack", { sprites: [{ image: pack }] });
+    const bytes = (text: string) => new TextEncoder().encode(text);
+    await storage.recovery.saveRecovery("pack:session", bytes(JSON.stringify({ data: [unsaved] })));
+    await storage.recovery.saveRecovery("broken", bytes("not json"));
+    expect(await pruneUnusedAssets(storage)).toBe(1);
+    expect(await loadDataUrl(pack, storage.assets)).toBe(url("pack"));
+    expect(await loadDataUrl(level, storage.assets)).toBe(url("level"));
+    expect(await loadDataUrl(unsaved, storage.assets)).toBe(url("unsaved"));
+    expect(await loadDataUrl(unused, storage.assets)).toBeNull();
+  });
+});

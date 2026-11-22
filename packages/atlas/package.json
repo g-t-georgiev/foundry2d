@@ -12,6 +12,7 @@
     "tsc:check": "tsc --noEmit"
   },
   "dependencies": {
+    "@foundry2d/core": "workspace:*",
     "@foundry2d/formats": "workspace:*"
   },
   "devDependencies": {
