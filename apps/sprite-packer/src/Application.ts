@@ -1,4 +1,4 @@
-import { buildAtlas, type Atlas, type RgbaImage } from "@foundry2d/atlas";
+import type { Atlas, RgbaImage } from "@foundry2d/atlas";
 import { pruneUnusedAssets, type Storage } from "@foundry2d/core";
 import {
   bindProjectBrowser,
@@ -7,8 +7,9 @@ import {
   type ProjectBrowser,
   type SplitButton,
 } from "@foundry2d/ui";
-import { ProjectFiles, ProjectSession, Workspace } from "@foundry2d/workspace";
-import { exportSheets, frameName, sheetFiles, spriteOfFrame, toCanvas } from "./export";
+import { downloadBlob, ProjectFiles, ProjectSession, Workspace } from "@foundry2d/workspace";
+import { toCanvas } from "./canvas";
+import { frameName, spriteOfFrame } from "./export";
 import { externalizeSprites, internalizeSprites } from "./io/assets";
 import {
   filesFromDrop,
@@ -34,6 +35,7 @@ import {
 import { detectAnimations, frameTags, packOrder, type Animation } from "./model/animations";
 import { DEFAULT_NAME, PackProject } from "./model/PackProject";
 import { atlasOptions, DEFAULT_SETTINGS, writesPivots, type PackSettings } from "./model/settings";
+import { Packer } from "./pack/Packer";
 import { SheetScene } from "./SheetScene";
 import { AnimationPreview } from "./ui/AnimationPreview";
 import { PivotEditor } from "./ui/PivotEditor";
@@ -98,6 +100,7 @@ export default class Application {
   /** True from an edit until its packing result is shown. */
   packing = false;
 
+  readonly packer = new Packer();
   private readonly images = new ImageStore();
   private readonly scene: SheetScene;
   private readonly list: SpriteList;
@@ -115,6 +118,8 @@ export default class Application {
   private packTimer: ReturnType<typeof setTimeout> | undefined;
   /** Bumped per packing run, so a run overtaken by a newer edit is dropped. */
   private packRun = 0;
+  /** A packing run is on its way; the next one waits for it. */
+  private running = false;
   private fitNext = true;
   private loading = false;
   private messageTimer: ReturnType<typeof setTimeout> | undefined;
@@ -223,7 +228,8 @@ export default class Application {
     this.bindDrop();
     this.load({ name: DEFAULT_NAME, settings: { ...DEFAULT_SETTINGS }, images: [] });
     this.session.refresh();
-    void this.files.startup().then(() => this.files.bindLaunchQueue());
+    this.files.bindLaunchQueue();
+    void this.files.startup();
   }
 
   get history() {
@@ -380,7 +386,21 @@ export default class Application {
   }
 
   private async pack(): Promise<void> {
+    if (this.running) return; // the run on its way starts the next one
+    this.running = true;
     const run = this.packRun;
+    try {
+      await this.runPack(run);
+    } finally {
+      this.running = false;
+    }
+    if (run !== this.packRun) {
+      clearTimeout(this.packTimer);
+      void this.pack();
+    }
+  }
+
+  private async runPack(run: number): Promise<void> {
     const { sprites, settings } = this.project;
     const animations = settings.animations ? detectAnimations(sprites.map((s) => s.name)) : [];
     const byName = new Map(sprites.map((s) => [s.name, s]));
@@ -406,7 +426,8 @@ export default class Application {
         duration: 1000 / settings.fps,
         pivot: byName.get(name)!.pivot,
       }));
-      if (inputs.length) atlas = buildAtlas(inputs, atlasOptions(settings));
+      if (inputs.length) atlas = await this.packer.pack(inputs, atlasOptions(settings));
+      if (run !== this.packRun) return;
     } catch (error) {
       if (run !== this.packRun) return;
       problem = (error as Error).message;
@@ -484,14 +505,18 @@ export default class Application {
     }
     try {
       const { name, settings } = this.project;
-      const files = sheetFiles(name, this.atlas.sheets, settings, this.animations);
-      const exported = await exportSheets(
+      this.notify("Exporting…", 60_000);
+      const files = await this.packer.export({
         name,
-        files,
+        sheets: this.atlas.sheets,
         settings,
-        output === "files" ? "files" : "zip"
-      );
-      this.notify(`Exported ${exported}`, 4000);
+        animations: this.animations,
+        output: output === "files" ? "files" : "zip",
+      });
+      for (const { name, mime, bytes } of files) {
+        downloadBlob(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: mime }), name);
+      }
+      this.notify(`Exported ${files.map((f) => f.name).join(", ")}`, 4000);
     } catch (error) {
       this.notify(`Export failed: ${(error as Error).message}`, 6000);
     }

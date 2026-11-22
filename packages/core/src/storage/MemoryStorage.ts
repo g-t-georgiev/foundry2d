@@ -3,6 +3,11 @@ import type { AssetRecord, ProjectMeta, ProjectRecord, RecentFileRecord, Storage
 
 const byUpdated = (a: ProjectMeta, b: ProjectMeta) => b.updatedAt - a.updatedAt;
 const metaOf = ({ data: _data, ...meta }: ProjectRecord): ProjectMeta => meta;
+/** File handles are kept as they are. */
+const copyOf = ({ file, ...record }: ProjectRecord): ProjectRecord => ({
+  ...structuredClone(record),
+  ...(file === undefined ? {} : { file }),
+});
 const done = (): Promise<void> => Promise.resolve();
 
 /**
@@ -41,10 +46,10 @@ export class MemoryStorage implements Storage {
       ),
     get: (id: string): Promise<ProjectRecord | null> => {
       const record = this.projectMap.get(id);
-      return Promise.resolve(record ? structuredClone(record) : null);
+      return Promise.resolve(record ? copyOf(record) : null);
     },
     put: (record: ProjectRecord): Promise<void> => {
-      this.projectMap.set(record.id, structuredClone(record));
+      this.projectMap.set(record.id, copyOf(record));
       return done();
     },
     delete: (id: string): Promise<void> => {

@@ -1,5 +1,5 @@
 import type { RgbaImage } from "@foundry2d/atlas";
-import { toCanvas } from "../export";
+import { toCanvas } from "../canvas";
 
 export interface PreviewFrame {
   image: RgbaImage;

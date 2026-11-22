@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vite-plus/test";
 import { MemoryStorage } from "@foundry2d/core";
 import { ProjectSession, type SessionState } from "../src/project/ProjectSession";
 
-function setup() {
+function setup(toStored = (json: unknown): Promise<unknown> => Promise.resolve({ wrapped: json })) {
   const storage = new MemoryStorage();
   const project = { name: "maze", cells: [1, 2, 3] };
   const states: SessionState[] = [];
@@ -13,7 +13,7 @@ function setup() {
     fileType: { description: "Test", mimeType: "application/json", extensions: [".test.json"] },
     serialize: () => structuredClone(project),
     // Pretend to move data out on store, and back in on load.
-    toStored: (json) => Promise.resolve({ wrapped: json }),
+    toStored,
     fromStored: (json) => Promise.resolve((json as { wrapped: unknown }).wrapped),
     getName: () => project.name,
     thumbnail: () => "data:image/png;base64,AA==",
@@ -44,6 +44,83 @@ describe("ProjectSession", () => {
       json: { name: "maze v2", cells: [1, 2, 3] },
       name: "maze v2",
     });
+  });
+
+  it("reopening a file keeps saving into its library copy", async () => {
+    const { storage, session } = setup();
+    const file = (name: string) => {
+      const state = { lastModified: 0 };
+      const handle = {
+        kind: "file" as const,
+        name,
+        state,
+        getFile: () =>
+          Promise.resolve(new File(["{}"], name, { lastModified: state.lastModified })),
+        isSameEntry: (other: unknown) => Promise.resolve(other === handle),
+        createWritable: () =>
+          Promise.resolve({
+            write: () => Promise.resolve(),
+            close: () => {
+              state.lastModified = Date.now();
+              return Promise.resolve();
+            },
+          }),
+      };
+      return handle;
+    };
+    const ids = async () => (await storage.projects.list("level")).map((p) => p.id);
+
+    // Opened from disk: the first save adds the copy, later ones update it.
+    const maze = file("maze.test.json");
+    await session.adoptFile("maze", maze);
+    expect(session.state.libraryId).toBeNull();
+    await session.save();
+    const [copy] = await ids();
+    await session.adoptFile("maze", maze);
+    expect(session.state).toMatchObject({ libraryId: copy, fileName: maze.name });
+    await session.save();
+    expect(await ids()).toEqual([copy]);
+
+    // Another file of the same name is its own work.
+    await session.adoptFile("maze", file("maze.test.json"));
+    expect(session.state.libraryId).toBeNull();
+
+    // A copy that is newer than the file isn't overwritten with the file's work.
+    const { lastModified } = maze.state;
+    maze.state.lastModified = lastModified - 60_000;
+    await session.adoptFile("maze", maze);
+    expect(session.state.libraryId).toBeNull();
+    maze.state.lastModified = lastModified;
+
+    // Neither is one that was opened from the library and saved without the file.
+    session.adoptLibrary(copy);
+    await session.save();
+    await session.adoptFile("maze", maze);
+    expect(session.state.libraryId).toBeNull();
+    await session.save();
+    expect(await ids()).toHaveLength(2);
+  });
+
+  it("a slow snapshot never replaces a newer one or comes back after saving", async () => {
+    let release = () => {};
+    const slow = new Promise<void>((resolve) => (release = resolve));
+    let calls = 0;
+    const { project, session } = setup(async (json) => {
+      if (calls++ === 0) await slow;
+      return { wrapped: json };
+    });
+    const first = session.flushRecovery();
+    project.name = "newer";
+    await session.flushRecovery();
+    release();
+    await first;
+    expect((await session.loadRecovery())?.json).toMatchObject({ name: "newer" });
+
+    calls = 0;
+    const late = session.flushRecovery();
+    await session.clearRecovery();
+    await late;
+    expect(await session.loadRecovery()).toBeNull();
   });
 
   it("snapshots unsaved work and restores it with its identity", async () => {

@@ -1,4 +1,4 @@
-import type { SheetData, SheetFrame } from "@foundry2d/formats";
+import type { SheetData, SheetFrame, Turn } from "@foundry2d/formats";
 import { pack, type PackOptions } from "./pack";
 import {
   blit,
@@ -7,6 +7,7 @@ import {
   extrudeEdges,
   imageHash,
   opaqueBounds,
+  rotateImageCCW,
   rotateImageCW,
   sameImage,
   scaleImage,
@@ -30,12 +31,16 @@ export interface AtlasOptions extends PackOptions {
   extrude?: number;
   /** Store identical sprites once; their frames share the same rectangle. */
   alias?: boolean;
+  /** Which way rotated sprites are turned (the data format decides); clockwise by default. */
+  turn?: Turn;
 }
 
 export interface AtlasSheet {
   image: RgbaImage;
   /** Frames on this sheet, in input order (aliases included). */
   frames: SheetFrame[];
+  /** Which way its rotated frames are turned. */
+  turn: Turn;
 }
 
 export interface Atlas {
@@ -72,6 +77,7 @@ export const sheetData = (sheet: AtlasSheet): SheetData => ({
   width: sheet.image.width,
   height: sheet.image.height,
   frames: sheet.frames,
+  turn: sheet.turn,
 });
 
 /** The sheet enlarged by a whole factor (nearest neighbour), frames included. */
@@ -79,6 +85,7 @@ export function scaleSheet(sheet: AtlasSheet, factor: number): AtlasSheet {
   const k = Math.max(1, Math.floor(factor));
   if (k === 1) return sheet;
   return {
+    ...sheet,
     image: scaleImage(sheet.image, k),
     frames: sheet.frames.map((f) => ({
       ...f,
@@ -98,12 +105,14 @@ export function scaleSheet(sheet: AtlasSheet, factor: number): AtlasSheet {
  * Packs sprites into one or more sheets: trims, aliases identical sprites,
  * extrudes edges, packs (see `pack`) and draws the sheets. Frame data uses
  * TexturePacker's conventions: `frame` is the sprite's rectangle with its
- * unrotated width and height; a rotated sprite is stored turned 90°
- * clockwise, so on the sheet it covers `frame.h × frame.w`.
+ * unrotated width and height; a rotated sprite is stored turned by 90°, so
+ * on the sheet it covers `frame.h × frame.w`.
  */
 export function buildAtlas(inputs: AtlasInput[], options: AtlasOptions): Atlas {
   if (inputs.length === 0) throw new Error("No sprites to pack.");
   const e = Math.max(0, Math.floor(options.extrude ?? 0));
+  const turn = options.turn ?? "cw";
+  const turned = turn === "cw" ? rotateImageCW : rotateImageCCW;
 
   const pieces: Piece[] = [];
   const byHash = new Map<string, number[]>();
@@ -127,6 +136,7 @@ export function buildAtlas(inputs: AtlasInput[], options: AtlasOptions): Atlas {
   const sheets: AtlasSheet[] = packed.bins.map((bin) => ({
     image: createImage(bin.width, bin.height),
     frames: [],
+    turn,
   }));
 
   // Draw the unique sprites and remember where each landed.
@@ -135,7 +145,7 @@ export function buildAtlas(inputs: AtlasInput[], options: AtlasOptions): Atlas {
   unique.forEach((pieceIndex, k) => {
     const placement = packed.placements[k];
     const piece = pieces[pieceIndex];
-    const image = placement.rotated ? rotateImageCW(piece.image) : piece.image;
+    const image = placement.rotated ? turned(piece.image) : piece.image;
     const x = placement.x + e;
     const y = placement.y + e;
     const sheet = sheets[placement.bin].image;

@@ -142,7 +142,7 @@ export function rotationBlocked(settings: PackSettings): string | null {
     return "Strips and grids keep sprites upright.";
   }
   const format = SHEET_FORMATS.find((f) => f.id === settings.dataFormat);
-  return format && !format.supportsRotation ? `${format.label} can't describe rotation.` : null;
+  return format && !format.rotation ? `${format.label} can't describe rotation.` : null;
 }
 
 /** Whether the data format writes sprite pivots. */
@@ -153,6 +153,7 @@ export const writesPivots = (settings: PackSettings) =>
 export function atlasOptions(settings: PackSettings): AtlasOptions {
   const { algorithm, heuristic, padding, border, extrude, trim, alias } = settings;
   const { maxWidth, maxHeight, powerOfTwo, square, columns } = settings;
+  const turn = SHEET_FORMATS.find((f) => f.id === settings.dataFormat)?.rotation;
   return {
     algorithm,
     heuristic,
@@ -167,5 +168,6 @@ export function atlasOptions(settings: PackSettings): AtlasOptions {
     square,
     columns,
     allowRotation: settings.allowRotation && !rotationBlocked(settings),
+    ...(turn ? { turn } : {}),
   };
 }

@@ -1,5 +1,13 @@
 import { expect, test, type Download, type Page } from "@playwright/test";
-import { drag, openApp, reloadAfterRecovery, toScreen, type FoundryApp } from "./helpers";
+import {
+  expectLaunchedFileOpens,
+  expectOneCopyPerFile,
+  drag,
+  openApp,
+  reloadAfterRecovery,
+  toScreen,
+  type FoundryApp,
+} from "./helpers";
 
 const CANVAS = "#paintCanvas";
 
@@ -427,4 +435,14 @@ test("Ctrl+S while typing the name commits it and saves", async ({ page }) => {
   await page.keyboard.press("Control+s");
   await expect(page.locator("#fileDisplay")).toHaveText("browser library");
   await expect(page).toHaveTitle(/^renamed/);
+});
+
+test("a sprite the installed app is launched with opens without the start screen", async ({
+  page,
+}) => {
+  await expectLaunchedFileOpens(page, "other.f2dsprite");
+});
+
+test("opening a file again and saving updates its copy in the browser", async ({ page }) => {
+  await expectOneCopyPerFile(page);
 });

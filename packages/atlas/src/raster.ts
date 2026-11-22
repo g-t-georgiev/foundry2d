@@ -116,7 +116,15 @@ export function rotateImageCW(image: RgbaImage): RgbaImage {
 
 /** The image turned 90° counter-clockwise (undoes `rotateImageCW`). */
 export function rotateImageCCW(image: RgbaImage): RgbaImage {
-  return rotateImageCW(rotateImageCW(rotateImageCW(image)));
+  const out = createImage(image.height, image.width);
+  const src = new Uint32Array(image.data.buffer, image.data.byteOffset, image.width * image.height);
+  const dst = new Uint32Array(out.data.buffer);
+  for (let y = 0; y < image.height; y++) {
+    for (let x = 0; x < image.width; x++) {
+      dst[(out.height - 1 - x) * out.width + y] = src[y * image.width + x];
+    }
+  }
+  return out;
 }
 
 /** The image with its colours multiplied by alpha, for engines that blend premultiplied. */

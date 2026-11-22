@@ -4,7 +4,13 @@ import { isImagePath, isSpritePath, type ImportFile } from "./images";
 export interface DirectoryLike {
   readonly kind: "directory";
   readonly name: string;
-  values(): AsyncIterable<DirectoryLike | { kind: "file"; name: string; getFile(): Promise<File> }>;
+  values(): AsyncIterable<DirectoryLike | FileLike>;
+}
+
+interface FileLike {
+  readonly kind: "file";
+  readonly name: string;
+  getFile(): Promise<File>;
 }
 
 interface PickerWindow {
@@ -20,6 +26,17 @@ export async function pickLiveFolder(): Promise<DirectoryLike | null> {
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") return null;
     throw error;
+  }
+}
+
+const isGone = (error: unknown) => error instanceof DOMException && error.name === "NotFoundError";
+
+/** Files come and go while other programs save them; that never ends the watching. */
+async function getFile(entry: FileLike): Promise<File | "gone" | "busy"> {
+  try {
+    return await entry.getFile();
+  } catch (error) {
+    return isGone(error) ? "gone" : "busy";
   }
 }
 
@@ -51,9 +68,20 @@ export class LiveFolder {
       for await (const entry of folder.values()) {
         const path = `${prefix}/${entry.name}`;
         if (entry.kind === "directory") {
-          await walk(entry, path);
+          try {
+            await walk(entry, path);
+          } catch (error) {
+            if (!isGone(error)) throw error; // a subfolder deleted while looking
+          }
         } else if (isImagePath(path) || isSpritePath(path)) {
-          const file = await entry.getFile();
+          const file = await getFile(entry);
+          if (file === "busy") {
+            // Being written: as before for now, looked at again next time.
+            const before = this.stamps.get(path);
+            if (before !== undefined) stamps.set(path, before);
+            continue;
+          }
+          if (file === "gone") continue;
           const stamp = `${file.lastModified}:${file.size}`;
           stamps.set(path, stamp);
           if (this.stamps.get(path) !== stamp) changed.push({ file, path });

@@ -319,7 +319,8 @@ export default class Application {
     // Only refresh the title here: resetIdentity() would discard the recovery
     // snapshot that startup() is about to restore.
     this.session.refresh();
-    void this.files.startup().then(() => this.files.bindLaunchQueue());
+    this.files.bindLaunchQueue();
+    void this.files.startup();
   }
 
   get view(): EditorView {

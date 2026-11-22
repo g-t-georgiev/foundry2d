@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vite-plus/test";
+import { afterEach, describe, it, expect, vi } from "vite-plus/test";
 import { MemoryStorage } from "@foundry2d/core";
 import { ProjectSession } from "../src/project/ProjectSession";
 import { ProjectFiles, type StartScreenData } from "../src/project/ProjectFiles";
@@ -18,6 +18,7 @@ function setup(options: { confirm?: boolean; storage?: MemoryStorage } = {}) {
   const prompts: string[] = [];
   const screens: StartScreenData[] = [];
   const deleted: string[] = [];
+  let shown = false;
   const session = new ProjectSession({
     app: "test",
     storage,
@@ -30,7 +31,13 @@ function setup(options: { confirm?: boolean; storage?: MemoryStorage } = {}) {
   });
   const files = new ProjectFiles<Doc>({
     session,
-    startScreen: { show: (data) => screens.push(data) },
+    startScreen: {
+      show: (data) => {
+        screens.push(data);
+        shown = true;
+      },
+      close: () => (shown = false),
+    },
     noun: { one: "doc", title: "Docs" },
     parse: ({ json, name }) => {
       const doc = json as Partial<Doc>;
@@ -63,6 +70,7 @@ function setup(options: { confirm?: boolean; storage?: MemoryStorage } = {}) {
     screens,
     deleted,
     current: () => open,
+    startScreenShown: () => shown,
     edit: (cells: number[]) => {
       open = { ...open, cells };
       session.markDirty();
@@ -149,6 +157,66 @@ describe("ProjectFiles", () => {
   });
 });
 
+describe("files the installed app is launched with", () => {
+  type Consumer = (params: { files: unknown[] }) => void;
+  let consumer: Consumer = () => {};
+  const stubQueue = () =>
+    vi.stubGlobal("launchQueue", { setConsumer: (c: Consumer) => (consumer = c) });
+  const launch = (name: string, content = JSON.stringify({ name: "launched", cells: [7] })) =>
+    consumer({
+      files: [{ kind: "file", name, getFile: () => Promise.resolve(new File([content], name)) }],
+    });
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** Storage with a saved project, so startup has something to offer. */
+  async function saved() {
+    const t = setup();
+    await t.files.save();
+    return t.storage;
+  }
+
+  it("open instead of the start screen", async () => {
+    stubQueue();
+    const t = setup({ storage: await saved() });
+    t.files.bindLaunchQueue();
+    launch("a.test.json");
+    await t.files.startup();
+    expect(t.current().name).toBe("launched");
+    expect(t.session.state).toMatchObject({ fileName: "a.test.json", dirty: false });
+    expect(t.screens).toHaveLength(0);
+    expect(t.prompts).toHaveLength(0);
+  });
+
+  it("close the start screen when they come later, unless they can't be read", async () => {
+    stubQueue();
+    const t = setup({ storage: await saved() });
+    t.files.bindLaunchQueue();
+    await t.files.startup();
+    expect(t.startScreenShown()).toBe(true);
+    launch("bad.test.json", "{}");
+    await vi.waitFor(() => expect(t.messages.at(-1)).toBe("Not a doc."));
+    expect(t.startScreenShown()).toBe(true);
+    launch("a.test.json");
+    await vi.waitFor(() => expect(t.startScreenShown()).toBe(false));
+    expect(t.current().name).toBe("launched");
+  });
+
+  it("ask before they replace restored unsaved work", async () => {
+    const before = setup();
+    before.edit([4, 5]);
+    await before.session.flushRecovery();
+    for (const confirm of [false, true]) {
+      stubQueue();
+      const t = setup({ storage: before.storage, confirm });
+      t.files.bindLaunchQueue();
+      launch("a.test.json");
+      await t.files.startup();
+      expect(t.prompts).toHaveLength(1);
+      expect(t.current().cells).toEqual(confirm ? [7] : [4, 5]);
+    }
+  });
+});
+
 describe("ProjectFiles library extras", () => {
   it("duplicates a library entry under a free name", async () => {
     const t = setup();
@@ -158,7 +226,13 @@ describe("ProjectFiles library extras", () => {
     await t.files.duplicateLibrary(original.id);
     const names = (await t.session.listLibrary()).map((p) => p.name).sort();
     expect(names).toEqual(["maze", "maze copy", "maze copy 2"]);
-    expect(t.screens.at(-1)?.library).toHaveLength(3);
+    // Copies of a file's entry don't belong to that file.
+    const record = (await t.storage.projects.get(original.id))!;
+    await t.storage.projects.put({ ...record, file: { kind: "file" } });
+    await t.files.duplicateLibrary(original.id);
+    const linked = (await t.session.listLibrary()).filter((p) => p.file);
+    expect(linked.map((p) => p.id)).toEqual([original.id]);
+    expect(t.screens.at(-1)?.library).toHaveLength(4);
   });
 
   it("saves a copy in the browser and keeps working on the copy", async () => {

@@ -8,13 +8,19 @@
  * untrimmed `sourceSize`.
  */
 
+/**
+ * Which way a format stores rotated sprites: turned 90° clockwise
+ * (TexturePacker, Starling) or counter-clockwise (LibGDX).
+ */
+export type Turn = "cw" | "ccw";
+
 /** One frame's placement in the sheet. */
 export interface SheetFrame {
   /** Frame key, e.g. "walk_0.png". */
   filename: string;
   /**
    * The sprite's rectangle on the sheet, with its unrotated width and height.
-   * A `rotated` sprite is stored turned 90° clockwise, covering `h × w`.
+   * A `rotated` sprite is stored turned by 90° (see `Turn`), covering `h × w`.
    */
   frame: { x: number; y: number; w: number; h: number };
   rotated: boolean;
@@ -32,6 +38,8 @@ export interface SheetData {
   width: number;
   height: number;
   frames: readonly SheetFrame[];
+  /** Which way rotated frames are turned; clockwise when left out. */
+  turn?: Turn;
 }
 
 /** A named animation over a frame range (Aseprite's frame tags). */
@@ -72,17 +80,20 @@ export interface SheetFormat {
   /** Data file extension, with the dot. */
   extension: string;
   mime: string;
-  /** Can describe sprites stored rotated (TexturePacker's 90° clockwise convention). */
-  supportsRotation: boolean;
+  /** Which way its readers expect rotated sprites to be turned; `null` when it has none. */
+  rotation: Turn | null;
   /** Writes sprite pivots. */
   supportsPivot: boolean;
   write(sheet: SheetData, options: SheetWriteOptions): string;
 }
 
-/** For formats that can't describe rotated sprites: fail loudly rather than write wrong data. */
-function noRotation(format: string, sheet: SheetData): void {
-  if (sheet.frames.some((f) => f.rotated)) {
+/** Fails loudly on rotated sprites the format can't describe, rather than writing wrong data. */
+function checkRotation(format: string, sheet: SheetData, rotation: Turn | null): void {
+  if (!sheet.frames.some((f) => f.rotated)) return;
+  if (!rotation)
     throw new Error(`${format} can't describe rotated sprites; pack without rotation.`);
+  if ((sheet.turn ?? "cw") !== rotation) {
+    throw new Error(`${format} needs rotated sprites turned the other way; pack for that format.`);
   }
 }
 
@@ -104,6 +115,7 @@ const cssName = (text: string) => {
 
 function texturePacker(format: "hash" | "array") {
   return (sheet: SheetData, options: SheetWriteOptions): string => {
+    checkRotation("TexturePacker JSON", sheet, "cw");
     const meta = {
       app: "https://github.com/g-t-georgiev/foundry2d",
       version: "1.0",
@@ -147,17 +159,20 @@ export function texturePackerJson(
 /**
  * Sparrow/Starling `TextureAtlas` XML. Trimmed frames carry `frameX/Y`
  * (negative offset of the trimmed rect) and the untrimmed `frameWidth/Height`.
+ * `width` and `height` are the size on the sheet, so a rotated sprite's are
+ * swapped; everything else is measured on the upright sprite.
  */
 function starlingXml(sheet: SheetData, options: SheetWriteOptions): string {
-  noRotation("Starling XML", sheet);
+  checkRotation("Starling XML", sheet, "cw");
   const lines = sheet.frames.map((f) => {
     const attrs = [
       `name="${xmlEscape(stem(f.filename))}"`,
       `x="${f.frame.x}"`,
       `y="${f.frame.y}"`,
-      `width="${f.frame.w}"`,
-      `height="${f.frame.h}"`,
+      `width="${f.rotated ? f.frame.h : f.frame.w}"`,
+      `height="${f.rotated ? f.frame.w : f.frame.h}"`,
     ];
+    if (f.rotated) attrs.push(`rotated="true"`);
     if (f.trimmed) {
       attrs.push(
         `frameX="${-f.spriteSourceSize.x}"`,
@@ -196,7 +211,7 @@ const godotFloat = (n: number) => (Number.isInteger(n) ? n.toFixed(1) : String(n
  * next to the resource.
  */
 function godotTres(sheet: SheetData, options: SheetWriteOptions): string {
-  noRotation("Godot SpriteFrames", sheet);
+  checkRotation("Godot SpriteFrames", sheet, null);
   const frames = sheet.frames;
   const base = Math.max(1, Math.min(...frames.map((f) => f.duration || 100)));
   const fps = Math.round((1000 / base) * 1000) / 1000;
@@ -251,10 +266,11 @@ function godotTres(sheet: SheetData, options: SheetWriteOptions): string {
 /**
  * LibGDX `TextureAtlas` text format (the classic layout TexturePacker and
  * gdx-texturepacker write). LibGDX measures `offset` from the bottom-left of
- * the original image.
+ * the original image. Rotated regions are turned counter-clockwise, and all
+ * their sizes and offsets are measured on the upright sprite.
  */
 function libgdxAtlas(sheet: SheetData, options: SheetWriteOptions): string {
-  noRotation("The LibGDX atlas writer", sheet);
+  checkRotation("The LibGDX atlas", sheet, "ccw");
   const out = [
     "",
     options.image,
@@ -267,7 +283,7 @@ function libgdxAtlas(sheet: SheetData, options: SheetWriteOptions): string {
     const offsetY = f.sourceSize.h - f.frame.h - f.spriteSourceSize.y;
     out.push(
       stem(f.filename),
-      "  rotate: false",
+      `  rotate: ${f.rotated}`,
       `  xy: ${f.frame.x}, ${f.frame.y}`,
       `  size: ${f.frame.w}, ${f.frame.h}`,
       `  orig: ${f.sourceSize.w}, ${f.sourceSize.h}`,
@@ -286,7 +302,7 @@ function libgdxAtlas(sheet: SheetData, options: SheetWriteOptions): string {
  * shifted by the trim offset, so they line up like the original frames.
  */
 function cssSprites(sheet: SheetData, options: SheetWriteOptions): string {
-  noRotation("CSS sprites", sheet);
+  checkRotation("CSS sprites", sheet, null);
   const base = cssName(stem(options.image));
   const rules = sheet.frames.map((f) => {
     const x = f.frame.x - f.spriteSourceSize.x;
@@ -320,7 +336,7 @@ export const SHEET_FORMATS: readonly SheetFormat[] = [
     readers: "Phaser, PixiJS, Aseprite-style tools",
     extension: ".json",
     mime: "application/json",
-    supportsRotation: true,
+    rotation: "cw",
     supportsPivot: true,
     write: texturePacker("hash"),
   },
@@ -330,17 +346,17 @@ export const SHEET_FORMATS: readonly SheetFormat[] = [
     readers: "Phaser, PixiJS",
     extension: ".json",
     mime: "application/json",
-    supportsRotation: true,
+    rotation: "cw",
     supportsPivot: true,
     write: texturePacker("array"),
   },
   {
     id: "starling-xml",
     label: "Starling / Sparrow XML",
-    readers: "Starling, Phaser (atlasXML), HaxeFlixel",
+    readers: "Starling, HaxeFlixel, Phaser (atlasXML, without rotation)",
     extension: ".xml",
     mime: "application/xml",
-    supportsRotation: false,
+    rotation: "cw",
     supportsPivot: true,
     write: starlingXml,
   },
@@ -350,7 +366,7 @@ export const SHEET_FORMATS: readonly SheetFormat[] = [
     readers: "Godot 4 (AnimatedSprite2D)",
     extension: ".tres",
     mime: "text/plain",
-    supportsRotation: false,
+    rotation: null,
     supportsPivot: false,
     write: godotTres,
   },
@@ -360,7 +376,7 @@ export const SHEET_FORMATS: readonly SheetFormat[] = [
     readers: "LibGDX TextureAtlas",
     extension: ".atlas",
     mime: "text/plain",
-    supportsRotation: false,
+    rotation: "ccw",
     supportsPivot: false,
     write: libgdxAtlas,
   },
@@ -370,7 +386,7 @@ export const SHEET_FORMATS: readonly SheetFormat[] = [
     readers: "Web pages",
     extension: ".css",
     mime: "text/css",
-    supportsRotation: false,
+    rotation: null,
     supportsPivot: false,
     write: cssSprites,
   },

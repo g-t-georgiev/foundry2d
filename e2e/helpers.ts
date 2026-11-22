@@ -12,7 +12,7 @@ interface Camera {
 }
 
 interface Session {
-  state: { dirty: boolean };
+  state: { dirty: boolean; fileName: string | null; libraryId: string | null };
   loadRecovery(): Promise<unknown>;
 }
 
@@ -64,4 +64,88 @@ export async function reloadAfterRecovery(page: Page): Promise<void> {
     .toBe(true);
   await page.reload();
   await page.waitForFunction(() => window.foundry !== undefined);
+}
+
+/**
+ * Saves the open work in the browser, then starts the app with a copy of it
+ * as a file double-clicked in the OS: first at startup, then while the start
+ * screen is open. Either way the file is what the user sees.
+ */
+export async function expectLaunchedFileOpens(page: Page, name: string): Promise<void> {
+  const state = () => page.evaluate(() => window.foundry!.session.state);
+  const dialog = page.locator("project-browser dialog");
+  await page.keyboard.press("Control+s");
+  await expect.poll(async () => (await state()).libraryId).not.toBeNull();
+  const content = await page.evaluate(() =>
+    JSON.stringify(
+      (
+        window.foundry!.session as unknown as { options: { serialize(): unknown } }
+      ).options.serialize()
+    )
+  );
+  // Stands in for the launch queue of an installed app.
+  await page.addInitScript(
+    ({ name, content }) => {
+      const file = new File([content], name);
+      const handle = { kind: "file", name, getFile: () => Promise.resolve(file) };
+      const setConsumer = (consumer: (params: { files: unknown[] }) => void) => {
+        const launch = () => consumer({ files: [handle] });
+        Object.assign(window, { launchNow: launch });
+        if (location.search === "?launched") launch();
+      };
+      Object.defineProperty(window, "launchQueue", { value: { setConsumer } });
+    },
+    { name, content }
+  );
+
+  await page.goto("/?launched");
+  await expect.poll(async () => (await state()).fileName).toBe(name);
+  await expect(dialog).toBeHidden();
+
+  await page.goto("/");
+  await expect(dialog).toBeVisible();
+  await page.evaluate(() => (window as unknown as { launchNow(): void }).launchNow());
+  await expect.poll(async () => (await state()).fileName).toBe(name);
+  await expect(dialog).toBeHidden();
+}
+
+/**
+ * Saves the open work as a file, reloads, opens that file again and saves:
+ * the file's copy in the browser is updated, not added again.
+ */
+export async function expectOneCopyPerFile(page: Page): Promise<void> {
+  const state = () => page.evaluate(() => window.foundry!.session.state);
+  const library = () =>
+    page.evaluate(async () => {
+      const session = window.foundry!.session as unknown as {
+        listLibrary(): Promise<{ id: string; updatedAt: number }[]>;
+      };
+      return session.listLibrary();
+    });
+  // The browser's private file system stands in for the pickers.
+  const stubPickers = () => {
+    const pick = async () => {
+      const root = await navigator.storage.getDirectory();
+      return root.getFileHandle("work.json", { create: true });
+    };
+    Object.assign(window, {
+      showSaveFilePicker: pick,
+      showOpenFilePicker: async () => [await pick()],
+    });
+  };
+  await page.addInitScript(stubPickers);
+  await page.evaluate(stubPickers);
+  await page.keyboard.press("Control+Shift+s");
+  await expect.poll(async () => (await state()).fileName).toBe("work.json");
+  const [before] = await library();
+
+  await page.reload();
+  await page.waitForFunction(() => window.foundry !== undefined);
+  const browser = page.locator("project-browser");
+  await expect(browser.locator("dialog")).toBeVisible();
+  await browser.getByRole("button", { name: "Open file" }).click();
+  await expect.poll(async () => (await state()).libraryId).toBe(before.id);
+  await page.keyboard.press("Control+s");
+  await expect.poll(async () => (await library())[0].updatedAt).toBeGreaterThan(before.updatedAt);
+  expect(await library()).toHaveLength(1);
 }

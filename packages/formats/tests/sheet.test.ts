@@ -129,13 +129,36 @@ describe("spritesheet data formats", () => {
 describe("rotated sprites", () => {
   const rotated: SheetData = { ...sheet, frames: [{ ...sheet.frames[0], rotated: true }] };
 
-  it("TexturePacker JSON passes the flag through; formats without rotation refuse", () => {
+  it("TexturePacker JSON passes the flag through; other rotations are refused", () => {
     const json = JSON.parse(sheetFormat("json-array").write(rotated, options)) as {
       frames: { rotated: boolean }[];
     };
     expect(json.frames[0].rotated).toBe(true);
-    for (const f of SHEET_FORMATS.filter((f) => !f.supportsRotation)) {
-      expect(() => f.write(rotated, options)).toThrow(/rotated/);
+    for (const f of SHEET_FORMATS) {
+      for (const turn of ["cw", "ccw"] as const) {
+        const write = () => f.write({ ...rotated, turn }, options);
+        if (f.rotation === turn) expect(write).not.toThrow();
+        else expect(write).toThrow(/rotated/);
+      }
+    }
+  });
+
+  it("Starling swaps the size, LibGDX doesn't; both read back upright", () => {
+    const frames = [{ ...sheet.frames[1], rotated: true }];
+    const xml = sheetFormat("starling-xml").write({ ...sheet, frames }, options);
+    expect(xml).toContain(
+      `x="18" y="0" width="12" height="10" rotated="true" frameX="-3" frameY="-2" frameWidth="16" frameHeight="16"`
+    );
+    const atlas = sheetFormat("libgdx-atlas").write({ ...sheet, frames, turn: "ccw" }, options);
+    expect(atlas).toContain("  rotate: true\n  xy: 18, 0\n  size: 10, 12\n  orig: 16, 16");
+    const { frame, spriteSourceSize, sourceSize } = frames[0];
+    for (const [text, turn] of [
+      [xml, "cw"],
+      [atlas, "ccw"],
+    ] as const) {
+      expect(readSheetData(text)).toMatchObject([
+        { turn, frames: [{ rotated: true, frame, spriteSourceSize, sourceSize }] },
+      ]);
     }
   });
 });
@@ -226,17 +249,16 @@ describe("reading sheet data", () => {
     ]);
   });
 
-  it("keeps TexturePacker's rotation, refuses it elsewhere, and ignores other files", () => {
+  it("keeps rotation, refuses other angles, and ignores other files", () => {
     const rotated = { frames: [{ ...sheet.frames[0], rotated: true }], meta: {} };
     expect(readSheetData(JSON.stringify(rotated))![0]).toMatchObject({
       image: "",
       frames: [{ rotated: true }],
     });
-    const xml = `<TextureAtlas imagePath="a.png"><SubTexture name="x" x="0" y="0" width="1" height="1" rotated="true"/></TextureAtlas>`;
-    expect(() => readSheetData(xml)).toThrow(SheetReadError);
-    expect(() => readSheetData("a.png\nx\n  rotate: true\n  xy: 0, 0\n  size: 1, 1\n")).toThrow(
-      SheetReadError
-    );
+    const atlas = (rotate: string) => `a.png\nx\n  rotate: ${rotate}\n  bounds: 0, 0, 2, 1\n`;
+    expect(readSheetData(atlas("90"))![0].frames[0].rotated).toBe(true);
+    expect(readSheetData(atlas("0"))![0].frames[0].rotated).toBe(false);
+    expect(() => readSheetData(atlas("180"))).toThrow(SheetReadError);
     expect(() => readSheetData('{"frames":{"x":{"frame":{"x":0}}}}')).toThrow(SheetReadError);
     for (const other of [
       "",

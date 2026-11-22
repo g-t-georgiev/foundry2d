@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vite-plus/test";
 import { buildAtlas, createImage } from "@foundry2d/atlas";
-import { MemoryStorage } from "@foundry2d/core";
+import { MemoryStorage, readZip } from "@foundry2d/core";
 import { frameName, sheetFiles, safeName } from "../src/export";
 import { externalizeSprites, internalizeSprites } from "../src/io/assets";
 import { findImage, isImagePath, spriteName } from "../src/io/images";
@@ -8,6 +8,8 @@ import { LiveFolder, type DirectoryLike } from "../src/io/liveFolder";
 import { fromPackFile, PackFormatError, toPackFile } from "../src/io/packFile";
 import { detectAnimations, frameTags, packOrder } from "../src/model/animations";
 import { cleanName, PackProject, type SpriteImage } from "../src/model/PackProject";
+import { Jobs, type Request } from "../src/pack/jobs";
+import { Packer } from "../src/pack/Packer";
 import {
   atlasOptions,
   DEFAULT_SETTINGS,
@@ -58,6 +60,12 @@ describe("settings", () => {
       expect(blocked.allowRotation).toBe(true);
     }
     expect(rotationBlocked({ ...on, dataFormat: "none" })).toBeNull();
+    // Sprites turn the way the format's engines expect.
+    expect(atlasOptions(on).turn).toBe("cw");
+    expect(atlasOptions({ ...on, dataFormat: "libgdx-atlas" })).toMatchObject({
+      allowRotation: true,
+      turn: "ccw",
+    });
   });
 });
 
@@ -166,10 +174,13 @@ describe("export files", () => {
   it("one sheet takes the pack's name, several are numbered and reference their own image", () => {
     const one = buildAtlas(inputs, { algorithm: "maxrects" });
     expect(
-      sheetFiles("My pack", one.sheets, DEFAULT_SETTINGS).map((f) => [f.imageName, f.data?.name])
+      [...sheetFiles("My pack", one.sheets, DEFAULT_SETTINGS)].map((f) => [
+        f.imageName,
+        f.data?.name,
+      ])
     ).toEqual([["My_pack.png", "My_pack.json"]]);
     const many = buildAtlas(inputs, { algorithm: "maxrects", maxWidth: 64, maxHeight: 64 });
-    const files = sheetFiles("p", many.sheets, DEFAULT_SETTINGS);
+    const files = [...sheetFiles("p", many.sheets, DEFAULT_SETTINGS)];
     expect(files.map((f) => f.imageName)).toEqual(["p-0.png", "p-1.png"]);
     const metas = files.map(
       (f) => JSON.parse(f.data!.text) as { meta: { image: string }; frames: object }
@@ -181,7 +192,7 @@ describe("export files", () => {
   it("writes no data file for images only", () => {
     const atlas = buildAtlas(inputs, { algorithm: "grid" });
     expect(
-      sheetFiles("p", atlas.sheets, { ...DEFAULT_SETTINGS, dataFormat: "none" })[0].data
+      [...sheetFiles("p", atlas.sheets, { ...DEFAULT_SETTINGS, dataFormat: "none" })][0].data
     ).toBeNull();
   });
 });
@@ -245,6 +256,96 @@ describe("pivots", () => {
   });
 });
 
+describe("packing in a worker", () => {
+  /** A worker that answers like the real one, or breaks at its `fails`-th message. */
+  class FakeWorker {
+    onmessage: ((ev: { data: unknown }) => void) | null = null;
+    onerror: ((ev: { preventDefault(): void }) => void) | null = null;
+    onmessageerror: (() => void) | null = null;
+    terminated = false;
+    readonly images: number[] = [];
+    private readonly jobs = new Jobs();
+
+    constructor(private fails = Infinity) {}
+
+    postMessage({ id, request }: { id: number; request: Request }): void {
+      this.images.push(request.type === "pack" ? request.images.length : -1);
+      if (--this.fails === 0) {
+        queueMicrotask(() => this.onerror?.({ preventDefault() {} }));
+        return;
+      }
+      void (async () => {
+        try {
+          this.onmessage?.({ data: { id, result: await this.jobs.run(request) } });
+        } catch (error) {
+          this.onmessage?.({ data: { id, error: (error as Error).message } });
+        }
+      })();
+    }
+
+    terminate(): void {
+      this.terminated = true;
+    }
+  }
+  const sprites = [1, 2, 3].map((n) => {
+    const img = createImage(n * 4, 8);
+    img.data.fill(n * 50);
+    return { name: `s${n}.png`, image: img };
+  });
+  const options = { algorithm: "maxrects" } as const;
+  const start = (worker: FakeWorker) => new Packer(() => worker as unknown as Worker);
+
+  it("sends each image once and passes errors on", async () => {
+    const worker = new FakeWorker();
+    const packer = start(worker);
+    expect(await packer.pack(sprites.slice(0, 2), options)).toEqual(
+      buildAtlas(sprites.slice(0, 2), options)
+    );
+    expect(await packer.pack(sprites, options)).toEqual(buildAtlas(sprites, options));
+    await packer.pack(sprites.slice(2), options);
+    // The first two were dropped, so they are sent again.
+    expect(await packer.pack(sprites, options)).toEqual(buildAtlas(sprites, options));
+    expect(worker.images).toEqual([2, 1, 0, 2]);
+    await expect(packer.pack(sprites, { ...options, maxWidth: 4, maxHeight: 4 })).rejects.toThrow();
+    expect(await packer.pack(sprites, options)).toEqual(buildAtlas(sprites, options));
+    expect(packer.inWorker).toBe(true);
+  });
+
+  it("goes on without the worker when it dies or can't start", async () => {
+    for (const fails of [1, 2]) {
+      const worker = new FakeWorker(fails);
+      const packer = start(worker);
+      expect(await packer.pack(sprites, options)).toEqual(buildAtlas(sprites, options));
+      expect(await packer.pack(sprites, options)).toEqual(buildAtlas(sprites, options));
+      expect(worker.terminated).toBe(true);
+      expect(packer.inWorker).toBe(false);
+      expect(await packer.pack(sprites.slice(1), options)).toEqual(
+        buildAtlas(sprites.slice(1), options)
+      );
+      expect(await packer.pack(sprites, options)).toEqual(buildAtlas(sprites, options));
+    }
+    const none = new Packer(() => {
+      throw new Error("no workers");
+    });
+    expect(await none.pack(sprites, options)).toEqual(buildAtlas(sprites, options));
+  });
+
+  it("exports the sheets as files or one ZIP", async () => {
+    const packer = start(new FakeWorker());
+    const { sheets } = await packer.pack(sprites, options);
+    const request = { name: "p", sheets, settings: DEFAULT_SETTINGS, animations: [] };
+    const files = await packer.export({ ...request, output: "files" });
+    expect(files.map((f) => [f.name, f.mime])).toEqual([
+      ["p.png", "image/png"],
+      ["p.json", "application/json"],
+    ]);
+    const [zip] = await packer.export({ ...request, output: "zip" });
+    const entries = await readZip(zip.bytes);
+    expect(entries.map((e) => e.name)).toEqual(["p.png", "p.json"]);
+    expect(entries[0].data).toEqual(files[0].bytes);
+  });
+});
+
 describe("export variants", () => {
   it("writes every scale with its own names, sizes and animations", () => {
     const atlas = buildAtlas(
@@ -257,7 +358,7 @@ describe("export variants", () => {
     );
     const settings = parseSettings({ scales: [2, 1, 9], imageFormat: "webp" });
     expect(settings.scales).toEqual([1, 2]);
-    const files = sheetFiles("p", atlas.sheets, settings, detectAnimations(["w_1", "w_2"]));
+    const files = [...sheetFiles("p", atlas.sheets, settings, detectAnimations(["w_1", "w_2"]))];
     expect(files.map((f) => [f.imageName, f.image.width, f.data!.name])).toEqual([
       ["p.webp", 20, "p.json"],
       ["p@2x.webp", 40, "p@2x.json"],
@@ -275,7 +376,7 @@ describe("export variants", () => {
     });
     expect(data.animations).toEqual({ w: ["w_1.png", "w_2.png"] });
     // A single scale needs no suffix.
-    const only = sheetFiles("p", atlas.sheets, { ...settings, scales: [3] });
+    const only = [...sheetFiles("p", atlas.sheets, { ...settings, scales: [3] })];
     expect(only.map((f) => [f.imageName, f.image.width])).toEqual([["p.webp", 60]]);
     expect(parseSettings({ scales: [] }).scales).toEqual([1]);
   });
@@ -357,6 +458,36 @@ describe("live folders", () => {
     delete files["hero.f2dsprite"];
     expect(await scan()).toEqual([["art/a.png", "art/run/b.webp"], ["art/hero.f2dsprite"]]);
     expect(await scan()).toEqual([[], []]);
+  });
+
+  it("files that vanish or are being written don't end the scan", async () => {
+    let trouble: string | null = null;
+    const flaky = {
+      kind: "file" as const,
+      name: "a.png",
+      getFile: () =>
+        trouble
+          ? Promise.reject(new DOMException("no", trouble))
+          : Promise.resolve(new File(["1"], "a.png", { lastModified: 1 })),
+    };
+    const live = new LiveFolder({
+      kind: "directory",
+      name: "art",
+      async *values() {
+        yield await Promise.resolve(flaky);
+      },
+    });
+    const scan = async () => {
+      const { changed, removed } = await live.scan();
+      return [changed.length, removed];
+    };
+    expect(await scan()).toEqual([1, []]);
+    trouble = "NotReadableError";
+    expect(await scan()).toEqual([0, []]);
+    trouble = null;
+    expect(await scan()).toEqual([0, []]);
+    trouble = "NotFoundError";
+    expect(await scan()).toEqual([0, ["art/a.png"]]);
   });
 
   it("updates and removals are one undo step", () => {

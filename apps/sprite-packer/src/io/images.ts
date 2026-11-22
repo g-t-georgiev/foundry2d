@@ -193,7 +193,9 @@ export class ImageStore {
           }
           sheets.add(image.path.toLowerCase());
           const sheet = await this.get(await fileUrl(image));
-          const unpacked = page.frames.map((f) => [f.filename, unpackFrame(sheet, f)] as const);
+          const unpacked = page.frames.map(
+            (f) => [f.filename, unpackFrame(sheet, f, page.turn)] as const
+          );
           for (const [name, pixels] of unpacked)
             add(path, await this.encode(spriteName(name), pixels));
         }

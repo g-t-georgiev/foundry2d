@@ -27,6 +27,7 @@ export interface FileHandleLike {
   readonly kind: "file";
   readonly name: string;
   getFile(): Promise<File>;
+  isSameEntry?(other: FileHandleLike): Promise<boolean>;
   createWritable(): Promise<{ write(data: Blob | string): Promise<void>; close(): Promise<void> }>;
   queryPermission?(options: { mode: "read" | "readwrite" }): Promise<PermissionState>;
   requestPermission?(options: { mode: "read" | "readwrite" }): Promise<PermissionState>;

@@ -22,6 +22,8 @@ export interface ProjectMeta {
   updatedAt: number;
   /** Small preview image as a data URL. */
   thumbnail?: string;
+  /** The file this is the browser's copy of (a `FileSystemFileHandle`), if any. */
+  file?: unknown;
 }
 
 /** A library project: metadata plus the app's JSON payload. */

@@ -1,4 +1,4 @@
-import type { ProjectMeta, RecentFileRecord, Storage } from "@foundry2d/core";
+import type { ProjectMeta, ProjectRecord, RecentFileRecord, Storage } from "@foundry2d/core";
 import {
   downloadBlob,
   ensurePermission,
@@ -62,6 +62,9 @@ interface RecoverySnapshot {
   data: unknown;
 }
 
+/** How much older than its library copy a file may look, in ms: file systems round times. */
+const FILE_TIME_SLACK = 3000;
+
 const newId = (): string =>
   globalThis.crypto?.randomUUID?.() ??
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
@@ -71,6 +74,8 @@ const newId = (): string =>
  *
  * - Save (Ctrl+S) always writes the local library, and also the bound file
  *   when one was opened or chosen with "Save as file".
+ * - The library entry remembers that file, so opening the file again saves
+ *   into the same entry instead of adding another one.
  * - "Save as file" asks for a location (Chromium) or downloads a copy.
  * - Unsaved work is snapshotted to the recovery store and restored on reload.
  */
@@ -81,6 +86,8 @@ export class ProjectSession {
   private recentId: string | null = null;
   private dirty = false;
   private recoveryTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Bumped per snapshot and on clearing: a slow older snapshot must not land last. */
+  private recoveryRun = 0;
   private readonly recoveryKey: string;
   private readonly encoder = new TextEncoder();
   private readonly decoder = new TextDecoder();
@@ -211,7 +218,7 @@ export class ProjectSession {
     const id = this.libraryId ?? newId();
     const existing = this.libraryId ? await storage.projects.get(id) : null;
     const data = (await this.options.toStored?.(json)) ?? json;
-    await storage.projects.put({
+    const record: ProjectRecord = {
       id,
       app,
       name: this.options.getName(),
@@ -219,8 +226,34 @@ export class ProjectSession {
       updatedAt: now,
       thumbnail: this.options.thumbnail?.(),
       data,
-    });
+    };
+    // Saved without its file, the entry goes its own way: the link is dropped.
+    const file = this.handle;
+    try {
+      await storage.projects.put(file ? { ...record, file } : record);
+    } catch (error) {
+      if (!file) throw error;
+      await storage.projects.put(record); // handles can't be stored everywhere
+    }
     this.libraryId = id;
+  }
+
+  /**
+   * The library entry that is this file's copy. One that is newer than the
+   * file holds work the file doesn't (the file couldn't be written, or an
+   * older version was put back), so it is left alone.
+   */
+  private async libraryCopyOf(handle: FileHandleLike): Promise<string | null> {
+    try {
+      for (const { id, file, updatedAt } of await this.listLibrary()) {
+        if (!file || !(await handle.isSameEntry?.(file as FileHandleLike))) continue;
+        const { lastModified } = await handle.getFile();
+        return updatedAt <= lastModified + FILE_TIME_SLACK ? id : null;
+      }
+    } catch (error) {
+      console.warn("Could not look up the file's copy in the library", error);
+    }
+    return null;
   }
 
   // ------------------------------------------------------------------ opening
@@ -251,7 +284,14 @@ export class ProjectSession {
     this.fileName = handle?.name ?? name;
     this.recentId = null;
     this.dirty = false;
-    if (handle) await this.touchRecent(handle);
+    if (handle) {
+      const id = await this.libraryCopyOf(handle);
+      // Unless something else was opened meanwhile.
+      if (this.handle === handle) {
+        this.libraryId = id;
+        await this.touchRecent(handle);
+      }
+    }
     await this.clearRecovery();
     this.changed();
   }
@@ -339,6 +379,7 @@ export class ProjectSession {
   }
 
   async flushRecovery(): Promise<void> {
+    const run = ++this.recoveryRun;
     try {
       const json = this.options.serialize();
       const snapshot: RecoverySnapshot = {
@@ -347,6 +388,7 @@ export class ProjectSession {
         recentId: this.recentId,
         data: (await this.options.toStored?.(json)) ?? json,
       };
+      if (run !== this.recoveryRun) return;
       const bytes = this.encoder.encode(JSON.stringify(snapshot));
       await this.options.storage.recovery.saveRecovery(this.recoveryKey, bytes);
     } catch (error) {
@@ -386,6 +428,7 @@ export class ProjectSession {
   }
 
   async clearRecovery(): Promise<void> {
+    this.recoveryRun++;
     if (this.recoveryTimer) clearTimeout(this.recoveryTimer);
     this.recoveryTimer = null;
     try {

@@ -1,6 +1,6 @@
 import type { Atlas } from "@foundry2d/atlas";
 import type { Position, Rect } from "@foundry2d/core";
-import type { SheetFrame } from "@foundry2d/formats";
+import type { SheetFrame, Turn } from "@foundry2d/formats";
 import {
   BoundsPass,
   CheckerboardPass,
@@ -8,7 +8,8 @@ import {
   type RenderPass,
 } from "@foundry2d/render";
 import type { ScenePointerEvent, Workspace, WorkspaceScene } from "@foundry2d/workspace";
-import { spriteOfFrame, toCanvas } from "./export";
+import { toCanvas } from "./canvas";
+import { spriteOfFrame } from "./export";
 
 /** World pixels between sheets drawn next to each other. */
 const SHEET_GAP = 32;
@@ -52,7 +53,7 @@ export class SheetScene implements WorkspaceScene {
         frames: sheet.frames.map((f) => ({
           name: f.filename,
           rotated: f.rotated,
-          pivot: pivotOnSheet(f, rect.x),
+          pivot: pivotOnSheet(f, sheet.turn, rect.x),
           rect: {
             x: rect.x + f.frame.x,
             y: rect.y + f.frame.y,
@@ -139,13 +140,16 @@ export class SheetScene implements WorkspaceScene {
 }
 
 /** Where a frame's pivot lies on its sheet (turned with rotated frames), in world pixels. */
-function pivotOnSheet(f: SheetFrame, sheetX: number): Position | null {
+function pivotOnSheet(f: SheetFrame, turn: Turn, sheetX: number): Position | null {
   if (!f.pivot) return null;
   const u = f.pivot.x * f.sourceSize.w - f.spriteSourceSize.x;
   const v = f.pivot.y * f.sourceSize.h - f.spriteSourceSize.y;
-  return f.rotated
-    ? { x: sheetX + f.frame.x + f.frame.h - v, y: f.frame.y + u }
-    : { x: sheetX + f.frame.x + u, y: f.frame.y + v };
+  const at = !f.rotated
+    ? { x: u, y: v }
+    : turn === "cw"
+      ? { x: f.frame.h - v, y: u }
+      : { x: v, y: f.frame.w - u };
+  return { x: sheetX + f.frame.x + at.x, y: f.frame.y + at.y };
 }
 
 /** The sheet images. */

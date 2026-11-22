@@ -17,6 +17,7 @@ export interface StartScreenData {
 /** The start screen / Open dialog, e.g. `<project-browser>`. */
 export interface StartScreen {
   show(data: StartScreenData): void;
+  close(): void;
 }
 
 export interface ProjectFilesOptions<Project> {
@@ -78,6 +79,10 @@ async function storageUsage(): Promise<string | undefined> {
  * start screen's events can be bound to it directly.
  */
 export class ProjectFiles<Project> {
+  /** Set once `startup` is done; files launched before that wait for it. */
+  private started = false;
+  private launched: FileHandleLike | null = null;
+
   constructor(private readonly options: ProjectFilesOptions<Project>) {}
 
   private get session(): ProjectSession {
@@ -125,6 +130,8 @@ export class ProjectFiles<Project> {
       const opened = await this.session.readHandle(handle);
       this.options.load(this.options.parse(opened));
       await this.session.adoptFile(opened.name, opened.handle);
+      // Nobody picked this file there, so the start screen may still be open.
+      this.options.startScreen.close();
       this.options.notify(`Opened ${opened.handle.name}`);
     });
   }
@@ -132,8 +139,9 @@ export class ProjectFiles<Project> {
   /**
    * Opens the files the OS launches an installed app with (double-clicking a
    * work file, "Open with"). Uses the Launch Handler API where the browser
-   * has it (Chromium on desktop); elsewhere this does nothing. Call after
-   * `startup()`, so a launched file wins over the start screen.
+   * has it (Chromium on desktop); elsewhere this does nothing. Call before
+   * `startup()`, which opens a file launched by then instead of showing the
+   * start screen.
    */
   bindLaunchQueue(): void {
     const queue = (
@@ -145,7 +153,9 @@ export class ProjectFiles<Project> {
     ).launchQueue;
     queue?.setConsumer((params) => {
       const [first] = params.files;
-      if (first) void this.openHandle(first);
+      if (!first) return;
+      if (this.started) void this.openHandle(first);
+      else this.launched = first;
     });
   }
 
@@ -192,8 +202,10 @@ export class ProjectFiles<Project> {
   /** Copies a library project to a new entry named "... copy". */
   async duplicateLibrary(id: string): Promise<void> {
     const storage = this.session.storage;
-    const record = await storage.projects.get(id);
-    if (!record) return;
+    const stored = await storage.projects.get(id);
+    if (!stored) return;
+    // The copy is its own work, not another copy of the file.
+    const { file: _file, ...record } = stored;
     const taken = new Set((await this.session.listLibrary()).map((p) => p.name));
     let name = `${record.name} copy`;
     for (let n = 2; taken.has(name); n++) name = `${record.name} copy ${n}`;
@@ -284,9 +296,21 @@ export class ProjectFiles<Project> {
   /**
    * Restores unsaved work from the last session, or shows the start screen
    * when there is saved work to pick from. Work started before storage
-   * answered is never replaced.
+   * answered is never replaced. A file the app was launched with comes last,
+   * asking first when there is unsaved work.
    */
   async startup(): Promise<void> {
+    try {
+      await this.restoreOrAsk();
+    } finally {
+      this.started = true;
+      const launched = this.launched;
+      this.launched = null;
+      if (launched) await this.openHandle(launched);
+    }
+  }
+
+  private async restoreOrAsk(): Promise<void> {
     const recovered = await this.session.loadRecovery();
     if (recovered && !this.session.state.dirty) {
       try {
@@ -302,7 +326,8 @@ export class ProjectFiles<Project> {
       this.session.listLibrary(),
       this.session.listRecent(),
     ]);
-    if ((library.length > 0 || recent.length > 0) && !this.session.state.dirty) {
+    const choice = library.length > 0 || recent.length > 0;
+    if (choice && !this.launched && !this.session.state.dirty) {
       await this.showBrowser();
     }
   }

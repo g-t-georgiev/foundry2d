@@ -1,10 +1,19 @@
 import { Buffer } from "node:buffer";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { expect, test, type Download, type Page } from "@playwright/test";
-import { openApp, reloadAfterRecovery, toScreen, type FoundryApp } from "./helpers";
+import {
+  expectLaunchedFileOpens,
+  expectOneCopyPerFile,
+  openApp,
+  reloadAfterRecovery,
+  toScreen,
+  type FoundryApp,
+} from "./helpers";
 
 interface PackerApp extends FoundryApp {
   packing: boolean;
+  packer: { inWorker: boolean };
   project: {
     sprites: { name: string }[];
     settings: { algorithm: string; allowRotation: boolean };
@@ -259,6 +268,12 @@ test("unsaved work survives a reload, and saved packs reopen from the start scre
 }) => {
   await addSprites(page, BASIC);
   await setting(page, "algorithm").selectOption("grid");
+  // Adding the sprites may have been saved already; wait for this edit.
+  await expect
+    .poll(() =>
+      page.evaluate(async () => JSON.stringify(await window.foundry!.session.loadRecovery()))
+    )
+    .toContain('"algorithm":"grid"');
   await reloadAfterRecovery(page);
   await expect(page.locator("#statMessage")).toContainText("Restored");
   await expect(setting(page, "algorithm")).toHaveValue("grid");
@@ -386,8 +401,9 @@ test("pivots of the selected sprites are edited, undone and exported", async ({ 
   await expect(page.locator("#pivotHint")).toBeVisible();
 });
 
-test("scales and WebP", async ({ page }) => {
-  await addSprites(page, { "a.png": [10, 20, "#f00"] });
+test("scales and WebP, packed in a worker and exact", async ({ page }) => {
+  await addSprites(page, { "a.png": [10, 20, "rgba(200, 100, 50, 0.02)"] });
+  expect(await page.evaluate(() => (window.foundry as PackerApp).packer.inWorker)).toBe(true);
   await setting(page, "imageFormat").selectOption("webp");
   await page.locator('[data-scale="2"]').check();
   const files = await exportFiles(page, 4);
@@ -398,42 +414,56 @@ test("scales and WebP", async ({ page }) => {
     "untitled@2x.webp",
   ]);
   expect(files.get("untitled@2x.webp")!.subarray(8, 12).toString()).toBe("WEBP");
+  // Nearly transparent pixels keep their colours.
+  const before = await pixelsOf(page, "a");
+  await addFiles(page, [{ name: "a.webp", buffer: files.get("untitled.webp")! }]);
+  await packed(page);
+  expect(await pixelsOf(page, "a")).toEqual(before);
   // The last scale can't be unticked.
   await page.locator('[data-scale="1"]').uncheck();
   await page.locator('[data-scale="2"]').click();
   await expect(page.locator('[data-scale="2"]')).toBeChecked();
 });
 
-test("a sheet with its data is unpacked into its sprites, pixel for pixel", async ({ page }) => {
-  await addSprites(page, {
-    "walk_1.png": [10, 21, "#f00"],
-    "walk_2.png": [12, 20, "rgba(0, 255, 0, 0.02)"],
-    "wide.png": [40, 6, "#00f"],
+for (const [format, extension] of [
+  ["json-hash", "json"],
+  ["starling-xml", "xml"],
+  ["libgdx-atlas", "atlas"],
+]) {
+  test(`a ${format} sheet is unpacked into its sprites, pixel for pixel`, async ({ page }) => {
+    await addSprites(page, {
+      "walk_1.png": [10, 21, "#f00"],
+      "walk_2.png": [12, 20, "rgba(0, 255, 0, 0.02)"],
+      "wide.png": [40, 6, "#00f"],
+    });
+    await setting(page, "dataFormat").selectOption(format);
+    await setting(page, "allowRotation").check();
+    const before = new Map<string, unknown>();
+    for (const name of await names(page)) before.set(name, await pixelsOf(page, name));
+    const files = await exportFiles(page, 2);
+
+    await page.locator('[data-command="open"]').click();
+    await page
+      .locator("project-browser")
+      .getByRole("button", { name: /Empty pack/ })
+      .click();
+    await expect(page.locator("#spriteCount")).toHaveText("0");
+    await addFiles(
+      page,
+      [...files].map(([name, buffer]) => ({ name, buffer }))
+    );
+    await expect.poll(() => names(page)).toEqual(["walk_1", "walk_2", "wide"]);
+    for (const [name, pixels] of before) expect(await pixelsOf(page, name)).toEqual(pixels);
+
+    // Data without its image says what is missing.
+    await addFiles(page, [
+      { name: `lonely.${extension}`, buffer: files.get(`untitled.${extension}`)! },
+    ]);
+    await expect(page.locator("#statMessage")).toContainText(
+      `lonely.${extension} (add untitled.png with it)`
+    );
   });
-  await setting(page, "allowRotation").check();
-  const before = new Map<string, unknown>();
-  for (const name of await names(page)) before.set(name, await pixelsOf(page, name));
-  const files = await exportFiles(page, 2);
-
-  await page.locator('[data-command="open"]').click();
-  await page
-    .locator("project-browser")
-    .getByRole("button", { name: /Empty pack/ })
-    .click();
-  await expect(page.locator("#spriteCount")).toHaveText("0");
-  await addFiles(
-    page,
-    [...files].map(([name, buffer]) => ({ name, buffer }))
-  );
-  await expect.poll(() => names(page)).toEqual(["walk_1", "walk_2", "wide"]);
-  for (const [name, pixels] of before) expect(await pixelsOf(page, name)).toEqual(pixels);
-
-  // Data without its image says what is missing.
-  await addFiles(page, [{ name: "lonely.json", buffer: files.get("untitled.json")! }]);
-  await expect(page.locator("#statMessage")).toContainText(
-    "lonely.json (add untitled.png with it)"
-  );
-});
+}
 
 test("pixel-editor sprites come in frame by frame", async ({ page }) => {
   const document = (color: number) => ({
@@ -461,6 +491,59 @@ test("pixel-editor sprites come in frame by frame", async ({ page }) => {
   await expect.poll(() => names(page)).toEqual(["hero_0", "hero_1"]);
   await expect(page.locator("#statMessage")).toHaveText("Added 2 sprites");
   expect((await pixelsOf(page, "hero_1")).data).toEqual([0, 255, 0, 255, 0, 0, 0, 0]);
+});
+
+test("a live folder on disk follows what other programs do", async ({ page }, info) => {
+  const dir = path.join(info.outputDir, "sprites");
+  await mkdir(dir, { recursive: true });
+  const file = (name: string) => path.join(dir, name);
+  await writeFile(file("a.png"), await png(page, 8, 8, "#f00"));
+
+  // The folder picker can't be driven, so the folder is dragged in to get its handle.
+  await page.evaluate(() => {
+    window.addEventListener(
+      "drop",
+      (ev) => {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        const item = ev.dataTransfer!.items[0] as DataTransferItem & {
+          getAsFileSystemHandle(): Promise<unknown>;
+        };
+        const handle = item.getAsFileSystemHandle();
+        Object.assign(window, { showDirectoryPicker: () => handle, handleReady: true });
+      },
+      { capture: true, once: true }
+    );
+  });
+  const cdp = await page.context().newCDPSession(page);
+  for (const type of ["dragEnter", "dragOver", "drop"] as const) {
+    await cdp.send("Input.dispatchDragEvent", {
+      type,
+      x: 700,
+      y: 400,
+      data: { items: [], files: [dir], dragOperationsMask: 1 },
+    });
+  }
+  await expect.poll(() => page.evaluate(() => "handleReady" in window)).toBe(true);
+  await page.getByRole("button", { name: "Live folder" }).click();
+  await expect.poll(() => names(page)).toEqual(["sprites/a"]);
+
+  // Saved the way many programs do: a new file that takes the old one's place.
+  await writeFile(file("a.tmp"), await png(page, 12, 8, "#0f0"));
+  await rename(file("a.tmp"), file("a.png"));
+  await mkdir(file("enemies"));
+  await writeFile(file("enemies/bat.png"), await png(page, 6, 6, "#00f"));
+  await expect.poll(() => names(page)).toEqual(["sprites/a", "sprites/enemies/bat"]);
+  await expect.poll(async () => (await pixelsOf(page, "sprites/a")).width).toBe(12);
+
+  await rm(file("enemies"), { recursive: true });
+  await expect.poll(() => names(page)).toEqual(["sprites/a"]);
+
+  // The whole folder goes: watching ends, the sprites stay.
+  await rm(dir, { recursive: true });
+  await expect(page.locator("#statMessage")).toContainText("Stopped watching sprites");
+  await expect(page.locator("#liveFolders")).toBeHidden();
+  expect(await names(page)).toEqual(["sprites/a"]);
 });
 
 test("a live folder adds, updates and removes sprites as files change", async ({ page }) => {
@@ -511,4 +594,17 @@ test("a live folder adds, updates and removes sprites as files change", async ({
   await write("d.png", await png(page, 8, 8, "#fff"));
   await page.waitForTimeout(2500);
   expect(await names(page)).toEqual(["art/b", "art/c"]);
+});
+
+test("a pack the installed app is launched with opens without the start screen", async ({
+  page,
+}) => {
+  await addSprites(page, BASIC);
+  await expectLaunchedFileOpens(page, "other.f2dpack");
+  await expect(page.locator("#spriteCount")).toHaveText("4");
+});
+
+test("opening a file again and saving updates its copy in the browser", async ({ page }) => {
+  await addSprites(page, BASIC);
+  await expectOneCopyPerFile(page);
 });

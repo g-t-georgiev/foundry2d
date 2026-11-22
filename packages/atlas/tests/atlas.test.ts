@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vite-plus/test";
+import { readSheetData, SHEET_FORMATS } from "@foundry2d/formats";
 import {
   buildAtlas,
   createImage,
@@ -8,6 +9,7 @@ import {
   rotateImageCCW,
   rotateImageCW,
   scaleSheet,
+  sheetData,
   unpackFrame,
   type PackOptions,
   type PackSize,
@@ -325,6 +327,39 @@ describe("pivots, scales and unpacking", () => {
     }
   });
 
+  it("every format with rotation survives writing, reading and unpacking", () => {
+    const rotating = SHEET_FORMATS.filter((f) => f.rotation);
+    expect(rotating.map((f) => f.id)).toEqual([
+      "json-hash",
+      "json-array",
+      "starling-xml",
+      "libgdx-atlas",
+    ]);
+    for (const format of rotating) {
+      const atlas = buildAtlas(inputs, {
+        algorithm: "maxrects",
+        allowRotation: true,
+        trim: true,
+        turn: format.rotation!,
+        maxWidth: 80,
+        maxHeight: 64,
+      });
+      let turned = 0;
+      for (const sheet of atlas.sheets) {
+        const text = format.write(sheetData(sheet), { image: "a.png", scale: 1 });
+        const [page] = readSheetData(text)!;
+        expect(page.frames).toHaveLength(sheet.frames.length);
+        for (const f of page.frames) {
+          if (f.rotated) turned++;
+          const name = `${f.filename.replace(/\.png$/, "")}.png`;
+          const original = inputs.find((i) => i.name === name)!.image;
+          expect(unpackFrame(sheet.image, f, page.turn)).toEqual(original);
+        }
+      }
+      expect(turned).toBeGreaterThan(0);
+    }
+  });
+
   it("refuses frames outside the sheet or their original size", () => {
     const atlas = buildAtlas([inputs[0]], { algorithm: "maxrects", trim: true });
     const [f] = atlas.sheets[0].frames;
@@ -354,6 +389,7 @@ describe("pivots, scales and unpacking", () => {
   it("turns images back and premultiplies", () => {
     const img = sprite(5, 3, 9);
     expect(rotateImageCCW(rotateImageCW(img))).toEqual(img);
+    expect(rotateImageCCW(img)).toEqual(rotateImageCW(rotateImageCW(rotateImageCW(img))));
     const half = image(1, 1, () => [200, 100, 3, 128]);
     expect(px(premultiply(half), 0, 0)).toEqual([100, 50, 2, 128]);
   });
