@@ -1,3 +1,9 @@
+export type {
+  WebComponent,
+  WebComponentConstructor,
+  TemplateFactory,
+  TemplateValue,
+} from "./core/types";
 export * from "./core/WebComponentBase";
 export * from "./core/component-utils";
 export * from "./core/dom";

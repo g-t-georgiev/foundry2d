@@ -1,3 +1,5 @@
+import { collectShortcuts, type Shortcut, type ShortcutInfo } from "./shortcuts";
+
 export type KeyHandler = (event: KeyboardEvent) => void | boolean;
 
 export interface KeyBinding {
@@ -13,7 +15,13 @@ export interface KeyBinding {
   whileTyping?: boolean;
 }
 
-interface ParsedCombo {
+/** Options of `Keymap.bind`; a label and group put the binding in the manual. */
+export interface BindOptions extends Partial<ShortcutInfo> {
+  repeat?: boolean;
+  whileTyping?: boolean;
+}
+
+export interface ParsedCombo {
   key: string;
   mod: boolean;
   shift: boolean;
@@ -55,18 +63,31 @@ export function parseCombo(combo: string): ParsedCombo {
 export class Keymap {
   private bindings: { parsed: ParsedCombo; binding: KeyBinding }[] = [];
   private holds: { key: string; onPress: () => void; onRelease: () => void; held: boolean }[] = [];
+  /** Every labelled key, in the order bound (also keys handled outside the keymap). */
+  private described: ({ combo: string } & ShortcutInfo)[] = [];
   private readonly isMac = isMacPlatform();
 
-  bind(
-    combo: string,
-    handler: KeyHandler,
-    options: { repeat?: boolean; whileTyping?: boolean } = {}
-  ): () => void {
-    const entry = { parsed: parseCombo(combo), binding: { combo, handler, ...options } };
+  bind(combo: string, handler: KeyHandler, options: BindOptions = {}): () => void {
+    const { label, group, ...rest } = options;
+    const entry = { parsed: parseCombo(combo), binding: { combo, handler, ...rest } };
     this.bindings.push(entry);
+    if (label && group) this.describe(combo, { label, group });
     return () => {
       this.bindings = this.bindings.filter((b) => b !== entry);
     };
+  }
+
+  /**
+   * Lists a key in the manual that something else handles (a list's own
+   * key handler, the browser's paste event).
+   */
+  describe(combo: string, info: ShortcutInfo): void {
+    this.described.push({ combo, ...info });
+  }
+
+  /** The labelled shortcuts, one row per action. */
+  shortcuts(): Shortcut[] {
+    return collectShortcuts(this.described);
   }
 
   /** Dispatches a keydown. Returns `true` when a binding handled it. */
@@ -104,7 +125,8 @@ export class Keymap {
    * Binds a key that is held down, e.g. Alt for a temporary eyedropper.
    * `onRelease` also fires when the window loses focus while held.
    */
-  hold(key: string, onPress: () => void, onRelease: () => void): () => void {
+  hold(key: string, onPress: () => void, onRelease: () => void, info?: ShortcutInfo): () => void {
+    if (info) this.describe(`hold ${key}`, info);
     const entry = { key: normalizeKey(key), onPress, onRelease, held: false };
     this.holds.push(entry);
     return () => {
@@ -154,6 +176,7 @@ export class Keymap {
   clear(): void {
     this.bindings = [];
     this.holds = [];
+    this.described = [];
   }
 }
 

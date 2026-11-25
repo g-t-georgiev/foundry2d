@@ -3,6 +3,8 @@ node_modules/
 .pnpm-store/
 
 # Build artifacts
+# Generated API reference (`vp run docs`)
+docs/api/
 dist/
 build/
 out/

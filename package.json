@@ -15,12 +15,15 @@
     "format": "vp fmt .",
     "format:check": "vp fmt --check .",
     "prepare": "vp config",
-    "test:e2e": "playwright test -c e2e/playwright.config.ts"
+    "test:e2e": "playwright test -c e2e/playwright.config.ts",
+    "docs": "vpx scripts/docs.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",
     "@types/node": "^26.6.5",
     "turbo": "^2.11.10",
+    "typedoc": "^0.28.20",
+    "typedoc-plugin-markdown": "^4.14.1",
     "typescript": "^5.4.0",
     "vite-plus": "catalog:"
   },

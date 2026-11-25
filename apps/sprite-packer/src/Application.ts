@@ -35,6 +35,7 @@ import {
 import { detectAnimations, frameTags, packOrder, type Animation } from "./model/animations";
 import { DEFAULT_NAME, PackProject } from "./model/PackProject";
 import { atlasOptions, DEFAULT_SETTINGS, writesPivots, type PackSettings } from "./model/settings";
+import { bindKeys } from "./keys";
 import { Packer } from "./pack/Packer";
 import { SheetScene } from "./SheetScene";
 import { AnimationPreview } from "./ui/AnimationPreview";
@@ -609,19 +610,17 @@ export default class Application {
   }
 
   private bindKeys(): void {
-    const { keymap } = this.workspace;
-    keymap.bind("mod+z", () => void this.history.undo(), { repeat: true });
-    keymap.bind("mod+shift+z", () => void this.history.redo(), { repeat: true });
-    keymap.bind("mod+y", () => void this.history.redo(), { repeat: true });
-    keymap.bind("mod+s", () => void this.files.save(), { whileTyping: true });
-    keymap.bind("mod+shift+s", () => void this.files.saveAs(), { whileTyping: true });
-    keymap.bind("mod+o", () => void this.files.showBrowser(), { whileTyping: true });
-    keymap.bind("mod+e", () => void this.export($<SplitButton>("#exportButton").value), {
-      whileTyping: true,
+    bindKeys(this.workspace.keymap, {
+      undo: () => void this.history.undo(),
+      redo: () => void this.history.redo(),
+      save: () => void this.files.save(),
+      saveAs: () => void this.files.saveAs(),
+      open: () => void this.files.showBrowser(),
+      export: () => void this.export($<SplitButton>("#exportButton").value),
+      fit: () => void this.workspace.fitToView(),
+      removeSelected: () => this.remove([...this.selected]),
+      deselect: () => this.select([]),
     });
-    keymap.bind("f", () => void this.workspace.fitToView());
-    keymap.bind("delete", () => this.remove([...this.selected]));
-    keymap.bind("escape", () => this.select([]));
   }
 
   /** Drop images or folders anywhere on the page. */

@@ -59,6 +59,16 @@ The first end-to-end run on a machine needs the browser: `pnpm exec playwright i
 - Shared look: use the classes from `@foundry2d/ui/theme/components.css` (`.btn`, `.input`, `.field`, `.panel-section`, `.dialog`…) rather than styling bare elements.
 - Commit messages: wrap HTML tag names in backticks (`` `<dialog>` ``); bare tags show up empty in some viewers.
 
+## Documentation
+
+The docs are Markdown in `docs/`: the [manual](manual/README.md), [architecture](architecture.md) and [technologies](technologies.md), with the root [README](../README.md) as the entry point.
+
+- **Generated parts:** `vp run docs` writes each app's "Keyboard shortcuts" article from its key bindings (`apps/*/src/keys.ts`, through `manual.ts`) and the API reference into `docs/api/` with TypeDoc. `vp run docs -- --no-api` skips the API reference.
+- **Shortcuts:** give every binding a `label` and `group` (`keymap.bind(combo, handler, { label, group })`); keys that something else handles are listed with `keymap.describe`. Each app has a test that fails while its shortcuts article is out of date, so run `vp run docs` after changing them. The articles are excluded from formatting.
+- **API reference:** comes from TSDoc comments on exports; it is not committed (`docs/api/` is ignored). TypeDoc warns about exported functions that use types the package doesn't export.
+- **Screenshots:** `docs/images/` is made by `vpx scripts/screenshots.ts` while the three dev servers run. Take them again when a layout changes.
+- **Style:** plain words, short sentences, one idea per sentence; name buttons and fields exactly as the app labels them.
+
 ## Known toolchain quirks
 
 ### Stale modules after editing a file from a shell (Windows)

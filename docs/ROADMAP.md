@@ -589,7 +589,17 @@ A third app in the monorepo that turns many images into optimised spritesheets p
 - **UI:** the shared shell from Phase 8 (workspace canvas, panels, project browser). A sheet preview with zoom, a sprite list with search and overrides, an animation preview, and packing statistics (fill rate, sheet count).
 - **Reuse:** `@foundry2d/workspace` for the preview canvas, the export controller's PNG and ZIP encoders, `compositeRgba` for sprite input, and storage and `ProjectSession` for the library and recovery.
 
-### Phase 10: Documentation, manual and onboarding ⚠️ (not started)
+### Phase 10: Documentation, manual and onboarding ⚠️ (in progress)
+
+**Stages:**
+
+- **10.1 Markdown sources** ✅ (2026-11-25): point 1 below.
+  - **Docs:** a root `README.md` (the apps, screenshots, quick start, layout), `docs/architecture.md`, `docs/technologies.md`, and the manual in `docs/manual/` (`README.md` lists it): getting started (the apps, projects and files, the canvas), a chapter per app with every tool, panel and dialog, workflows (a spritesheet from the pixel editor, a Pac-Man maze with entities, a sprite as a tileset, packing a game's sprites), and file formats for game developers (work files, level exports, spritesheet data). Folders and files are numbered in reading order for the site (10.2).
+  - **Generated shortcut tables:** `Keymap.bind` takes a `label` and `group`, `keymap.describe` lists keys handled elsewhere (paste, F2 in lists), and each app's `manual.ts` builds its "Keyboard shortcuts" article from the real bindings. `vp run docs` writes them; a test per app fails when an article is out of date. The sprite packer's bindings moved to its own `keys.ts` like the other apps.
+  - **API reference:** TypeDoc with `typedoc-plugin-markdown` for all seven packages, from `vp run docs` into `docs/api/` (not committed, since it is regenerated from the code). Types that exported functions use but packages didn't export are now exported, so it builds without warnings.
+  - **Screenshots:** `scripts/screenshots.ts` drives the three apps in a fresh browser profile and writes `docs/images/`.
+  - Every link in the docs was checked to resolve.
+- **10.2 Manual site** (point 2) and **10.3 First-run guide** (point 3): next. Item 45 (what the apps show at startup) is to be decided with 10.3, since the first-run guide starts from the same screen.
 
 1. **Markdown sources** in `docs/`, the single source of truth:
    - `README.md` at the root: what foundry2d is, screenshots, quick start (`vp install`, `vp dev`), and the repository layout.

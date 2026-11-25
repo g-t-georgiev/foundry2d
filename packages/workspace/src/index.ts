@@ -1,5 +1,6 @@
 export type * from "./types";
 export * from "./Keymap";
+export * from "./shortcuts";
 export * from "./InputController";
 export * from "./Workspace";
 export * from "./scenes/GridDocumentScene";

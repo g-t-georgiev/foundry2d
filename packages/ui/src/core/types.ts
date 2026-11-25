@@ -24,10 +24,7 @@ export interface WebComponent extends HTMLElement {
 
 export interface WebComponentConstructor extends CustomElementConstructor {
   new (...args: unknown[]): HTMLElement & WebComponent;
-  /**
-   * @static
-   * Lists the attributes that will trigger `attributeChangedCallback`.
-   */
+  /** Lists the attributes that trigger `attributeChangedCallback` (a static field). */
   readonly observedAttributes?: string[];
 }
 

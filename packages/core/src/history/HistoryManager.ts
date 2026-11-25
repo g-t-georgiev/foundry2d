@@ -6,7 +6,7 @@ export interface HistoryOptions {
   limit?: number;
 }
 
-type HistoryListener = (state: HistoryState) => void;
+export type HistoryListener = (state: HistoryState) => void;
 
 export class HistoryManager {
   private undoStack: ICommand[] = [];

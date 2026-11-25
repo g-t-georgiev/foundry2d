@@ -1,0 +1,29 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPointStrategy": "packages",
+  "entryPoints": [
+    "packages/core",
+    "packages/render",
+    "packages/workspace",
+    "packages/store",
+    "packages/ui",
+    "packages/atlas",
+    "packages/formats"
+  ],
+  "packageOptions": {
+    "entryPoints": ["src/index.ts"],
+    "excludePrivate": true,
+    "excludeInternal": true
+  },
+  "plugin": ["typedoc-plugin-markdown"],
+  "out": "docs/api",
+  "name": "foundry2d API",
+  "readme": "none",
+  "excludePrivate": true,
+  "hideGenerator": true,
+  "githubPages": false,
+  "validation": { "notExported": false, "invalidLink": true, "notDocumented": false },
+  "outputFileStrategy": "modules",
+  "useCodeBlocks": true,
+  "expandObjects": false
+}

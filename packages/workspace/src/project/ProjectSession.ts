@@ -55,7 +55,7 @@ export interface OpenedProject {
   name: string;
 }
 
-interface RecoverySnapshot {
+export interface RecoverySnapshot {
   libraryId: string | null;
   fileName: string | null;
   recentId: string | null;

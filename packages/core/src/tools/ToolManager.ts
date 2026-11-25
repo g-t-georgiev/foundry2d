@@ -14,7 +14,7 @@ export interface ToolManagerOptions {
   initialTool?: ToolType;
 }
 
-type ToolChangeListener = (tool: ToolType, previous: ToolType) => void;
+export type ToolChangeListener = (tool: ToolType, previous: ToolType) => void;
 
 /**
  * Registry of tools plus the active-tool state machine.
