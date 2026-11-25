@@ -1,5 +1,7 @@
 # foundry2d Roadmap
 
+> **Becoming Game Studio 2D** (decided 2026-11-25): see [Vision: Game Studio 2D](#vision-game-studio-2d-agreed-2026-11-25) and Phases 11–15. The name changes in Phase 11.1.
+
 Two apps on one engine:
 
 - **Pixel Editor** (`apps/pixel-editor`): Piskel-like sprite editor. One document, one canvas workspace.
@@ -480,7 +482,7 @@ Foundry2D already has both, but the line between them isn't drawn deliberately y
 38. ✅ **Offline support (installable web app).** Each app gets a web app manifest, icons and a service worker that caches the app shell, so it installs from the browser and works offline. Items 33–34 (branded files, file association) build on the same manifest. (8.7)
     - Storage already works offline (IndexedDB, File System Access).
     - The service worker needs an update flow ("new version available, reload"), so a cached old version never silently edits newer files.
-39. ⏸️ **Standalone desktop and mobile apps.** Decide between packaging the existing web apps and keeping them installable web apps only. (8.7: decided, not now)
+39. ✅ **Standalone desktop and mobile apps.** Decide between packaging the existing web apps and keeping them installable web apps only. (8.7: not then; 2026-11-25: decided, the desktop studio is a **Tauri** app with a Rust core, Phase 13. Mobile is still open.)
     - **Desktop:** Tauri (small, uses the system web view) or Electron (one Chromium everywhere, bigger). Either gives real file associations, native menus, recent files and plain file-system access without browser pickers.
     - **Mobile:** Capacitor around the same build, or installable web apps first. Touch input needs its own pass: pinch zoom, a long press for the secondary action, and larger hit targets.
     - Choose after item 38, because the installable web app may already cover most needs.
@@ -508,12 +510,12 @@ Foundry2D already has both, but the line between them isn't drawn deliberately y
 
 44. ✅ **Split-button menu stretched the toolbar** (reported 2026-11-15), fixed. In the level designer, opening the Export menu grew the toolbar and showed a scrollbar instead of floating over the canvas. The toolbar scrolls sideways (`overflow-x: auto`), so it clipped the absolutely positioned menu and scrolled instead of letting it overflow. The `<split-button>` menu is now a top-layer popover placed in viewport coordinates, like the colour picker panel (item 43). An end-to-end check makes sure the toolbar doesn't grow. Rule of thumb for future components: menus and panels that pop out of a control should be popovers, not absolutely positioned children.
 
-45. ⚠️ **Open question: what the apps show at startup** (raised 2026-11-15, to decide). Today both apps start with a new blank, unsaved project ("untitled"). They restore unsaved work from the last session if there is any; otherwise, when the browser library or recent files have something, the start screen opens on top of the blank project. (open question)
-    1. Should the apps always start with a brand-new, blank, unsaved project behind the start screen?
-    2. Should the project saved last (if there is one) be open behind the start screen instead?
-    3. Should the start screen mark the project that was open last, with its saved changes?
-
-    **Suggestion so far (not decided):** combine 1 and 3. Always start with a brand-new project. On the start screen, mark the project that was worked on last, meaning the one with the most recently saved changes, so it is one click away without being opened automatically. This needs a closer look at how the apps should behave as a whole before it is settled.
+45. ✅ **What the apps show at startup** (raised 2026-11-15, **decided 2026-11-25**, built in Phase 11). The question was what an app shows behind its start panel (a blank project, the last one, or a marked last one).
+    - **Decision:** a separate **start screen, the hub**, instead of a panel over each app. It is the entry point for all the tools: **Continue** (unsaved work from the last session, per app), **In this browser** (saved projects of every app, marked by app), **Recent files**, **New** (each app's templates and presets), the manual and the apps.
+    - **Opening from the hub** goes straight into the right app with that project (`?project=`, `?recent=`, `?new=`), never through a start panel.
+    - **Opening an app directly** (bookmark, installed app, a double-clicked work file) never shows a panel either: it opens the file, restores unsaved work, or starts a new blank project.
+    - **Inside an app,** Open (Ctrl+O) stays as a dialog on demand, for switching without leaving, and a **Home** button goes back to the hub.
+    - **Needs one origin:** the hub reads every app's library and recent files, and browser storage is per origin, so the apps are served under paths of one site (Phase 11.2).
 
 46. ✅ **Guide grid per layer** (requested 2026-11-15). LDtk layer definitions have an optional "guide" grid, `guideGridWid` × `guideGridHei` in pixels, next to the layer's real `gridSize`. It only affects how the layer is shown in the editor (helper lines, for example a 16 × 16 room grid over an 8 px layer); cells, tools and exports keep using the real grid. Checked against the LDtk JSON field docs, which describe the fields but not how the editor draws them, so the drawing details are still to be confirmed. (8.5)
     - **Built as:** two optional numbers on a layer definition ("Guide grid W × H", px) in Project settings → Layers, stored in the work file. When the active layer has them, the level view draws a second, lighter grid at that spacing (another `GridLinesPass` with a step getter, already supported since item 17). No effect on game exports.
@@ -527,7 +529,22 @@ Foundry2D already has both, but the line between them isn't drawn deliberately y
       - Layers with their own grid (item 17) and guide grids (46): the ruler should follow the active layer's grid, like the cell grid does.
     - Also review the pixel rulers' step choice at the zoom levels where it looks odd.
 
-48. ⚠️ **Naming and branding** (requested 2026-11-15, **last**, after Phase 10). Make each app's name consistent everywhere: package name (`package.json`), directory, page title, work-file extension and MIME type. Today they differ, e.g. the level designer is `@apps/level-designer` in `apps/level-designer/`, "Foundry2D · Level Designer" as the title, `.f2dlevel` files with `application/vnd.foundry2d.level+json`. The request is to use one short lower-case name per app in all of these, the level designer as "levels". The pixel editor's name, the exact title format, and how to keep existing `.f2dsprite`/`.f2dlevel` files and their MIME types opening (as `.f2d.json` still does) are to be decided. File handlers in the manifests (item 34) follow the new names.
+48. ⚠️ **Naming and branding** (requested 2026-11-15; **names decided 2026-11-25**, done in Phase 11.1). Make each app's name consistent everywhere: package name, directory, page title, work-file extension and MIME type. Today they differ, e.g. the level designer is `@apps/level-designer` in `apps/level-designer/`, "Foundry2D · Level Designer" as the title, `.f2dlevel` files with `application/vnd.foundry2d.level+json`.
+    - **The product becomes Game Studio 2D** (short id `gs2d`), a studio of tools for 2D games. Files, work files, directories, metadata, ids, descriptions and documentation follow it.
+    - **Proposed names** (to confirm when 11.1 starts):
+
+      | What                       | Name                                                                                                       |
+      | -------------------------- | ---------------------------------------------------------------------------------------------------------- |
+      | Product, titles            | Game Studio 2D; app titles "Game Studio 2D · Pixel" and so on                                              |
+      | Packages                   | `@gs2d/core`, `@gs2d/render`, `@gs2d/workspace`, `@gs2d/ui`, `@gs2d/store`, `@gs2d/atlas`, `@gs2d/formats` |
+      | Apps (directory, path, id) | `pixel`, `levels`, `packer`, `sound`, `docs`, `studio` (the hub and desktop shell)                         |
+      | Work files                 | `.gs2dsprite`, `.gs2dlevel`, `.gs2dpack`, `.gs2dsound`                                                     |
+      | MIME types                 | `application/vnd.gs2d.sprite+json`, `….level+json`, `….pack+json`, `….sound+json`                          |
+      | Game manifest              | `gs2d.json` in a game's folder (Phase 12)                                                                  |
+      | Browser storage            | IndexedDB `gs2d`, keys `gs2d.*` (migrated from `foundry2d`)                                                |
+
+    - **Old files keep opening:** `.f2dsprite`, `.f2dlevel`, `.f2dpack` and the `.f2d.json` names, and their MIME types in the file handlers, as older names do today.
+    - **Before going public:** check the name for conflicts with existing products.
 
 ### Phase 9: Sprite Packer app (TexturePacker-style) ✅ (2026-11-22)
 
@@ -589,7 +606,7 @@ A third app in the monorepo that turns many images into optimised spritesheets p
 - **UI:** the shared shell from Phase 8 (workspace canvas, panels, project browser). A sheet preview with zoom, a sprite list with search and overrides, an animation preview, and packing statistics (fill rate, sheet count).
 - **Reuse:** `@foundry2d/workspace` for the preview canvas, the export controller's PNG and ZIP encoders, `compositeRgba` for sprite input, and storage and `ProjectSession` for the library and recovery.
 
-### Phase 10: Documentation, manual and onboarding ⚠️ (in progress)
+### Phase 10: Documentation, manual and onboarding ✅ (2026-11-25)
 
 **Stages:**
 
@@ -631,6 +648,64 @@ A third app in the monorepo that turns many images into optimised spritesheets p
    - It starts on first launch, can be replayed from a Help menu, and has links into the matching manual articles.
    - Completion is stored per app, so updates can add a "What's new" tour for new features.
 
+### Vision: Game Studio 2D (agreed 2026-11-25)
+
+The three apps grow into **Game Studio 2D**: a desktop studio of tools for 2D games, which work on their own and together. It is **tooling, not an engine**: no code editor, physics or game loop. A game stays its own project, with its own code and engine (Phaser, PixiJS, plain canvas…).
+
+- **A game opens in the studio through an adapter.** Its declarative part is a manifest in the game's folder (`gs2d.json`): which **asset contracts** the game understands (sprite sheets, animations, levels, sounds, each a small versioned JSON contract, like the Pac-Man game's `SoundAsset`), where each kind goes and how files are named. Its runtime part is a small module in the game that talks to the studio for the live preview.
+- **Workflow:** draw a sprite or animation in Pixel, pack it in Packer, and it lands in the game, ready for its loader. Levels go from Levels into the game the same way, sounds from Sound. The game previews live inside the studio.
+- **Tools, now and later:** Pixel, Levels, Packer; Sound (recorder, editor, mixer); later an animation sandbox and inspector. Each is its own app in the studio, and still a web app in a browser.
+- **Desktop: Tauri and Rust.** The studio is a native app: a Tauri shell whose windows are the existing web apps, with a Rust core for game folders, file watching, running the game's dev server, the sound DSP and the MCP server. TypeScript for the tools' UI, Rust for the native side; no rewrite of the apps. (Flutter was considered: it would mean rewriting the three apps in Dart, and desktop Flutter has no officially supported web view on Windows and Linux for the game preview. Electron: bigger, and its backend would be Node rather than Rust.)
+- **Pilot game: Pac-Man**, from the parallel project. It draws in plain canvas code today; moving it to sprites with an animation system (like PixiJS or Phaser) is game-side work, and its `SoundAsset` contract is the model for the adapter's contracts. Contracts are grown from this real game rather than designed in the abstract.
+- **Agents:** the tools become MCP servers, so agents can use them like their own tools (Phase 15).
+
+### Phase 11: Game Studio 2D hub and identity ⚠️ (planned)
+
+Items 45 and 48: the new name, one site, and the hub as the entry point.
+
+- **11.1 Naming:** packages, directories, titles, ids, file extensions, MIME types, manifests and docs renamed as in item 48. Storage migrated in place (IndexedDB `foundry2d` → `gs2d`, `localStorage` keys), old work files and handlers still open. One commit, guarded by the full test suites.
+- **11.2 One origin:** every app served under a path of one site (`/pixel/`, `/levels/`, `/packer/`, `/docs/`, hub at `/`): `base` per app, one development server for all of them, one build output. Shared storage then works across the apps.
+- **11.3 The hub** (`apps/studio`): Continue, In this browser (all apps, with search), Recent files, New (templates and presets, moved to shared data modules the apps and the hub both read), storage use and clean-up, the manual and the apps, its own first-run tour.
+- **11.4 Entry by URL:** apps open `?project=`, `?recent=` (permission asked in the hub, on the click), `?new=`; no start panel at startup; Open (Ctrl+O) on demand; a Home button. One installable web app, the hub, handling every work-file type and routing to the right tool; the tools stay usable on their own.
+- **11.5** Tests (end-to-end across apps on one origin), manual and screenshots.
+
+### Phase 12: Studio projects, with the Pac-Man pilot ⚠️ (planned)
+
+The adapter's declarative part, and most of the value without any runtime connection.
+
+- **12.1 Asset contracts:** versioned JSON schemas for sprite sheets, animations, levels and sounds, written with the pilot game (its `SoundAsset` as the model), and exports that produce them.
+- **12.2 The manifest** (`gs2d.json`): contracts the game reads, where each asset kind goes, naming, which tools may write where. Validated, with clear errors.
+- **12.3 Game folders:** open a game's folder in the hub (File System Access now, the desktop core from Phase 13); work files live in the game's repository next to its code; **export on save** writes the game-ready files where the manifest says.
+- **12.4 Send to:** between tools (a sprite to Packer or to a tileset, a pack to the game) without going through files by hand; the existing sprite-to-tileset and sprite-to-packer paths join it.
+- **12.5 Pilot:** the Pac-Man game reads its sprites, animations, levels and sounds from studio output (the game-side sprite and animation system is work in the game's own project).
+
+### Phase 13: Desktop studio (Tauri, Rust) and live preview ⚠️ (planned)
+
+- **13.1 Tauri shell:** the hub and the tools as windows of one native app; installers for Windows, macOS and Linux; updates.
+- **13.2 Rust core:** game folders without browser pickers, file watching (live folders everywhere), starting and stopping the game's dev server, recent projects. The web tools reach it through a small bridge, and still run in a browser without it.
+- **13.3 Runtime adapter protocol v1:** a handshake with the game's capabilities, "asset changed, reload it", "load this level", and optionally listing and selecting entities. Messages over `postMessage` (preview frame) or a local WebSocket. Every capability optional, so a minimal adapter is a few lines.
+- **13.4 Reference adapters:** plain canvas (the pilot), PixiJS and Phaser, each a small package with an example game.
+- **13.5 Preview pane:** the game running inside the studio, reloading assets and levels as they are saved.
+
+### Phase 14: Sound tools ⚠️ (planned)
+
+Built on the existing Flutter and Rust sound project, whose DSP core moves into the studio's Rust side.
+
+- **Recorder, editor and mixer** as a tool of the studio (web UI like the others; the Flutter UI can stay a standalone app on the same core).
+- **Clean-up:** noise reduction (spectral gating, learning the noise from a quiet part), trimming, normalising, fades.
+- **Telling sounds apart:** onset detection to cut a recording into events, grouped by their spectral features. Real source separation (a voice out of a mix) needs a trained model (e.g. Demucs through ONNX) and comes later.
+- **`SoundAsset` export** to the game's contract, sound sets as skins, and a `.gs2dsound` work file.
+
+### Phase 15: MCP servers ⚠️ (planned)
+
+- **Headless first:** the tools' operations (create and edit sprites, pack a folder, build and export levels, process sounds) as MCP tools, running on the DOM-free packages without any window.
+- **Live:** an MCP server in the desktop studio that drives the open tools and reads the game preview, so an agent can work alongside the user.
+
+### Later
+
+- Animation sandbox and inspector (through the adapter's capabilities), like Godot's.
+- More engines' adapters as games need them; mobile once the touch pass (item 39) is wanted.
+
 ---
 
 ## 4. Decisions log
@@ -638,3 +713,8 @@ A third app in the monorepo that turns many images into optimised spritesheets p
 1. **Order after Phase 0:** Phase 1 (pixel parity) came first. Done.
 2. **Pac-Man tile size:** 8 px, the arcade original, set in the Pac-Man preset and editable per project.
 3. **Project file format:** human-readable JSON with RLE layer data. Since stage 8.4 the files use branded extensions, `.f2dsprite` (pixel editor) and `.f2dlevel` (level designer), with vendor MIME types; the older `.f2d.json` and `.f2dlevel.json` names still open.
+4. **Game Studio 2D** (2026-11-25): the project becomes a studio of tools for 2D games, connected to games through an adapter (a manifest plus a runtime module), not an engine. Names in item 48.
+5. **Startup** (2026-11-25): a hub as the entry point for every tool; apps opened directly never show a start panel (item 45).
+6. **Desktop stack** (2026-11-25): Tauri with a Rust core, the existing web tools as its windows, over Flutter (a rewrite, weak desktop web views) and Electron (bigger, Node backend).
+7. **Pilot game** (2026-11-25): the Pac-Man game; asset contracts grow from it, with its `SoundAsset` contract as the model.
+8. **Order after Phase 10** (2026-11-25): hub and naming (11), studio projects (12), desktop and live preview (13), sound tools (14), MCP (15).
