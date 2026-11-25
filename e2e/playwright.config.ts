@@ -5,7 +5,7 @@ import { defineConfig, devices } from "@playwright/test";
  * Browser end-to-end smoke tests for the apps (`vp run test:e2e`).
  * Paths are relative to this file (`e2e/`); web servers start from here too.
  *
- * Each app runs its own dev server on a dedicated port (4170–4172), never
+ * Each app runs its own dev server on a dedicated port (4170–4173), never
  * the ports you develop on. Locally an already running test server is
  * reused (e.g. one kept alive by the VS Code Playwright extension); on CI a
  * fresh one is always started. Every test gets a fresh browser context,
@@ -14,6 +14,7 @@ import { defineConfig, devices } from "@playwright/test";
 const PIXEL_PORT = 4170;
 const LEVEL_PORT = 4171;
 const PACKER_PORT = 4172;
+const DOCS_PORT = 4173;
 
 export default defineConfig({
   testDir: ".",
@@ -45,6 +46,11 @@ export default defineConfig({
       testMatch: "sprite-packer.spec.ts",
       use: { baseURL: `http://localhost:${PACKER_PORT}` },
     },
+    {
+      name: "docs",
+      testMatch: "docs.spec.ts",
+      use: { baseURL: `http://localhost:${DOCS_PORT}` },
+    },
   ],
   webServer: [
     {
@@ -62,6 +68,12 @@ export default defineConfig({
     {
       command: `pnpm --dir ../apps/sprite-packer exec vp dev --port ${PACKER_PORT} --strictPort`,
       url: `http://localhost:${PACKER_PORT}`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+    },
+    {
+      command: `pnpm --dir ../apps/docs exec vp dev --port ${DOCS_PORT} --strictPort`,
+      url: `http://localhost:${DOCS_PORT}`,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },

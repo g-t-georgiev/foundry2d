@@ -35,6 +35,28 @@
   color-scheme: dark;
 }
 
+/*
+ * Light theme. The apps are dark; pages that offer both (the manual) set
+ * data-theme="light" on the root element.
+ */
+:root[data-theme="light"] {
+  --theme-bg-app: #f6f6f8;
+  --theme-bg-panel: #ffffff;
+  --theme-bg-card: #eeeef2;
+  --theme-bg-card-hover: #e2e2e8;
+  --theme-bg-input: #ffffff;
+  --theme-bg-selected: #dbe7ff;
+  --theme-border-color: #d6d6de;
+  --theme-border-active: #2563eb;
+  --theme-text-main: #18181b;
+  --theme-text-muted: #5b5b66;
+  --theme-color-primary: #2563eb;
+  --theme-color-primary-hover: #1d4ed8;
+  --theme-color-accent: #0369a1;
+  --theme-danger: #c62828;
+  color-scheme: light;
+}
+
 *,
 *::before,
 *::after {

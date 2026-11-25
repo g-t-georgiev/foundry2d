@@ -5,6 +5,7 @@
     "dev:pixel": "pnpm --dir apps/pixel-editor dev",
     "dev:level": "pnpm --dir apps/level-designer dev",
     "dev:packer": "pnpm --dir apps/sprite-packer dev",
+    "dev:docs": "pnpm --dir apps/docs dev",
     "test": "turbo run test",
     "test:store": "turbo run test --filter=@foundry2d/store",
     "turbo:telemetry:enable": "turbo telemetry enable",

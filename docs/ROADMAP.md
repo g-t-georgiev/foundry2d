@@ -599,7 +599,14 @@ A third app in the monorepo that turns many images into optimised spritesheets p
   - **API reference:** TypeDoc with `typedoc-plugin-markdown` for all seven packages, from `vp run docs` into `docs/api/` (not committed, since it is regenerated from the code). Types that exported functions use but packages didn't export are now exported, so it builds without warnings.
   - **Screenshots:** `scripts/screenshots.ts` drives the three apps in a fresh browser profile and writes `docs/images/`.
   - Every link in the docs was checked to resolve.
-- **10.2 Manual site** (point 2) and **10.3 First-run guide** (point 3): next. Item 45 (what the apps show at startup) is to be decided with 10.3, since the first-run guide starts from the same screen.
+- **10.2 Manual site** ✅ (2026-11-25): point 2 below, as `apps/docs` (`pnpm dev:docs`, port 3003; end-to-end port 4173).
+  - **Content:** the Markdown in `docs/manual` and `docs/images`, read at build time (`import.meta.glob`) and rendered with `marked` (the one new dependency). Chapter titles come from the manual's README, article titles from their first heading; links between articles become anchors (`#pixel-editor/selections`, `#…/section`), links to the rest of `docs/` go to the repository, and a test fails on any link or image that points nowhere.
+  - **Layout:** a collapsible chapter and article tree with search (every word, in titles and text; `/` or Ctrl+K focuses it, Enter opens the first match) on the left, all articles in one scroll on the right. The article being read is marked in the tree and its chapter opened (scroll-spy), and the URL hash follows, so a reload or a shared link comes back to the same place.
+  - **Themes and print:** light and dark from the shared tokens (`tokens.css` gained a `data-theme="light"` set), following the system unless chosen with the Theme button (remembered). The print stylesheet leaves only the text, a chapter per page.
+  - **Open in app:** each app chapter links to its app (development ports, or `../pixel-editor/` and so on next to a built site; `VITE_*_URL` overrides).
+  - **Narrow screens:** the tree slides in from a menu button; long code wraps or scrolls in place.
+  - **Fixed on the way:** the browser's own scroll restoration fought the hash after a reload, and keeping the marked entry visible in the tree scrolled the page; both found with five end-to-end tests that run in a real window.
+- **10.3 First-run guide** (point 3): next. Item 45 (what the apps show at startup) is to be decided with 10.3, since the first-run guide starts from the same screen.
 
 1. **Markdown sources** in `docs/`, the single source of truth:
    - `README.md` at the root: what foundry2d is, screenshots, quick start (`vp install`, `vp dev`), and the repository layout.

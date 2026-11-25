@@ -9,6 +9,7 @@ Notes for working on the monorepo: setup, the commands that check a change, and 
 | `apps/pixel-editor`   | Piskel-like sprite editor (port 3000 in development)                                      |
 | `apps/level-designer` | LDtk-like level designer (port 3001)                                                      |
 | `apps/sprite-packer`  | Packs images into spritesheets with engine data (port 3002)                               |
+| `apps/docs`           | The manual site, built from `docs/manual` (port 3003)                                     |
 | `packages/core`       | Documents, layers, tools, commands, selection, storage, ZIP writer (no DOM)               |
 | `packages/render`     | Canvas render passes (layers, grid, cursor, rulers…)                                      |
 | `packages/workspace`  | Canvas workspace, input, key map, project session and file workflow                       |
@@ -50,7 +51,7 @@ pnpm -r --if-present test
 vp run test:e2e
 ```
 
-The first end-to-end run on a machine needs the browser: `pnpm exec playwright install chromium`. The tests start their own dev servers on ports 4170 to 4172 and reuse running ones outside CI, so they can also be run from VS Code's Testing tab with the Playwright extension.
+The first end-to-end run on a machine needs the browser: `pnpm exec playwright install chromium`. The tests start their own dev servers on ports 4170 to 4173 and reuse running ones outside CI, so they can also be run from VS Code's Testing tab with the Playwright extension.
 
 ## Conventions
 
@@ -67,6 +68,7 @@ The docs are Markdown in `docs/`: the [manual](manual/README.md), [architecture]
 - **Shortcuts:** give every binding a `label` and `group` (`keymap.bind(combo, handler, { label, group })`); keys that something else handles are listed with `keymap.describe`. Each app has a test that fails while its shortcuts article is out of date, so run `vp run docs` after changing them. The articles are excluded from formatting.
 - **API reference:** comes from TSDoc comments on exports; it is not committed (`docs/api/` is ignored). TypeDoc warns about exported functions that use types the package doesn't export.
 - **Screenshots:** `docs/images/` is made by `vpx scripts/screenshots.ts` while the three dev servers run. Take them again when a layout changes.
+- **Manual site:** `pnpm dev:docs` serves it on port 3003 and reloads when an article changes. New articles only need a numbered file in a chapter folder; new chapters also need their title in `docs/manual/README.md`.
 - **Style:** plain words, short sentences, one idea per sentence; name buttons and fields exactly as the app labels them.
 
 ## Known toolchain quirks
@@ -88,4 +90,4 @@ The project pins Vite+ 1.4.0 (`pnpm-workspace.yaml` catalog); 1.6.0 was the late
 
 ### Ports already in use
 
-If a port from 4170 to 4172 is taken when running the end-to-end tests, a dev server from an earlier run (or from the VS Code Playwright extension) is probably still running. Outside CI the tests reuse it, which is usually what you want; stop it if it serves old code.
+If a port from 4170 to 4173 is taken when running the end-to-end tests, a dev server from an earlier run (or from the VS Code Playwright extension) is probably still running. Outside CI the tests reuse it, which is usually what you want; stop it if it serves old code.

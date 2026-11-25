@@ -1,0 +1,22 @@
+{
+  "name": "@apps/docs",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "tsc && vp build",
+    "preview": "vp preview",
+    "test": "vp test run",
+    "tsc:check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@foundry2d/ui": "workspace:*",
+    "marked": "^18.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.0",
+    "typescript": "^5.4.0",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

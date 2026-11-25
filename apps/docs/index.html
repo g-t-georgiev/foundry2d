@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Foundry2D · Manual</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <button class="btn btn-icon menu-toggle" id="menuToggle" aria-label="Contents">☰</button>
+      <a class="brand" href="#">Foundry2D <small>Manual</small></a>
+      <span class="topbar-actions">
+        <button class="btn btn-small" id="printButton" title="Print, or save as PDF">Print</button>
+        <button class="btn btn-small" id="themeToggle" title="Light, dark, or as the system">
+          Theme
+        </button>
+      </span>
+    </header>
+    <nav class="sidebar" aria-label="Contents">
+      <input
+        id="search"
+        class="input"
+        type="search"
+        placeholder="Search the manual (/)"
+        aria-label="Search the manual"
+      />
+      <p class="search-status" id="searchStatus" role="status" aria-live="polite"></p>
+      <ul class="tree" id="tree"></ul>
+    </nav>
+    <main class="content" id="content"></main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -38,7 +38,7 @@ They open on ports 3000, 3001 and 3002.
 
 ## Documentation
 
-- **[User manual](docs/manual/)**: every tool, panel and dialog, step-by-step workflows, the file formats, and keyboard shortcuts.
+- **[User manual](docs/manual/README.md)**: every tool, panel and dialog, step-by-step workflows, the file formats, and keyboard shortcuts. `pnpm dev:docs` serves it as a site (port 3003) with search.
 - **[Architecture](docs/architecture.md)**: the packages and how documents, commands, rendering, the workspace and storage fit together.
 - **[Technologies](docs/technologies.md)**: what the project is built with, and why.
 - **API reference**: generated from the source comments with `vp run docs` (into `docs/api/`).
@@ -52,6 +52,7 @@ apps/
   pixel-editor/     the Pixel Editor
   level-designer/   the Level Designer (presets/ holds its project templates)
   sprite-packer/    the Sprite Packer
+  docs/             the manual site
 packages/
   core/             documents, layers, tools, commands, selection, storage, ZIP (no DOM)
   render/           canvas render passes (layers, grid, cursor, rulers)

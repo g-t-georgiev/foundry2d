@@ -20,6 +20,12 @@
       "port": 3002
     },
     {
+      "name": "docs",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "apps/docs", "dev"],
+      "port": 3003
+    },
+    {
       "name": "pixel-editor-build",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [
