@@ -100,6 +100,8 @@ interface SpriteProject {
  *   and `ExportController`; key bindings live in `keys.ts`.
  */
 export default class Application implements ApplicationContext {
+  /** Resolves once startup (recovery, the start screen) is done. */
+  readonly ready: Promise<void>;
   readonly sprite: Sprite;
   readonly history = new HistoryManager();
   readonly tools = new ToolManager<Uint32Array>();
@@ -268,7 +270,7 @@ export default class Application implements ApplicationContext {
     this.showFrame(true);
     this.session.refresh();
     this.files.bindLaunchQueue();
-    void this.files.startup();
+    this.ready = this.files.startup();
   }
 
   /** The frame document being edited. */

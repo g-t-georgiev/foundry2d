@@ -10,6 +10,7 @@
     "./layers": "./src/layers/index.ts"
   },
   "scripts": {
+    "test": "vp test run",
     "tsc:check": "tsc --noEmit"
   },
   "dependencies": {

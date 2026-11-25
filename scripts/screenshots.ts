@@ -214,6 +214,12 @@ try {
     ["sprite-packer", spritePacker],
   ] as const) {
     const context = await browser.newContext({ viewport, colorScheme: "dark" });
+    // The first-run tour would cover the app.
+    await context.addInitScript(() => {
+      for (const app of ["pixel", "level", "pack"]) {
+        localStorage.setItem(`foundry2d.tours.${app}`, JSON.stringify(["intro"]));
+      }
+    });
     const page = await context.newPage();
     page.on("dialog", (d) => void d.accept());
     const shot = await take(page);

@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type Download, type Page } from "@playwright/test";
 import {
+  expectFirstRunTour,
   expectLaunchedFileOpens,
   expectOneCopyPerFile,
   openApp,
@@ -607,4 +608,8 @@ test("a pack the installed app is launched with opens without the start screen",
 test("opening a file again and saving updates its copy in the browser", async ({ page }) => {
   await addSprites(page, BASIC);
   await expectOneCopyPerFile(page);
+});
+
+test("a first-run tour shows the app, and the Help menu brings it back", async ({ page }) => {
+  await expectFirstRunTour(page);
 });

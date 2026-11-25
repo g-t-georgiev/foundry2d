@@ -12,3 +12,4 @@ export * from "./layers";
 export * from "./color-picker";
 export * from "./project-browser";
 export * from "./split-button";
+export * from "./guided-tour";

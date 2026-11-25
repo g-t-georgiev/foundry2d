@@ -30,10 +30,22 @@ declare global {
 }
 
 /** Waits until the app has booted, started its session and drawn once. */
-export async function openApp(page: Page, path = "/"): Promise<void> {
+export async function openApp(
+  page: Page,
+  path = "/",
+  options: { tour?: boolean } = {}
+): Promise<void> {
   // Confirmations are accepted: tests reload and delete on purpose.
   // Prompts are accepted with their suggested value.
   page.on("dialog", (dialog) => void dialog.accept(dialog.defaultValue()));
+  // The first-run tour would cover the app; it has tests of its own.
+  if (!options.tour) {
+    await page.addInitScript(() => {
+      for (const app of ["pixel", "level", "pack"]) {
+        localStorage.setItem(`foundry2d.tours.${app}`, JSON.stringify(["intro"]));
+      }
+    });
+  }
   await page.goto(path);
   await page.waitForFunction(() => window.foundry !== undefined);
 }
@@ -148,4 +160,60 @@ export async function expectOneCopyPerFile(page: Page): Promise<void> {
   await page.keyboard.press("Control+s");
   await expect.poll(async () => (await library())[0].updatedAt).toBeGreaterThan(before.updatedAt);
   expect(await library()).toHaveLength(1);
+}
+
+/**
+ * The first-run tour: it starts by itself in a fresh browser, steps through
+ * with the keyboard and buttons, isn't shown again once done, and comes back
+ * from the Help menu, which also links to the manual.
+ */
+export async function expectFirstRunTour(shared: Page): Promise<void> {
+  // A page of its own: the usual setup marks the tour as seen on every load.
+  const page = await shared.context().newPage();
+  await openApp(page, "/", { tour: true });
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.waitForFunction(() => window.foundry !== undefined);
+  const card = page.locator("guided-tour").getByRole("dialog");
+  await expect(card).toBeVisible();
+  const count = card.locator("#count");
+  await expect(count).toHaveText(/^1 of \d+$/);
+  const total = Number((await count.textContent())!.split(" of ")[1]);
+  // App shortcuts wait while the tour runs: Ctrl+O would open the start screen.
+  await page.keyboard.press("Control+o");
+  await expect(page.locator("project-browser dialog")).toBeHidden();
+
+  await page.keyboard.press("ArrowRight");
+  await expect(count).toHaveText(`2 of ${total}`);
+  await card.getByRole("button", { name: "Back" }).click();
+  await expect(count).toHaveText(`1 of ${total}`);
+  for (let i = 1; i < total; i++) await card.getByRole("button", { name: "Next" }).click();
+  await expect(count).toHaveText(`${total} of ${total}`);
+  // Every step's card stays inside the window.
+  const box = (await card.boundingBox())!;
+  const view = page.viewportSize()!;
+  expect(box.x >= 0 && box.y >= 0 && box.x + box.width <= view.width).toBe(true);
+  expect(box.y + box.height).toBeLessThanOrEqual(view.height);
+  await card.getByRole("button", { name: "Done" }).click();
+  await expect(card).toBeHidden();
+
+  await page.reload();
+  await page.waitForFunction(() => window.foundry !== undefined);
+  await page.waitForTimeout(500);
+  await expect(card).toBeHidden();
+
+  const help = page.locator("help-button");
+  await help.getByRole("button", { name: "Help" }).click();
+  await expect(help.getByRole("menuitem", { name: /Manual/ })).toHaveAttribute(
+    "href",
+    /localhost:3003\/#[a-z-]+\/tour$/
+  );
+  await expect(help.getByRole("menuitem", { name: /Keyboard shortcuts/ })).toHaveAttribute(
+    "href",
+    /#[a-z-]+\/shortcuts$/
+  );
+  await help.getByRole("menuitem", { name: "Take the tour" }).click();
+  await expect(count).toHaveText(`1 of ${total}`);
+  await page.keyboard.press("Escape");
+  await expect(card).toBeHidden();
 }

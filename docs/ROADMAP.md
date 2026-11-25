@@ -606,7 +606,13 @@ A third app in the monorepo that turns many images into optimised spritesheets p
   - **Open in app:** each app chapter links to its app (development ports, or `../pixel-editor/` and so on next to a built site; `VITE_*_URL` overrides).
   - **Narrow screens:** the tree slides in from a menu button; long code wraps or scrolls in place.
   - **Fixed on the way:** the browser's own scroll restoration fought the hash after a reload, and keeping the marked entry visible in the tree scrolled the page; both found with five end-to-end tests that run in a real window.
-- **10.3 First-run guide** (point 3): next. Item 45 (what the apps show at startup) is to be decided with 10.3, since the first-run guide starts from the same screen.
+- **10.3 First-run guide** ✅ (2026-11-25): point 3 below.
+  - **`<guided-tour>`** (`@foundry2d/ui`): a spotlight on part of the page (a hole in a dark veil) with a message card: step count, title, text, an optional manual link, Back, Next (Done at the end) and Skip. It is a top-layer popover, so it sits over dialogs and menus; the card is placed beside the target inside the window, or centred when the step has no target or the target isn't on screen. Arrow keys, Enter and Esc work, and the app's own shortcuts are held back while it runs.
+  - **Tours as data:** each app's `src/help.ts` has an intro tour (8 to 10 steps) pointing at its tools, panels, saving and export, with links into the matching manual articles.
+  - **When:** `setupAppHelp` starts the intro after startup, once nothing covers the app (it waits for the start screen to close), on the first run only. Seen tours are kept per app in the browser; any later tour with a new id is a "What's new" tour, shown once to people who saw the intro (`toursToShow`, unit-tested).
+  - **Help menu:** a **?** button (`<help-button>`) at the end of each toolbar: Take the tour, What's new tours, the Manual and the app's Keyboard shortcuts article (the manual site's address: `VITE_DOCS_URL`, else the docs dev server or `../docs/` next to a built app).
+  - **Tests:** an end-to-end test per app (starts by itself, shortcuts held back, Back and Next, every card inside the window, not shown again after a reload, replayed from Help, the manual links). The other end-to-end tests mark the intro as seen. The manual's getting-started article describes the tour and Help.
+- **Item 45** (what the apps show at startup) is still open; nothing in 10.3 depends on it: a first run has no saved work, so no start screen comes before the tour.
 
 1. **Markdown sources** in `docs/`, the single source of truth:
    - `README.md` at the root: what foundry2d is, screenshots, quick start (`vp install`, `vp dev`), and the repository layout.

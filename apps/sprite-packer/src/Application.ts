@@ -92,6 +92,8 @@ const LIVE_INTERVAL = 1500;
 
 /** Composition root of the sprite packer. */
 export default class Application {
+  /** Resolves once startup (recovery, the start screen) is done. */
+  readonly ready: Promise<void>;
   readonly project = new PackProject();
   readonly workspace: Workspace;
   readonly session: ProjectSession;
@@ -230,7 +232,7 @@ export default class Application {
     this.load({ name: DEFAULT_NAME, settings: { ...DEFAULT_SETTINGS }, images: [] });
     this.session.refresh();
     this.files.bindLaunchQueue();
-    void this.files.startup();
+    this.ready = this.files.startup();
   }
 
   get history() {

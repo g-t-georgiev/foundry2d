@@ -119,6 +119,8 @@ interface LevelWork {
  * (add, move, delete levels) undo in the order they were made.
  */
 export default class Application {
+  /** Resolves once startup (recovery, the start screen) is done. */
+  readonly ready: Promise<void>;
   readonly history = new HistoryManager();
   readonly tools = new ToolManager<Int32Array>();
   readonly workspace: Workspace;
@@ -320,7 +322,7 @@ export default class Application {
     // snapshot that startup() is about to restore.
     this.session.refresh();
     this.files.bindLaunchQueue();
-    void this.files.startup();
+    this.ready = this.files.startup();
   }
 
   get view(): EditorView {

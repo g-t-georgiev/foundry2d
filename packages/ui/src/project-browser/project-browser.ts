@@ -166,6 +166,8 @@ export default class ProjectBrowser extends Base implements WebComponent {
     this._shadowRoot.appendChild(template.content.cloneNode(true));
     this.dialog = this._shadowRoot.querySelector("dialog")!;
     this.dialog.addEventListener("click", (ev) => this.onClick(ev));
+    // Lets the app know when nothing covers it any more (e.g. to start a tour).
+    this.dialog.addEventListener("close", () => this.dispatchEvent(new Event("close")));
   }
 
   get data(): ProjectBrowserData {

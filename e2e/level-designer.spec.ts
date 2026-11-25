@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import { expect, test, type Page } from "@playwright/test";
 import {
+  expectFirstRunTour,
   expectLaunchedFileOpens,
   expectOneCopyPerFile,
   drag,
@@ -416,4 +417,8 @@ test("a project the installed app is launched with opens without the start scree
 test("opening a file again and saving updates its copy in the browser", async ({ page }) => {
   await openApp(page);
   await expectOneCopyPerFile(page);
+});
+
+test("a first-run tour shows the app, and the Help menu brings it back", async ({ page }) => {
+  await expectFirstRunTour(page);
 });

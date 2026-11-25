@@ -26,3 +26,14 @@ In Chrome and Edge each app can be installed (the install icon in the address ba
 - opens in its own window and works offline;
 - opens its work files when you double-click them on the desktop or in your file manager;
 - tells you when a new version is ready, and switches only when you choose **Reload**.
+
+## Help and the tour
+
+The first time you open an app, a short **tour** points out its parts: tools, panels, saving and exporting. Use **Next** and **Back** (or the arrow keys), and **Skip tour** or **Esc** to leave it. It doesn't come back by itself.
+
+The **?** button at the right end of each app's toolbar opens **Help**:
+
+- **Take the tour** shows the tour again.
+- **Manual** opens this manual, and **Keyboard shortcuts** the app's list of keys.
+
+When a new version adds something worth knowing, a short "what's new" tour shows it once.
