@@ -1,6 +1,6 @@
 # Technologies
 
-What foundry2d is built with, and why. Nothing here needs a server: the apps are static files.
+What Game Studio 2D is built with, and why. Nothing here needs a server: the apps are static files.
 
 ## Toolchain
 
@@ -17,12 +17,12 @@ What foundry2d is built with, and why. Nothing here needs a server: the apps are
 ## In the browser
 
 - **Canvas 2D** draws everything. Layers are cached in `OffscreenCanvas`es and redrawn only where they changed; no WebGL is needed for pixel art and grids.
-- **Web Components** (custom elements with shadow DOM) for the reusable controls: `<layers-panel>`, `<project-browser>`, `<split-button>`, the colour picker. Everything else is plain HTML with shared CSS classes and design tokens (`@foundry2d/ui/theme`).
+- **Web Components** (custom elements with shadow DOM) for the reusable controls: `<layers-panel>`, `<project-browser>`, `<split-button>`, the colour picker. Everything else is plain HTML with shared CSS classes and design tokens (`@gs2d/ui/theme`).
 - **Popovers and `<dialog>`**: menus and pickers live in the browser's top layer, so scrolling toolbars and stacking contexts never clip them.
 - **IndexedDB** (through the small `idb` wrapper) stores the project library, images, recent files and crash recovery.
-- **File System Access API** (Chrome and Edge) opens and saves files in place, remembers recent files and watches folders (the sprite packer's live folders). Other browsers fall back to file inputs and downloads.
+- **File System Access API** (Chrome and Edge) opens and saves files in place, remembers recent files and watches folders (Packer's live folders). Other browsers fall back to file inputs and downloads.
 - **Web app manifest, service worker and Launch Handler API** make the apps installable, usable offline, and the handlers for their file types.
-- **Web Workers**: the sprite packer packs and encodes sheets off the page.
+- **Web Workers**: Packer packs and encodes sheets off the page.
 - **Compression Streams** for deflate (PNG and ZIP), **WebCodecs' `ImageDecoder`** to read images without losing the colour of nearly transparent pixels, and the **Async Clipboard API** to copy and paste images between apps.
 
 ## Libraries

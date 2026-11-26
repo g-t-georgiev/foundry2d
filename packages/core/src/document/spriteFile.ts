@@ -2,8 +2,8 @@ import { compositeRgba } from "./composite";
 import { deserializeDocument, type SerializedDocument } from "./serialization";
 
 /**
- * Reads the frames of a pixel-editor sprite (`.f2dsprite`; format
- * "foundry2d.pixel", v1 or v2) for the other apps. The pixel editor's
+ * Reads the frames of a Pixel sprite (`.gs2dsprite`; format
+ * "gs2d.sprite", v1 or v2) for the other apps. Pixel's
  * `io/project.ts` is the source of truth for the format; this only needs
  * the frame documents.
  */
@@ -17,12 +17,13 @@ export interface SpriteFrameImage {
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
 
 export function isPixelSpriteFile(json: unknown): json is Record<string, unknown> {
-  return isRecord(json) && json.format === "foundry2d.pixel";
+  // "foundry2d.pixel" is the id from before Game Studio 2D.
+  return isRecord(json) && (json.format === "gs2d.sprite" || json.format === "foundry2d.pixel");
 }
 
 /** Every frame, composited. Throws an `Error` with a readable message on bad files. */
 export function readSpriteFrames(json: unknown): { name: string; frames: SpriteFrameImage[] } {
-  if (!isPixelSpriteFile(json)) throw new Error("Not a Foundry2D sprite.");
+  if (!isPixelSpriteFile(json)) throw new Error("Not a Game Studio 2D sprite.");
   const documents: unknown[] =
     Array.isArray(json.frames) && json.frames.length > 0
       ? json.frames.map((f: unknown) => (isRecord(f) ? f.document : undefined))

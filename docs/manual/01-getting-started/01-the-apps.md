@@ -1,22 +1,22 @@
 # The three apps
 
-foundry2d is three editors for 2D games that share one engine and one look. Each opens in its own browser tab (or app window, once installed) and keeps its own work.
+Game Studio 2D is three editors for 2D games that share one engine and one look. Each opens in its own browser tab (or app window, once installed) and keeps its own work.
 
-| App                | Use it to…                                                                                    | Work file    |
-| ------------------ | --------------------------------------------------------------------------------------------- | ------------ |
-| **Pixel Editor**   | draw sprites and animations pixel by pixel, and export images, GIFs and spritesheets.         | `.f2dsprite` |
-| **Level Designer** | build levels on grids: collision and other values, tiles, and placed objects with properties. | `.f2dlevel`  |
-| **Sprite Packer**  | pack many images into spritesheets with data for a game engine.                               | `.f2dpack`   |
+| App        | Use it to…                                                                                    | Work file     |
+| ---------- | --------------------------------------------------------------------------------------------- | ------------- |
+| **Pixel**  | draw sprites and animations pixel by pixel, and export images, GIFs and spritesheets.         | `.gs2dsprite` |
+| **Levels** | build levels on grids: collision and other values, tiles, and placed objects with properties. | `.gs2dlevel`  |
+| **Packer** | pack many images into spritesheets with data for a game engine.                               | `.gs2dpack`   |
 
 ## How they work together
 
-- A sprite from the **pixel editor** can become a **tileset** in the level designer (Project settings → Tilesets → Import…), and it can be re-imported after you change it. See [A sprite as a tileset](../03-level-designer/09-workflow-tileset.md).
-- The **sprite packer** reads pixel-editor sprites frame by frame, so a character drawn there joins the rest of a game's art on one sheet.
-- The pixel editor has its own spritesheet export for a single sprite; the sprite packer is for a whole folder of images.
+- A sprite from **Pixel** can become a **tileset** in Levels (Project settings → Tilesets → Import…), and it can be re-imported after you change it. See [A sprite as a tileset](../03-levels/09-workflow-tileset.md).
+- **Packer** reads Pixel sprites frame by frame, so a character drawn there joins the rest of a game's art on one sheet.
+- Pixel has its own spritesheet export for a single sprite; Packer is for a whole folder of images.
 
 ## What you need
 
-- A current **Chrome, Edge, Firefox or Safari**. Everything works in all of them, with two extras in Chrome and Edge: saving back to the file you opened (instead of downloading a copy), and the sprite packer's live folders.
+- A current **Chrome, Edge, Firefox or Safari**. Everything works in all of them, with two extras in Chrome and Edge: saving back to the file you opened (instead of downloading a copy), and Packer's live folders.
 - Nothing to install, and no account. Your work stays on your computer: in the browser's storage and in the files you save.
 
 ## Installing the apps

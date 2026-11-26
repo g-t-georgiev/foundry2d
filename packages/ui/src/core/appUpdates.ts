@@ -1,6 +1,6 @@
 /**
  * Registers the app's service worker (written by the build, see
- * `@foundry2d/workspace/vite/pwa.ts`) and offers a reload when a new
+ * `@gs2d/workspace/vite/pwa.ts`) and offers a reload when a new
  * version has been downloaded. The new version only takes over when the
  * user agrees, so an open tab never switches versions mid-edit (roadmap
  * item 38).
@@ -8,7 +8,7 @@
 export function registerAppUpdates(options: {
   /** Off in development: the dev server has no service worker. */
   enabled: boolean;
-  /** App name for the banner, e.g. "Pixel Editor". */
+  /** App name for the banner, e.g. "Pixel". */
   appName: string;
 }): void {
   if (!options.enabled || !("serviceWorker" in navigator)) return;

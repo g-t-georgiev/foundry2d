@@ -29,22 +29,22 @@ export const manual = buildManual(
 
 /** The apps, for "Open in app" links. Set `VITE_*_URL` when they are served elsewhere. */
 export const APP_LINKS: Record<string, { label: string; url: string }> = {
-  "pixel-editor": {
-    label: "Open the Pixel Editor",
+  pixel: {
+    label: "Open Pixel",
     url:
-      import.meta.env.VITE_PIXEL_EDITOR_URL ??
-      (import.meta.env.DEV ? "http://localhost:3000/" : "../pixel-editor/"),
+      import.meta.env.VITE_PIXEL_URL ??
+      (import.meta.env.DEV ? "http://localhost:3000/" : "../pixel/"),
   },
-  "level-designer": {
-    label: "Open the Level Designer",
+  levels: {
+    label: "Open Levels",
     url:
-      import.meta.env.VITE_LEVEL_DESIGNER_URL ??
-      (import.meta.env.DEV ? "http://localhost:3001/" : "../level-designer/"),
+      import.meta.env.VITE_LEVELS_URL ??
+      (import.meta.env.DEV ? "http://localhost:3001/" : "../levels/"),
   },
-  "sprite-packer": {
-    label: "Open the Sprite Packer",
+  packer: {
+    label: "Open Packer",
     url:
-      import.meta.env.VITE_SPRITE_PACKER_URL ??
-      (import.meta.env.DEV ? "http://localhost:3002/" : "../sprite-packer/"),
+      import.meta.env.VITE_PACKER_URL ??
+      (import.meta.env.DEV ? "http://localhost:3002/" : "../packer/"),
   },
 };

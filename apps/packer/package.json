@@ -1,0 +1,26 @@
+{
+  "name": "@apps/packer",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "tsc && vp build",
+    "preview": "vp preview",
+    "test": "vp test run",
+    "tsc:check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gs2d/atlas": "workspace:*",
+    "@gs2d/core": "workspace:*",
+    "@gs2d/formats": "workspace:*",
+    "@gs2d/render": "workspace:*",
+    "@gs2d/ui": "workspace:*",
+    "@gs2d/workspace": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.0",
+    "typescript": "^5.4.0",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

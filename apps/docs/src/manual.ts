@@ -5,13 +5,13 @@ import { Marked, type Tokens } from "marked";
  * articles for the site. Pure: no DOM, so it is tested in Node.
  *
  * Folders are chapters and files are articles, both numbered in reading
- * order ("02-pixel-editor/03-selections.md"). Chapter titles come from the
+ * order ("02-pixel/03-selections.md"). Chapter titles come from the
  * manual's README, the article titles from their first heading. Links
  * between articles become in-page anchors, so the site is one document.
  */
 
 export interface Article {
-  /** Anchor and URL hash, e.g. "pixel-editor/selections". */
+  /** Anchor and URL hash, e.g. "pixel/selections". */
   id: string;
   title: string;
   /** Rendered HTML, the title included (as an `h2`). */
@@ -23,7 +23,7 @@ export interface Article {
 }
 
 export interface Chapter {
-  /** e.g. "pixel-editor". */
+  /** e.g. "pixel". */
   id: string;
   /** 1-based, as in the manual's README. */
   number: number;
@@ -40,7 +40,7 @@ export interface Manual {
 /** Where documents outside the manual are linked to. */
 export const REPOSITORY = "https://github.com/g-t-georgiev/foundry2d/blob/dev/";
 
-/** "02-pixel-editor" → "pixel-editor"; "Pen size" → "pen-size". */
+/** "02-pixel" → "pixel"; "Pen size" → "pen-size". */
 export const slug = (text: string) =>
   text
     .replace(/^\d+-/, "")

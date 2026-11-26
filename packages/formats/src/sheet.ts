@@ -1,7 +1,7 @@
 /**
  * Spritesheet data formats for game engines (roadmap item 40). Every writer
  * takes the same placement data, so a format is written once and used by the
- * pixel editor's exporter and the Sprite Packer (Phase 9).
+ * exporter of Pixel and Packer (Phase 9).
  *
  * Placement uses TexturePacker's field names: `frame` is the rectangle in
  * the sheet, `spriteSourceSize` where that rectangle sits inside the

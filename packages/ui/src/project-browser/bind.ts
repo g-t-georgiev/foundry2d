@@ -1,7 +1,7 @@
 import type ProjectBrowser from "./project-browser";
 import { ProjectBrowserEvents } from "./types";
 
-/** What each start-screen action calls (e.g. `ProjectFiles` from `@foundry2d/workspace`). */
+/** What each start-screen action calls (e.g. `ProjectFiles` from `@gs2d/workspace`). */
 export interface ProjectBrowserHandlers {
   newFromTemplate(templateId: string): void;
   openFile(): unknown;

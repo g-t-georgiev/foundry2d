@@ -1,0 +1,272 @@
+{
+  "format": "gs2d.level",
+  "version": 2,
+  "preset": {
+    "label": "Pac-Man (arcade)",
+    "description": "28×36 tile maze with collision and collectibles layers, plus Pac-Man, ghost and fruit entities.",
+    "order": 1
+  },
+  "name": "pacman",
+  "gridSize": 8,
+  "worldLayout": "free",
+  "worldGrid": {
+    "width": 224,
+    "height": 288
+  },
+  "nextUid": 13,
+  "defs": {
+    "layers": [
+      {
+        "uid": 1,
+        "identifier": "collision",
+        "type": "IntGrid",
+        "intGridValues": [
+          {
+            "value": 1,
+            "identifier": "wall",
+            "color": "#1919a3"
+          },
+          {
+            "value": 2,
+            "identifier": "intersection_a",
+            "color": "#47a400"
+          },
+          {
+            "value": 3,
+            "identifier": "intersection_b",
+            "color": "#a69801"
+          },
+          {
+            "value": 4,
+            "identifier": "ghost_house_door",
+            "color": "#fcb9f8"
+          },
+          {
+            "value": 5,
+            "identifier": "tunnel_entry",
+            "color": "#ffffff"
+          }
+        ]
+      },
+      {
+        "uid": 2,
+        "identifier": "collectibles",
+        "type": "IntGrid",
+        "intGridValues": [
+          {
+            "value": 1,
+            "identifier": "pellet",
+            "color": "#ffb8ae"
+          },
+          {
+            "value": 2,
+            "identifier": "power_pellet",
+            "color": "#ff8a65"
+          }
+        ]
+      },
+      {
+        "uid": 12,
+        "identifier": "entities",
+        "type": "Entities",
+        "intGridValues": []
+      }
+    ],
+    "tilesets": [],
+    "enums": [
+      {
+        "uid": 5,
+        "identifier": "ghost",
+        "values": [
+          {
+            "id": "blinky",
+            "color": "#ff0000"
+          },
+          {
+            "id": "pinky",
+            "color": "#ffb8ff"
+          },
+          {
+            "id": "inky",
+            "color": "#00ffff"
+          },
+          {
+            "id": "clyde",
+            "color": "#ffb852"
+          }
+        ]
+      }
+    ],
+    "entities": [
+      {
+        "uid": 6,
+        "identifier": "PacMan",
+        "color": "#ffff00",
+        "width": 16,
+        "height": 16,
+        "pivotX": 0.5,
+        "pivotY": 0.5,
+        "shape": "ellipse",
+        "tile": null,
+        "maxPerLevel": 1,
+        "fields": []
+      },
+      {
+        "uid": 7,
+        "identifier": "Ghost",
+        "color": "#ff0000",
+        "width": 16,
+        "height": 16,
+        "pivotX": 0.5,
+        "pivotY": 0.5,
+        "shape": "rectangle",
+        "tile": null,
+        "maxPerLevel": 4,
+        "fields": [
+          {
+            "uid": 8,
+            "identifier": "kind",
+            "type": "Enum",
+            "defaultValue": "blinky",
+            "enumUid": 5
+          },
+          {
+            "uid": 9,
+            "identifier": "scatterTarget",
+            "type": "Point",
+            "defaultValue": null
+          }
+        ]
+      },
+      {
+        "uid": 10,
+        "identifier": "Fruit",
+        "color": "#e5484d",
+        "width": 12,
+        "height": 12,
+        "pivotX": 0.5,
+        "pivotY": 0.5,
+        "shape": "ellipse",
+        "tile": null,
+        "maxPerLevel": 1,
+        "fields": [
+          {
+            "uid": 11,
+            "identifier": "points",
+            "type": "Int",
+            "defaultValue": 100,
+            "min": 0,
+            "max": null
+          }
+        ]
+      }
+    ]
+  },
+  "levels": [
+    {
+      "uid": 4,
+      "identifier": "level_0",
+      "worldX": 0,
+      "worldY": 0,
+      "width": 28,
+      "height": 36,
+      "activeDefUid": 1,
+      "layers": [
+        {
+          "defUid": 1,
+          "visible": true,
+          "opacity": 1,
+          "data": [1008, 0]
+        },
+        {
+          "defUid": 2,
+          "visible": true,
+          "opacity": 1,
+          "data": [1008, 0]
+        },
+        {
+          "defUid": 12,
+          "visible": true,
+          "opacity": 1,
+          "data": [1008, 0]
+        }
+      ],
+      "entities": [
+        {
+          "iid": "pacman-spawn",
+          "defUid": 6,
+          "layerUid": 12,
+          "x": 112,
+          "y": 212,
+          "fields": {}
+        },
+        {
+          "iid": "ghost-blinky",
+          "defUid": 7,
+          "layerUid": 12,
+          "x": 112,
+          "y": 116,
+          "fields": {
+            "8": "blinky",
+            "9": {
+              "x": 25,
+              "y": 0
+            }
+          }
+        },
+        {
+          "iid": "ghost-pinky",
+          "defUid": 7,
+          "layerUid": 12,
+          "x": 112,
+          "y": 140,
+          "fields": {
+            "8": "pinky",
+            "9": {
+              "x": 2,
+              "y": 0
+            }
+          }
+        },
+        {
+          "iid": "ghost-inky",
+          "defUid": 7,
+          "layerUid": 12,
+          "x": 96,
+          "y": 140,
+          "fields": {
+            "8": "inky",
+            "9": {
+              "x": 27,
+              "y": 35
+            }
+          }
+        },
+        {
+          "iid": "ghost-clyde",
+          "defUid": 7,
+          "layerUid": 12,
+          "x": 128,
+          "y": 140,
+          "fields": {
+            "8": "clyde",
+            "9": {
+              "x": 0,
+              "y": 35
+            }
+          }
+        },
+        {
+          "iid": "fruit-spawn",
+          "defUid": 10,
+          "layerUid": 12,
+          "x": 112,
+          "y": 164,
+          "fields": {
+            "11": 100
+          }
+        }
+      ]
+    }
+  ]
+}

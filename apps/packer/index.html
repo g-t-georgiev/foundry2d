@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Game Studio 2D · Packer</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header class="toolbar">
+      <div class="toolbar-start">
+        <span class="brand">Game Studio 2D <small>Packer</small></span>
+        <input id="projectName" class="project-name" aria-label="Pack name" spellcheck="false" />
+      </div>
+      <div class="toolbar-actions">
+        <button class="btn" data-command="open" title="New or open a pack (Ctrl+O)">
+          <svg class="icon" viewBox="0 0 24 24">
+            <path d="M5 20h14v-2H5m14-9h-4V3H9v6H5l7 7 7-7z" />
+          </svg>
+          Open
+        </button>
+        <button
+          class="btn"
+          data-command="save"
+          title="Save in the browser, and to the open file if any (Ctrl+S)"
+        >
+          Save
+        </button>
+        <split-button id="saveAsButton" title="Save as (Ctrl+Shift+S saves to a file)">
+          <option value="file" selected data-hint="Ctrl+Shift+S">Save as file…</option>
+          <option value="browser" data-hint="new library entry">
+            Save a copy in this browser…
+          </option>
+        </split-button>
+        <split-button
+          id="exportButton"
+          variant="primary"
+          remember="pack-export"
+          title="Export the sheets (Ctrl+E). The arrow picks how."
+        >
+          <svg slot="icon" viewBox="0 0 24 24">
+            <path d="M5 20h14v-2H5M12 2 5 9h4v6h6V9h4l-7-7z" />
+          </svg>
+          <option value="zip" selected data-hint="sheets and data">Export (ZIP)</option>
+          <option value="files" data-hint="one download each">Export (separate files)</option>
+        </split-button>
+        <span class="divider"></span>
+        <button class="btn btn-icon" data-command="undo" title="Undo (Ctrl+Z)" aria-label="Undo">
+          <svg class="icon" viewBox="0 0 24 24">
+            <path
+              d="M12.5 8c-2.65 0-5.05 1-6.9 2.6L2 7v9h9l-3.62-3.62A7.97 7.97 0 0 1 20.1 16l2.37-.78A10.5 10.5 0 0 0 12.5 8z"
+            />
+          </svg>
+        </button>
+        <button
+          class="btn btn-icon"
+          data-command="redo"
+          title="Redo (Ctrl+Shift+Z)"
+          aria-label="Redo"
+        >
+          <svg class="icon" viewBox="0 0 24 24">
+            <path
+              d="M18.4 10.6A10.4 10.4 0 0 0 11.5 8a10.5 10.5 0 0 0-9.96 7.22l2.37.78A7.97 7.97 0 0 1 16.62 12.4L13 16h9V7z"
+            />
+          </svg>
+        </button>
+        <help-button></help-button>
+      </div>
+    </header>
+
+    <div class="main-layout">
+      <aside class="sidebar left-sidebar" aria-label="Sprites">
+        <section class="panel-section flex-expand sprites-section">
+          <div class="section-header">
+            <h3 class="section-title">Sprites · <span id="spriteCount">0</span></h3>
+            <button
+              class="btn btn-small"
+              id="removeSprites"
+              title="Remove the selected sprites (Delete)"
+              disabled
+            >
+              Remove
+            </button>
+          </div>
+          <div class="button-row">
+            <button
+              class="btn btn-small"
+              id="addImages"
+              title="Add images, Game Studio 2D sprites, or a sheet with its data to unpack"
+            >
+              + Images
+            </button>
+            <button
+              class="btn btn-small"
+              id="addFolder"
+              title="Add a folder; names keep the folder path"
+            >
+              + Folder
+            </button>
+            <button
+              class="btn btn-small"
+              id="addLive"
+              title="Watch a folder: its images are added, updated and removed as they change"
+            >
+              Live folder
+            </button>
+          </div>
+          <ul id="liveFolders" class="live-folders" aria-label="Live folders" hidden></ul>
+          <input
+            id="spriteSearch"
+            class="input"
+            type="search"
+            placeholder="Search sprites"
+            aria-label="Search sprites"
+          />
+          <ul
+            id="spriteList"
+            class="sprite-list"
+            role="listbox"
+            aria-label="Sprites"
+            aria-multiselectable="true"
+            tabindex="0"
+          ></ul>
+          <p class="hint">F2 renames, Delete removes. Adding a file again updates its sprite.</p>
+          <input type="file" id="imageInput" multiple hidden />
+          <input type="file" id="folderInput" webkitdirectory hidden />
+        </section>
+      </aside>
+
+      <main class="canvas-viewport" id="viewport" aria-label="Sheets">
+        <canvas id="sheetCanvas"></canvas>
+        <div id="emptyHint" class="empty-hint">
+          <strong>Drop images or folders here</strong>
+          <span>or use + Images and + Folder</span>
+        </div>
+        <div id="packError" class="pack-error" role="alert" hidden></div>
+        <div class="canvas-hud canvas-tools">
+          <button class="btn btn-small" data-command="fit" title="Fit to view (F)">Fit</button>
+          <label class="checkbox-field">
+            <input type="checkbox" id="outlinesToggle" checked /> Outlines
+          </label>
+        </div>
+        <div class="canvas-hud zoom-hud" id="zoomHud"></div>
+      </main>
+
+      <aside class="sidebar right-sidebar" id="sidePanel" aria-label="Settings">
+        <section class="panel-section" id="selection" hidden>
+          <h3 class="section-title">Selected</h3>
+          <span id="selectionTitle" class="sprite-name"></span>
+          <label class="field">
+            <span class="label">Pivot</span>
+            <select class="input" id="pivotPreset">
+              <option value="none">Engine default</option>
+              <option value="center">Centre</option>
+              <option value="bottom">Bottom centre</option>
+              <option value="top-left">Top left</option>
+              <option value="bottom-left">Bottom left</option>
+              <option value="custom">Custom</option>
+              <option value="mixed" hidden>Mixed</option>
+            </select>
+          </label>
+          <div class="field-pair">
+            <input
+              class="input"
+              id="pivotX"
+              type="number"
+              step="0.05"
+              placeholder="x"
+              aria-label="Pivot x, 0 left to 1 right"
+            />
+            <input
+              class="input"
+              id="pivotY"
+              type="number"
+              step="0.05"
+              placeholder="y"
+              aria-label="Pivot y, 0 top to 1 bottom"
+            />
+          </div>
+          <p class="hint" id="pivotHint">The chosen data format has no pivots.</p>
+        </section>
+
+        <section class="panel-section" id="animationPreview" hidden>
+          <div class="section-header">
+            <h3 class="section-title">Animation</h3>
+            <button class="btn btn-small" id="previewToggle">Pause</button>
+          </div>
+          <select class="input" id="previewSelect" aria-label="Animation"></select>
+          <canvas id="previewCanvas" class="preview-canvas"></canvas>
+          <p class="hint" id="animationHint" hidden></p>
+        </section>
+
+        <div id="settings">
+          <section class="panel-section">
+            <h3 class="section-title">Layout</h3>
+            <label class="field">
+              <span class="label">Algorithm</span>
+              <select class="input" data-setting="algorithm">
+                <option value="maxrects">MaxRects (tightest)</option>
+                <option value="shelf">Shelves</option>
+                <option value="grid">Grid</option>
+                <option value="horizontal">One row</option>
+                <option value="vertical">One column</option>
+              </select>
+            </label>
+            <label class="field" data-for="maxrects">
+              <span class="label">Fit</span>
+              <select class="input" data-setting="heuristic">
+                <option value="short-side">Best short side</option>
+                <option value="long-side">Best long side</option>
+                <option value="area">Best area</option>
+                <option value="bottom-left">Bottom left</option>
+              </select>
+            </label>
+            <label class="field" data-for="grid">
+              <span class="label">Columns (0: automatic)</span>
+              <input class="input" type="number" min="0" data-setting="columns" />
+            </label>
+            <label class="checkbox-field">
+              <input type="checkbox" data-setting="allowRotation" /> Allow 90° rotation
+            </label>
+            <p class="hint" id="rotationHint" hidden></p>
+          </section>
+
+          <section class="panel-section">
+            <h3 class="section-title">Sprites</h3>
+            <label
+              class="checkbox-field"
+              title="Cut transparent edges; the original size and offset are kept in the data"
+            >
+              <input type="checkbox" data-setting="trim" /> Trim transparent edges
+            </label>
+            <label class="checkbox-field" title="Sprites with the same pixels share one place">
+              <input type="checkbox" data-setting="alias" /> Store identical sprites once
+            </label>
+            <label class="field inline">
+              <span class="label">Extrude (px)</span>
+              <input class="input" type="number" min="0" data-setting="extrude" />
+            </label>
+          </section>
+
+          <section class="panel-section">
+            <h3 class="section-title">Sheet</h3>
+            <label class="field inline">
+              <span class="label">Padding (px)</span>
+              <input class="input" type="number" min="0" data-setting="padding" />
+            </label>
+            <label class="field inline">
+              <span class="label">Border (px)</span>
+              <input class="input" type="number" min="0" data-setting="border" />
+            </label>
+            <label class="field inline">
+              <span class="label">Max width</span>
+              <input class="input" type="number" min="1" data-setting="maxWidth" />
+            </label>
+            <label class="field inline">
+              <span class="label">Max height</span>
+              <input class="input" type="number" min="1" data-setting="maxHeight" />
+            </label>
+            <label class="checkbox-field">
+              <input type="checkbox" data-setting="powerOfTwo" /> Power-of-two size
+            </label>
+            <label class="checkbox-field">
+              <input type="checkbox" data-setting="square" /> Square
+            </label>
+          </section>
+
+          <section class="panel-section">
+            <h3 class="section-title">Data</h3>
+            <label class="field">
+              <span class="label">Format</span>
+              <select class="input" data-setting="dataFormat"></select>
+            </label>
+            <p class="hint" id="formatHint"></p>
+            <label
+              class="checkbox-field"
+              title="Sprites numbered walk_1, walk_2… become an animation called walk"
+            >
+              <input type="checkbox" data-setting="animations" /> Numbered sprites are animations
+            </label>
+            <label class="field inline">
+              <span class="label">Frames per second</span>
+              <input class="input" type="number" min="1" max="60" data-setting="fps" />
+            </label>
+          </section>
+
+          <section class="panel-section">
+            <h3 class="section-title">Images</h3>
+            <label class="field">
+              <span class="label">Format</span>
+              <select class="input" data-setting="imageFormat">
+                <option value="png">PNG</option>
+                <option value="webp">WebP (lossless)</option>
+              </select>
+            </label>
+            <div class="scales" role="group" aria-label="Scales">
+              <span class="label">Scales</span>
+              <label class="checkbox-field"><input type="checkbox" data-scale="1" /> 1×</label>
+              <label class="checkbox-field"><input type="checkbox" data-scale="2" /> 2×</label>
+              <label class="checkbox-field"><input type="checkbox" data-scale="3" /> 3×</label>
+              <label class="checkbox-field"><input type="checkbox" data-scale="4" /> 4×</label>
+            </div>
+            <label
+              class="checkbox-field"
+              title="For engines that blend with premultiplied alpha; most expect this off"
+            >
+              <input type="checkbox" data-setting="premultiply" /> Premultiplied alpha
+            </label>
+          </section>
+        </div>
+
+        <section class="panel-section">
+          <h3 class="section-title">Result</h3>
+          <div class="property-row">
+            <span class="label">Sheets</span>
+            <span class="value" id="statSheets">—</span>
+          </div>
+          <div class="property-row">
+            <span class="label">Filled</span>
+            <span class="value" id="statFill">—</span>
+          </div>
+          <div class="property-row">
+            <span class="label">Shared (identical)</span>
+            <span class="value" id="statShared">—</span>
+          </div>
+        </section>
+      </aside>
+    </div>
+
+    <footer class="statusbar">
+      <span class="statusbar-item">
+        <span class="status-label">Sprite</span>
+        <span class="status-value" id="statSprite">—</span>
+      </span>
+      <span class="statusbar-item">
+        <span class="status-label">Pack</span>
+        <span class="status-value" id="statFile"></span>
+      </span>
+      <span class="statusbar-message" id="statMessage" role="status" aria-live="polite"></span>
+    </footer>
+
+    <project-browser id="projectBrowser"></project-browser>
+    <guided-tour></guided-tour>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

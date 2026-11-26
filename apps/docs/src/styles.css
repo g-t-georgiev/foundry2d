@@ -1,5 +1,5 @@
-@import "@foundry2d/ui/theme/tokens.css";
-@import "@foundry2d/ui/theme/components.css";
+@import "@gs2d/ui/theme/tokens.css";
+@import "@gs2d/ui/theme/components.css";
 
 /*
  * The manual: contents on the left, every article in one scroll on the right.

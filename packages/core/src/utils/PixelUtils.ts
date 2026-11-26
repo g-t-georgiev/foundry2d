@@ -57,7 +57,7 @@ export const HOST_IS_LITTLE_ENDIAN = new Uint8Array(new Uint32Array([1]).buffer)
 export function assertPixelByteOrder(): void {
   if (!HOST_IS_LITTLE_ENDIAN) {
     throw new Error(
-      "foundry2d needs a little-endian host: pixel data is stored as 0xAABBGGRR words and read as RGBA bytes."
+      "Game Studio 2D needs a little-endian host: pixel data is stored as 0xAABBGGRR words and read as RGBA bytes."
     );
   }
 }

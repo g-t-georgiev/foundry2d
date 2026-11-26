@@ -1,49 +1,53 @@
 import { openDB, type IDBPDatabase } from "idb";
 import { sha256Hex } from "./hash";
-import type {
-  FoundryDBSchema,
-  ProjectMeta,
-  ProjectRecord,
-  RecentFileRecord,
-  Storage,
-} from "./types";
+import { migrateLegacyDatabase } from "./legacy";
+import type { Gs2dDBSchema, ProjectMeta, ProjectRecord, RecentFileRecord, Storage } from "./types";
 
-export const FOUNDRY_DB_NAME = "foundry2d";
+export const GS2D_DB_NAME = "gs2d";
 /**
  * v1: `recovery`
  * v2: `projects` (index `app`), `assets`, `recentFiles` (index `app`)
+ * v3: `meta` (the database is called "gs2d" since Game Studio 2D; the old
+ *     "foundry2d" one is copied into it once, see `legacy.ts`)
  */
-export const FOUNDRY_DB_VERSION = 2;
+export const GS2D_DB_VERSION = 3;
 
 const metaOf = ({ data: _data, ...meta }: ProjectRecord): ProjectMeta => meta;
 
 /** Creates or migrates the object stores, one step per version. */
-function upgradeFoundryDB(db: IDBPDatabase<FoundryDBSchema>, oldVersion: number): void {
+function upgradeDatabase(db: IDBPDatabase<Gs2dDBSchema>, oldVersion: number): void {
   if (oldVersion < 1) db.createObjectStore("recovery");
   if (oldVersion < 2) {
     db.createObjectStore("projects", { keyPath: "id" }).createIndex("app", "app");
     db.createObjectStore("assets", { keyPath: "hash" });
     db.createObjectStore("recentFiles", { keyPath: "id" }).createIndex("app", "app");
   }
+  if (oldVersion < 3) db.createObjectStore("meta");
 }
 
 /** `Storage` backed by one IndexedDB database. */
 export class IndexedDBStorage implements Storage {
   readonly kind = "indexeddb" as const;
-  private readonly db: Promise<IDBPDatabase<FoundryDBSchema>>;
+  private readonly db: Promise<IDBPDatabase<Gs2dDBSchema>>;
 
-  constructor(name = FOUNDRY_DB_NAME) {
-    this.db = openDB<FoundryDBSchema>(name, FOUNDRY_DB_VERSION, { upgrade: upgradeFoundryDB });
+  constructor(name = GS2D_DB_NAME) {
+    this.db = openDB<Gs2dDBSchema>(name, GS2D_DB_VERSION, { upgrade: upgradeDatabase }).then(
+      async (db) => {
+        // Brings over the work kept under the old name, once.
+        if (name === GS2D_DB_NAME) await migrateLegacyDatabase(db);
+        return db;
+      }
+    );
   }
 
   /** Resolves `true` if the database can be opened (fails in some private modes). */
-  static async isAvailable(name = FOUNDRY_DB_NAME): Promise<boolean> {
+  static async isAvailable(name = GS2D_DB_NAME): Promise<boolean> {
     if (typeof indexedDB === "undefined") return false;
     // Open the real database (creating or upgrading it), rather than a probe
     // database that would be left behind.
     try {
-      const db = await openDB<FoundryDBSchema>(name, FOUNDRY_DB_VERSION, {
-        upgrade: upgradeFoundryDB,
+      const db = await openDB<Gs2dDBSchema>(name, GS2D_DB_VERSION, {
+        upgrade: upgradeDatabase,
       });
       db.close();
       return true;
@@ -141,7 +145,7 @@ export async function openStorage(): Promise<Storage> {
 export class IndexedDBStorageDriver {
   private readonly storage: IndexedDBStorage;
 
-  constructor(name = FOUNDRY_DB_NAME) {
+  constructor(name = GS2D_DB_NAME) {
     this.storage = new IndexedDBStorage(name);
   }
 

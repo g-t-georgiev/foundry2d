@@ -17,8 +17,8 @@ The zoom level is shown on the canvas or in the status bar.
 
 ## Grid and rulers
 
-- **#** or the **Grid** checkbox turns the grid on and off. Every fourth (level designer) or eighth (pixel editor) line is stronger.
-- The **rulers** along the top and left count cells. A label marks the line after that many cells ("8" is the line after the 8th cell), and the cell under the pointer is shaded on both rulers, so you can count along them. In the level designer they count the active layer's cells, which can be bigger than the level's.
+- **#** or the **Grid** checkbox turns the grid on and off. Every fourth (Levels) or eighth (Pixel) line is stronger.
+- The **rulers** along the top and left count cells. A label marks the line after that many cells ("8" is the line after the 8th cell), and the cell under the pointer is shaded on both rulers, so you can count along them. In Levels they count the active layer's cells, which can be bigger than the level's.
 
 ## The status bar
 

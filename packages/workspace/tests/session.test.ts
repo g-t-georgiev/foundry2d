@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vite-plus/test";
-import { MemoryStorage } from "@foundry2d/core";
+import { MemoryStorage } from "@gs2d/core";
 import { ProjectSession, type SessionState } from "../src/project/ProjectSession";
 
 function setup(toStored = (json: unknown): Promise<unknown> => Promise.resolve({ wrapped: json })) {

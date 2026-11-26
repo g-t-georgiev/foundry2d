@@ -20,6 +20,9 @@ export interface TourStorage {
   setItem(key: string, value: string): void;
 }
 
+/** App ids before Game Studio 2D, for reading what was seen then. */
+const LEGACY_TOUR_APPS: Readonly<Record<string, string>> = { levels: "level", packer: "pack" };
+
 /** Which of an app's tours were seen, kept per browser. */
 export class TourProgress {
   private readonly key: string;
@@ -28,12 +31,17 @@ export class TourProgress {
     app: string,
     private readonly storage: TourStorage | null = safeLocalStorage()
   ) {
-    this.key = `foundry2d.tours.${app}`;
+    this.key = `gs2d.tours.${app}`;
+    this.legacyKey = `foundry2d.tours.${LEGACY_TOUR_APPS[app] ?? app}`;
   }
+
+  /** Where the list was kept before Game Studio 2D (read once, never written). */
+  private readonly legacyKey: string;
 
   seen(): Set<string> {
     try {
-      const raw: unknown = JSON.parse(this.storage?.getItem(this.key) ?? "[]");
+      const stored = this.storage?.getItem(this.key) ?? this.storage?.getItem(this.legacyKey);
+      const raw: unknown = JSON.parse(stored ?? "[]");
       return new Set(Array.isArray(raw) ? raw.filter((v) => typeof v === "string") : []);
     } catch {
       return new Set();

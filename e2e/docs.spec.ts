@@ -14,9 +14,9 @@ test.beforeEach(async ({ page }) => {
 test("the contents lead to articles, and the URL keeps the place", async ({ page }) => {
   await expect(page.locator(".tree-toggle")).toHaveText([
     "1. Getting started",
-    "2. Pixel Editor",
-    "3. Level Designer",
-    "4. Sprite Packer",
+    "2. Pixel",
+    "3. Levels",
+    "4. Packer",
     "5. File formats",
   ]);
   // Every image of the manual loads.
@@ -30,7 +30,7 @@ test("the contents lead to articles, and the URL keeps the place", async ({ page
   await page.evaluate(() => scrollTo(0, 0));
 
   // Scrolling through opened every chapter; close one, then open it again.
-  const chapter = page.getByRole("button", { name: "3. Level Designer" });
+  const chapter = page.getByRole("button", { name: "3. Levels" });
   const autoLayers = page.locator("#tree").getByRole("link", { name: "Auto-layers" });
   await page.reload();
   await page.evaluate(() => scrollTo(0, 0));
@@ -41,21 +41,21 @@ test("the contents lead to articles, and the URL keeps the place", async ({ page
   await expect(autoLayers).toBeHidden();
   await chapter.click();
   await autoLayers.click();
-  await expect(page).toHaveURL(/#level-designer\/auto-layers$/);
-  await expect.poll(() => topOf(page, "level-designer/auto-layers")).toBeLessThan(100);
+  await expect(page).toHaveURL(/#levels\/auto-layers$/);
+  await expect.poll(() => topOf(page, "levels/auto-layers")).toBeLessThan(100);
   await expect(current(page)).toHaveText("Auto-layers");
 
   // Scrolling on marks the next article and moves the URL with it.
-  const next = await topOf(page, "level-designer/entities");
+  const next = await topOf(page, "levels/entities");
   await page.mouse.move(800, 500);
   await page.mouse.wheel(0, next - 60);
   await expect(current(page)).toHaveText("Entities, fields and enums");
-  await expect(page).toHaveURL(/#level-designer\/entities$/);
+  await expect(page).toHaveURL(/#levels\/entities$/);
 
   // A reload comes back to the same article.
   await page.reload();
-  await expect.poll(() => topOf(page, "level-designer/entities")).toBeLessThan(100);
-  await expect.poll(() => topOf(page, "level-designer/entities")).toBeGreaterThan(0);
+  await expect.poll(() => topOf(page, "levels/entities")).toBeLessThan(100);
+  await expect.poll(() => topOf(page, "levels/entities")).toBeGreaterThan(0);
   await expect(current(page)).toHaveText("Entities, fields and enums");
 });
 
@@ -65,12 +65,12 @@ test("links inside articles jump to other articles and their sections", async ({
     .first()
     .getByRole("link", { name: "A sprite as a tileset" })
     .click();
-  await expect(page).toHaveURL(/#level-designer\/workflow-tileset$/);
-  await expect.poll(() => topOf(page, "level-designer/workflow-tileset")).toBeLessThan(100);
+  await expect(page).toHaveURL(/#levels\/workflow-tileset$/);
+  await expect.poll(() => topOf(page, "levels/workflow-tileset")).toBeLessThan(100);
   await expect(current(page)).toHaveText("Workflow: a sprite as a tileset");
 
-  await page.goto("/#sprite-packer/settings/sheet");
-  await expect.poll(() => topOf(page, "sprite-packer/settings/sheet")).toBeLessThan(100);
+  await page.goto("/#packer/settings/sheet");
+  await expect.poll(() => topOf(page, "packer/settings/sheet")).toBeLessThan(100);
   await expect(current(page)).toHaveText("Packing settings");
 });
 
@@ -98,9 +98,9 @@ test("search narrows the contents, and Enter opens the first match", async ({ pa
 test("chapters link to their app; themes switch and stay; print shows only the text", async ({
   page,
 }) => {
-  await expect(page.getByRole("link", { name: "Open the Level Designer ↗" })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "Open Levels ↗" })).toHaveAttribute(
     "href",
-    /localhost:3001|level-designer/
+    /localhost:3001|levels/
   );
   const theme = page.locator("#themeToggle");
   const root = page.locator("html");
@@ -130,10 +130,10 @@ test("on a narrow screen the contents open from the menu button", async ({ page 
   await expect.poll(onScreen).toBe(false);
   await page.getByRole("button", { name: "Contents" }).click();
   await expect.poll(onScreen).toBe(true);
-  await page.getByRole("button", { name: "4. Sprite Packer" }).click();
+  await page.getByRole("button", { name: "4. Packer" }).click();
   await page.locator("#tree").getByRole("link", { name: "Exporting sheets" }).click();
   await expect.poll(onScreen).toBe(false);
-  await expect(page).toHaveURL(/#sprite-packer\/exporting$/);
+  await expect(page).toHaveURL(/#packer\/exporting$/);
   // No sideways scrolling.
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });

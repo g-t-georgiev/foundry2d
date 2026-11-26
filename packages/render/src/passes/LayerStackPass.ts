@@ -1,4 +1,4 @@
-import type { CellBuffer, Dimensions, GridLayer, Position, Rect } from "@foundry2d/core";
+import type { CellBuffer, Dimensions, GridLayer, Position, Rect } from "@gs2d/core";
 import type { RenderContext, RenderPass } from "../types";
 import { LayerBitmapCache, type CellColorizer } from "../LayerBitmapCache";
 

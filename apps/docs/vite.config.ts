@@ -10,7 +10,7 @@ export default defineConfig({
   base: "./",
   resolve: {
     alias: {
-      "@foundry2d/ui": path.resolve(__dirname, "../../packages/ui/src"),
+      "@gs2d/ui": path.resolve(__dirname, "../../packages/ui/src"),
     },
   },
   server: {

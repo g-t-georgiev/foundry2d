@@ -1,4 +1,4 @@
-import type { Camera, Position } from "@foundry2d/core";
+import type { Camera, Position } from "@gs2d/core";
 
 /** Where the pointer is, in every coordinate space a pass might need. */
 export interface PointerInfo {

@@ -1,16 +1,18 @@
-# foundry2d
+# Game Studio 2D
 
-Three browser apps for making 2D game art and levels, built on one shared engine:
+A studio of tools for 2D games, built on one shared engine. Three apps today, which work on their own and together:
 
-| App                | What it is for                                                                                                                                                                                       |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Pixel Editor**   | Drawing sprites pixel by pixel, with layers, frames, onion skin and an animated preview. Exports images, GIFs and spritesheets with data for game engines.                                           |
-| **Level Designer** | Building levels from grids of values, tiles and placed entities, laid out in a world. Tiles can be generated from rules (auto-layers). Exports game JSON, CSV and PNG.                               |
-| **Sprite Packer**  | Packing many images into spritesheets: trimming, rotation, identical sprites stored once, several sheets when needed, animations and pivots. Writes data for Phaser, PixiJS, Godot, LibGDX and more. |
+| App        | What it is for                                                                                                                                                                                       |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Pixel**  | Drawing sprites pixel by pixel, with layers, frames, onion skin and an animated preview. Exports images, GIFs and spritesheets with data for game engines.                                           |
+| **Levels** | Building levels from grids of values, tiles and placed entities, laid out in a world. Tiles can be generated from rules (auto-layers). Exports game JSON, CSV and PNG.                               |
+| **Packer** | Packing many images into spritesheets: trimming, rotation, identical sprites stored once, several sheets when needed, animations and pivots. Writes data for Phaser, PixiJS, Godot, LibGDX and more. |
 
 ![The three apps](docs/images/apps.png)
 
 They run in any modern browser and keep your work there (with crash recovery), or in files on your disk. In Chrome and Edge they can be installed as apps that work offline and open their files from the desktop.
+
+The project was called Foundry2D until November 2026; its files (`.f2dsprite`, `.f2dlevel`, `.f2dpack`) still open, and work kept in the browser is carried over. Where it is going next (a desktop studio connected to your games) is in the [roadmap](docs/ROADMAP.md).
 
 ## Quick start
 
@@ -27,7 +29,7 @@ pnpm dev:pixel
 ```
 
 ```bash
-pnpm dev:level
+pnpm dev:levels
 ```
 
 ```bash
@@ -49,9 +51,9 @@ They open on ports 3000, 3001 and 3002.
 
 ```
 apps/
-  pixel-editor/     the Pixel Editor
-  level-designer/   the Level Designer (presets/ holds its project templates)
-  sprite-packer/    the Sprite Packer
+  pixel/     Pixel
+  levels/   Levels (presets/ holds its project templates)
+  packer/    Packer
   docs/             the manual site
 packages/
   core/             documents, layers, tools, commands, selection, storage, ZIP (no DOM)

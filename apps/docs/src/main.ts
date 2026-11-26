@@ -1,4 +1,4 @@
-import { el } from "@foundry2d/ui";
+import { el } from "@gs2d/ui";
 import { APP_LINKS, manual } from "./content";
 import { search, type Chapter } from "./manual";
 
@@ -7,7 +7,7 @@ const $ = <T extends HTMLElement = HTMLElement>(selector: string) =>
 
 /** "light", "dark" or "auto" (follow the system); remembered per browser. */
 type Theme = "light" | "dark" | "auto";
-const THEME_KEY = "foundry2d.docs.theme";
+const THEME_KEY = "gs2d.docs.theme";
 
 function storedTheme(): Theme {
   try {

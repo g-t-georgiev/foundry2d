@@ -2,21 +2,21 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "pixel-editor",
+      "name": "pixel",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--dir", "apps/pixel-editor", "dev"],
+      "runtimeArgs": ["--dir", "apps/pixel", "dev"],
       "port": 3000
     },
     {
-      "name": "level-designer",
+      "name": "levels",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--dir", "apps/level-designer", "dev"],
+      "runtimeArgs": ["--dir", "apps/levels", "dev"],
       "port": 3001
     },
     {
-      "name": "sprite-packer",
+      "name": "packer",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--dir", "apps/sprite-packer", "dev"],
+      "runtimeArgs": ["--dir", "apps/packer", "dev"],
       "port": 3002
     },
     {
@@ -26,11 +26,11 @@
       "port": 3003
     },
     {
-      "name": "pixel-editor-build",
+      "name": "pixel-build",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [
         "--dir",
-        "apps/pixel-editor",
+        "apps/pixel",
         "exec",
         "vp",
         "preview",

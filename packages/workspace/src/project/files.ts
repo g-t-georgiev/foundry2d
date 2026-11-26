@@ -6,7 +6,7 @@
 export interface FileTypeSpec {
   description: string;
   mimeType: string;
-  /** Extensions including the dot, e.g. [".f2dsprite"]. The first one is used when saving. */
+  /** Extensions including the dot, e.g. [".gs2dsprite"]. The first one is used when saving. */
   extensions: string[];
   /** Older extensions that still open (never written), e.g. [".f2d.json"]. */
   legacyExtensions?: string[];

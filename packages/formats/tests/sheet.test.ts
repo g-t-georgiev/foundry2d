@@ -264,7 +264,7 @@ describe("reading sheet data", () => {
       "",
       "{}",
       "{broken",
-      '{"format":"foundry2d.pixel"}',
+      '{"format":"gs2d.sprite"}',
       "<svg/>",
       "notes: hello",
     ]) {

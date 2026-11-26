@@ -1,9 +1,11 @@
 import { describe, it, expect, vi } from "vite-plus/test";
 import {
+  currentAppId,
   JsonRecovery,
   MemoryStorage,
   bytesToDataUrl,
   dataUrlToBytes,
+  renameLegacyContents,
   sha256Hex,
   type ProjectRecord,
 } from "../src";
@@ -15,6 +17,28 @@ const record = (id: string, app: string, updatedAt: number): ProjectRecord => ({
   createdAt: 0,
   updatedAt,
   data: { cells: [1, 2, 3] },
+});
+
+describe("moving to Game Studio 2D", () => {
+  it("gives the old database's content today's app ids", () => {
+    const data = new Uint8Array([1]);
+    const renamed = renameLegacyContents({
+      recovery: [
+        ["level:session", data],
+        ["pixel:session", data],
+      ],
+      projects: [record("a", "level", 1), record("b", "pack", 2), record("c", "pixel", 3)],
+      assets: [{ hash: "h", type: "image/png", bytes: data }],
+      recentFiles: [
+        { id: "pack:hero.f2dpack", app: "pack", name: "hero.f2dpack", openedAt: 1, handle: null },
+      ],
+    });
+    expect(renamed.recovery.map(([key]) => key)).toEqual(["levels:session", "pixel:session"]);
+    expect(renamed.projects.map((p) => p.app)).toEqual(["levels", "packer", "pixel"]);
+    expect(renamed.recentFiles[0]).toMatchObject({ id: "packer:hero.f2dpack", app: "packer" });
+    expect(renamed.assets).toHaveLength(1);
+    expect(currentAppId("unknown")).toBe("unknown");
+  });
 });
 
 describe("MemoryStorage", () => {

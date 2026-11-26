@@ -1,0 +1,286 @@
+@import "@gs2d/ui/theme/tokens.css";
+@import "@gs2d/ui/theme/components.css";
+
+body {
+  display: grid;
+  grid-template-rows: var(--theme-toolbar-height) minmax(0, 1fr) var(--theme-statusbar-height);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+h3,
+p,
+ul {
+  margin: 0;
+}
+
+/* ------------------------------------------------------------------ toolbar */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 0 12px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  background: var(--theme-bg-panel);
+  border-bottom: 1px solid var(--theme-border-color);
+}
+
+.toolbar-start,
+.toolbar-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.brand small {
+  color: var(--theme-text-muted);
+  font-weight: 500;
+}
+
+.project-name {
+  width: 180px;
+  height: 28px;
+  padding: 0 8px;
+  font: inherit;
+  color: var(--theme-text-main);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+}
+
+.project-name:hover,
+.project-name:focus {
+  background: var(--theme-bg-input);
+  border-color: var(--theme-border-color);
+}
+
+/* ------------------------------------------------------------------ layout */
+
+.main-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr) 240px;
+  min-height: 0;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--theme-bg-panel);
+}
+
+.left-sidebar {
+  border-right: 1px solid var(--theme-border-color);
+}
+
+.right-sidebar {
+  border-left: 1px solid var(--theme-border-color);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+@media (max-width: 1000px) {
+  .main-layout {
+    grid-template-columns: 200px minmax(0, 1fr) 200px;
+  }
+}
+
+/* ------------------------------------------------------------------ sprite list */
+
+.sprites-section {
+  min-height: 0;
+}
+
+.sprite-list {
+  flex: 1;
+  min-height: 80px;
+  padding: 2px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.sprite-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.sprite-item:hover {
+  background: var(--theme-bg-card-hover);
+}
+
+.sprite-item[aria-selected="true"] {
+  background: var(--theme-bg-selected);
+  border-color: var(--theme-border-active);
+}
+
+.sprite-item img {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  background: repeating-conic-gradient(#2a2d33 0% 25%, #24262b 0% 50%) 0 0 / 8px 8px;
+  border-radius: 3px;
+}
+
+.sprite-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sprite-item small,
+.sprite-list .empty {
+  color: var(--theme-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------ viewport */
+
+.canvas-viewport {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.canvas-viewport canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.canvas-hud {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: rgba(24, 24, 28, 0.85);
+  border: 1px solid var(--theme-border-color);
+  border-radius: 6px;
+}
+
+.canvas-tools {
+  top: 36px;
+  right: 12px;
+}
+
+.zoom-hud {
+  right: 12px;
+  bottom: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.empty-hint {
+  position: absolute;
+  inset: 24px 0 0 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--theme-text-muted);
+  pointer-events: none;
+}
+
+.empty-hint strong {
+  color: var(--theme-text-main);
+  font-size: 15px;
+}
+
+.pack-error {
+  position: absolute;
+  bottom: 12px;
+  left: 36px;
+  max-width: calc(100% - 120px);
+  padding: 6px 10px;
+  background: var(--theme-bg-panel);
+  border: 1px solid var(--theme-danger);
+  border-radius: 6px;
+}
+
+body.dropping .canvas-viewport::after {
+  position: absolute;
+  inset: 8px;
+  border: 2px dashed var(--theme-color-accent);
+  border-radius: 10px;
+  content: "";
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ settings */
+
+.right-sidebar .field.inline {
+  justify-content: space-between;
+}
+
+.scales {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.scales .label {
+  flex-basis: 100%;
+}
+
+.scales .checkbox-field {
+  gap: 4px;
+}
+
+.preview-canvas {
+  width: 100%;
+  height: 140px;
+  background: repeating-conic-gradient(#2a2d33 0% 25%, #24262b 0% 50%) 0 0 / 12px 12px;
+  border: 1px solid var(--theme-border-color);
+  border-radius: 6px;
+}
+
+.live-folders {
+  padding: 0;
+  list-style: none;
+}
+
+.live-folders li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--theme-color-accent);
+  font-size: 12px;
+}
+
+#selectionTitle {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}

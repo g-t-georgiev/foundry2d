@@ -41,8 +41,8 @@ export async function openApp(
   // The first-run tour would cover the app; it has tests of its own.
   if (!options.tour) {
     await page.addInitScript(() => {
-      for (const app of ["pixel", "level", "pack"]) {
-        localStorage.setItem(`foundry2d.tours.${app}`, JSON.stringify(["intro"]));
+      for (const app of ["pixel", "levels", "packer"]) {
+        localStorage.setItem(`gs2d.tours.${app}`, JSON.stringify(["intro"]));
       }
     });
   }

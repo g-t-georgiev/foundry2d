@@ -10,7 +10,7 @@
     "tsc:check": "tsc --noEmit"
   },
   "dependencies": {
-    "@foundry2d/ui": "workspace:*",
+    "@gs2d/ui": "workspace:*",
     "marked": "^18.3.0"
   },
   "devDependencies": {

@@ -1,4 +1,4 @@
-import type { SheetData, SheetFrame, Turn } from "@foundry2d/formats";
+import type { SheetData, SheetFrame, Turn } from "@gs2d/formats";
 import { pack, type PackOptions } from "./pack";
 import {
   blit,
@@ -72,7 +72,7 @@ function prepare(input: AtlasInput, trim: boolean): Omit<Piece, "aliasOf"> {
   };
 }
 
-/** The sheet's size and frames, for the `@foundry2d/formats` writers. */
+/** The sheet's size and frames, for the `@gs2d/formats` writers. */
 export const sheetData = (sheet: AtlasSheet): SheetData => ({
   width: sheet.image.width,
   height: sheet.image.height,

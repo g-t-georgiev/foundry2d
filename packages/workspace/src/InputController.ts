@@ -1,4 +1,4 @@
-import type { Position } from "@foundry2d/core";
+import type { Position } from "@gs2d/core";
 import type { Workspace } from "./Workspace";
 import { normalizeKey, isTypingTarget } from "./Keymap";
 

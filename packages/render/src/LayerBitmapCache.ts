@@ -1,4 +1,4 @@
-import type { CellBuffer, GridLayer } from "@foundry2d/core";
+import type { CellBuffer, GridLayer } from "@gs2d/core";
 import { createSurface, type Surface } from "./canvas";
 
 /**

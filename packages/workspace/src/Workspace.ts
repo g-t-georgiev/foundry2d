@@ -5,7 +5,7 @@ import {
   type CameraState,
   type Position,
   type Rect,
-} from "@foundry2d/core";
+} from "@gs2d/core";
 import {
   Renderer,
   RulersPass,
@@ -13,7 +13,7 @@ import {
   type RenderPass,
   type RenderTheme,
   type RulersPassOptions,
-} from "@foundry2d/render";
+} from "@gs2d/render";
 import { InputController, type InputOptions } from "./InputController";
 import { Keymap } from "./Keymap";
 import type { ScenePointerEvent, WorkspaceEventMap, WorkspaceScene } from "./types";

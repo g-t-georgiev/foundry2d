@@ -32,18 +32,18 @@ export default defineConfig({
   },
   projects: [
     {
-      name: "pixel-editor",
-      testMatch: "pixel-editor.spec.ts",
+      name: "pixel",
+      testMatch: "pixel.spec.ts",
       use: { baseURL: `http://localhost:${PIXEL_PORT}` },
     },
     {
-      name: "level-designer",
-      testMatch: "level-designer.spec.ts",
+      name: "levels",
+      testMatch: "levels.spec.ts",
       use: { baseURL: `http://localhost:${LEVEL_PORT}` },
     },
     {
-      name: "sprite-packer",
-      testMatch: "sprite-packer.spec.ts",
+      name: "packer",
+      testMatch: "packer.spec.ts",
       use: { baseURL: `http://localhost:${PACKER_PORT}` },
     },
     {
@@ -54,19 +54,19 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: `pnpm --dir ../apps/pixel-editor exec vp dev --port ${PIXEL_PORT} --strictPort`,
+      command: `pnpm --dir ../apps/pixel exec vp dev --port ${PIXEL_PORT} --strictPort`,
       url: `http://localhost:${PIXEL_PORT}`,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },
     {
-      command: `pnpm --dir ../apps/level-designer exec vp dev --port ${LEVEL_PORT} --strictPort`,
+      command: `pnpm --dir ../apps/levels exec vp dev --port ${LEVEL_PORT} --strictPort`,
       url: `http://localhost:${LEVEL_PORT}`,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },
     {
-      command: `pnpm --dir ../apps/sprite-packer exec vp dev --port ${PACKER_PORT} --strictPort`,
+      command: `pnpm --dir ../apps/packer exec vp dev --port ${PACKER_PORT} --strictPort`,
       url: `http://localhost:${PACKER_PORT}`,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,

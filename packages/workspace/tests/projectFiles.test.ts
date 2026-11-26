@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from "vite-plus/test";
-import { MemoryStorage } from "@foundry2d/core";
+import { MemoryStorage } from "@gs2d/core";
 import { ProjectSession } from "../src/project/ProjectSession";
 import { ProjectFiles, type StartScreenData } from "../src/project/ProjectFiles";
 
@@ -260,10 +260,11 @@ describe("stripFileExtension", () => {
     const { stripFileExtension } = await import("../src/project/files");
     const type = {
       description: "",
-      mimeType: "application/vnd.foundry2d.level+json",
-      extensions: [".f2dlevel"],
-      legacyExtensions: [".f2dlevel.json"],
+      mimeType: "application/vnd.gs2d.level+json",
+      extensions: [".gs2dlevel"],
+      legacyExtensions: [".f2dlevel", ".f2dlevel.json"],
     };
+    expect(stripFileExtension("maze.gs2dlevel", type)).toBe("maze");
     expect(stripFileExtension("maze.f2dlevel", type)).toBe("maze");
     expect(stripFileExtension("maze.F2DLEVEL.json", type)).toBe("maze");
     expect(stripFileExtension("export.json", type)).toBe("export");

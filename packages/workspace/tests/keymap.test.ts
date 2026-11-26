@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vite-plus/test";
 import { Keymap, parseCombo } from "../src/Keymap";
-import { niceStep } from "@foundry2d/render";
+import { niceStep } from "@gs2d/render";
 
 const key = (k: string, mods: Partial<KeyboardEvent> = {}) =>
   ({
@@ -66,7 +66,7 @@ describe("niceStep", () => {
 
 describe("rulerScale (item 47)", () => {
   it("never ticks between whole units", async () => {
-    const { rulerScale } = await import("@foundry2d/render");
+    const { rulerScale } = await import("@gs2d/render");
     for (const px of [0.3, 1, 2.59 * 8, 7, 13, 40, 120, 400]) {
       for (const kind of ["binary", "decimal"] as const) {
         const { step, tick } = rulerScale(px, kind);
@@ -79,12 +79,12 @@ describe("rulerScale (item 47)", () => {
   });
 
   it("8 px tiles at 259%: labels every 4 tiles (the grid's stronger lines), a tick per tile", async () => {
-    const { rulerScale } = await import("@foundry2d/render");
+    const { rulerScale } = await import("@gs2d/render");
     expect(rulerScale(2.59 * 8, "binary")).toEqual({ step: 4, tick: 1 });
   });
 
   it("zoomed out, binary steps stay powers of two and decimal ones 1-2-5", async () => {
-    const { rulerScale } = await import("@foundry2d/render");
+    const { rulerScale } = await import("@gs2d/render");
     expect(rulerScale(0.5, "binary")).toEqual({ step: 128, tick: 16 });
     expect(rulerScale(0.5, "decimal")).toEqual({ step: 200, tick: 10 });
     expect(rulerScale(100, "binary")).toEqual({ step: 1, tick: 1 });

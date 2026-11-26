@@ -1,5 +1,5 @@
-import type { Dimensions, Position, Rect } from "@foundry2d/core";
-import type { RenderPass } from "@foundry2d/render";
+import type { Dimensions, Position, Rect } from "@gs2d/core";
+import type { RenderPass } from "@gs2d/render";
 import type { Workspace } from "./Workspace";
 
 export interface ScenePointerEvent {
@@ -18,8 +18,8 @@ export interface ScenePointerEvent {
 }
 
 /**
- * What a `Workspace` is currently showing and editing. The pixel editor has
- * one scene per document; the level designer swaps between a world scene and
+ * What a `Workspace` is currently showing and editing. Pixel has
+ * one scene per document; Levels swaps between a world scene and
  * a level scene inside the same workspace.
  */
 export interface WorkspaceScene {

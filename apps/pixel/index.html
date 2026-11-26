@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Game Studio 2D · Pixel</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header class="toolbar">
+      <span class="brand">Game Studio 2D <small>Pixel</small></span>
+      <input id="spriteName" class="sprite-name" aria-label="Sprite name" spellcheck="false" />
+
+      <div class="group" aria-label="File">
+        <button class="btn" data-command="open" title="New or open a sprite (Ctrl+O)">
+          Projects…
+        </button>
+        <button
+          class="btn"
+          data-command="save"
+          title="Save in the browser, and to the open file if any (Ctrl+S)"
+        >
+          Save
+        </button>
+        <split-button id="saveAsButton" title="Save as (Ctrl+Shift+S saves to a file)">
+          <option value="file" selected data-hint="Ctrl+Shift+S">Save as file…</option>
+          <option value="browser" data-hint="new library entry">
+            Save a copy in this browser…
+          </option>
+        </split-button>
+        <span class="divider"></span>
+        <button
+          data-command="export"
+          class="btn btn-primary"
+          title="Export images, spritesheets or GIF (Ctrl+E)"
+        >
+          Export…
+        </button>
+        <span class="divider"></span>
+        <button class="btn btn-icon" data-command="undo" title="Undo (Ctrl+Z)" aria-label="Undo">
+          <svg viewBox="0 0 24 24">
+            <path
+              d="M12.5 8c-2.65 0-5.05 1-6.9 2.6L2 7v9h9l-3.62-3.62A7.97 7.97 0 0 1 20.1 16l2.37-.78A10.5 10.5 0 0 0 12.5 8z"
+            />
+          </svg>
+        </button>
+        <button
+          class="btn btn-icon"
+          data-command="redo"
+          title="Redo (Ctrl+Shift+Z or Ctrl+Y)"
+          aria-label="Redo"
+        >
+          <svg viewBox="0 0 24 24">
+            <path
+              d="M18.4 10.6A10.4 10.4 0 0 0 11.5 8a10.5 10.5 0 0 0-9.96 7.22l2.37.78A7.97 7.97 0 0 1 16.62 12.4L13 16h9V7z"
+            />
+          </svg>
+        </button>
+      </div>
+
+      <div class="group" aria-label="Edit">
+        <button class="btn" data-command="clear" title="Clear active layer (Delete)">
+          Clear layer
+        </button>
+      </div>
+
+      <div class="group" aria-label="Canvas">
+        <label class="section-title" for="documentSizeSelect">Size</label>
+        <select class="input" id="documentSizeSelect">
+          <option value="8x8">8 × 8</option>
+          <option value="16x16">16 × 16</option>
+          <option value="24x24">24 × 24</option>
+          <option value="32x32" selected>32 × 32</option>
+          <option value="48x48">48 × 48</option>
+          <option value="64x64">64 × 64</option>
+          <option value="128x128">128 × 128</option>
+        </select>
+      </div>
+
+      <div class="group" aria-label="View">
+        <button class="btn" data-command="zoom-out" title="Zoom out (-)" aria-label="Zoom out">
+          −
+        </button>
+        <button class="btn" data-command="fit" title="Fit to view (F)">Fit</button>
+        <button class="btn" data-command="zoom-in" title="Zoom in (+)" aria-label="Zoom in">
+          +
+        </button>
+        <label class="toggle"><input type="checkbox" id="gridToggle" checked /> Grid</label>
+        <label class="toggle"><input type="checkbox" id="previewToggle" /> Preview</label>
+      </div>
+
+      <help-button></help-button>
+    </header>
+
+    <main class="workspace">
+      <aside class="tools-column" aria-label="Tools">
+        <div class="tool-grid" role="toolbar" aria-label="Drawing tools">
+          <button class="tool-btn" data-tool="pen" title="Pen (B)" aria-label="Pen">
+            <svg viewBox="0 0 24 24">
+              <path
+                d="M20.7 7c.4-.4.4-1 0-1.4l-2.3-2.3c-.4-.4-1-.4-1.4 0l-1.8 1.8 3.7 3.7M3 17.2V21h3.8L17.8 9.9l-3.7-3.7L3 17.2z"
+              />
+            </svg>
+          </button>
+          <button class="tool-btn" data-tool="eraser" title="Eraser (E)" aria-label="Eraser">
+            <svg viewBox="0 0 24 24">
+              <path
+                d="m16.2 3.6 5 4.9c.8.8.8 2 0 2.8L12 20.5a4 4 0 0 1-5.7 0L2.8 17a4 4 0 0 1 0-5.6l9.5-9.5c.8-.8 2.1-.8 2.9 0m-2.1 11.3 2.8-2.8-4.9-5-2.8 2.9 4.9 4.9z"
+              />
+            </svg>
+          </button>
+          <button
+            class="tool-btn"
+            data-tool="bucket"
+            title="Paint bucket (G)"
+            aria-label="Paint bucket"
+          >
+            <svg viewBox="0 0 24 24">
+              <path
+                d="M19 11.5s-2 2.2-2 3.5a2 2 0 0 0 4 0c0-1.3-2-3.5-2-3.5M5.2 10 10 5.2l4.8 4.8M16.6 8.9 7.6 0 6.2 1.4l2.4 2.4-5.2 5.2c-.6.6-.6 1.5 0 2.1l5.5 5.5c.3.3.7.4 1.1.4.4 0 .8-.1 1.1-.4l5.5-5.5c.6-.6.6-1.6 0-2.2z"
+              />
+            </svg>
+          </button>
+          <button
+            class="tool-btn"
+            data-tool="eyedropper"
+            title="Color picker (I, hold Alt)"
+            aria-label="Color picker"
+          >
+            <svg viewBox="0 0 24 24">
+              <path
+                d="m19.4 11.6-3-3 1.4-1.4 3 3-1.4 1.4m-5.9-5.8 3 3-7.8 7.7H5.7v-2.9l7.8-7.8m0-2.9L2 14.5V22h7.5L21 10.6c.8-.8.8-2.1 0-2.9l-4.7-4.7c-.8-.8-2-.8-2.8 0z"
+              />
+            </svg>
+          </button>
+          <button class="tool-btn" data-tool="line" title="Line (L)" aria-label="Line">
+            <svg viewBox="0 0 24 24"><path d="M4 18.6 18.6 4 20 5.4 5.4 20z" /></svg>
+          </button>
+          <button class="tool-btn" data-tool="rect" title="Rectangle (R)" aria-label="Rectangle">
+            <svg viewBox="0 0 24 24"><path d="M3 5h18v14H3V5m2 2v10h14V7H5z" /></svg>
+          </button>
+          <button class="tool-btn" data-tool="ellipse" title="Ellipse (C)" aria-label="Ellipse">
+            <svg viewBox="0 0 24 24">
+              <path
+                d="M12 5c5 0 9 3.1 9 7s-4 7-9 7-9-3.1-9-7 4-7 9-7m0 2c-3.9 0-7 2.2-7 5s3.1 5 7 5 7-2.2 7-5-3.1-5-7-5z"
+              />
+            </svg>
+          </button>
+          <button
+            class="tool-btn"
+            data-tool="select"
+            title="Select / move (M). Drag a handle to scale; Shift adds, Alt subtracts"
+            aria-label="Select and move"
+          >
+            <svg viewBox="0 0 24 24">
+              <path
+                d="M4 4h4v2H6v2H4V4m6 0h4v2h-4V4m6 0h4v4h-2V6h-2V4M4 10h2v4H4v-4m14 0h2v4h-2v-4M4 16h2v2h2v2H4v-4m14 0h2v4h-4v-2h2v-2m-8 2h4v2h-4v-2z"
+              />
+            </svg>
+          </button>
+          <button
+            class="tool-btn"
+            data-tool="lasso"
+            title="Lasso select: drag an outline (Q). Shift adds, Alt subtracts"
+            aria-label="Lasso select"
+          >
+            <svg viewBox="0 0 24 24">
+              <path
+                d="M12 3C6.5 3 2 6.1 2 10c0 2.3 1.6 4.4 4.1 5.6-.1.4-.1.7-.1 1.1A3.3 3.3 0 0 0 9.3 20c1.7 0 3-1.2 3.3-2.8 4.9-.3 9.4-3.2 9.4-7.2 0-3.9-4.5-7-10-7m0 2c4.6 0 8 2.4 8 5s-3.3 4.9-7.7 5c-.6-1.2-1.8-2-3.3-2-.6 0-1.2.1-1.7.4C5.3 14.5 4 12.3 4 10c0-2.6 3.4-5 8-5M9.3 15c.7 0 1.3.6 1.3 1.3S10 18 9.3 18 8 17.3 8 16.7c0-.4.2-.8.5-1 .2-.4.5-.7.8-.7z"
+              />
+            </svg>
+          </button>
+          <button
+            class="tool-btn"
+            data-tool="wand"
+            title="Magic wand: same colour (W). Ctrl: everywhere; Shift adds, Alt subtracts"
+            aria-label="Magic wand"
+          >
+            <svg viewBox="0 0 24 24">
+              <path
+                d="M7.5 5.6 10 7 8.6 4.5 10 2 7.5 3.4 5 2l1.4 2.5L5 7l2.5-1.4m12 9.8L17 14l1.4 2.5L17 19l2.5-1.4L22 19l-1.4-2.5L22 14l-2.5 1.4M22 2l-2.5 1.4L17 2l1.4 2.5L17 7l2.5-1.4L22 7l-1.4-2.5L22 2m-7.6 5.3a1 1 0 0 0-1.4 0L1.3 19a1 1 0 0 0 0 1.4l2.3 2.3a1 1 0 0 0 1.4 0L16.7 11a1 1 0 0 0 0-1.4l-2.3-2.3M13.3 12.3 11.7 10.7 13.7 8.7 15.3 10.3l-2 2z"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <div class="section">
+          <span class="section-title">Mirror</span>
+          <div class="size-grid" role="group" aria-label="Mirror drawing">
+            <button
+              class="btn"
+              data-mirror="x"
+              title="Mirror left/right (Shift+X)"
+              aria-pressed="false"
+            >
+              ⇆
+            </button>
+            <button
+              class="btn"
+              data-mirror="y"
+              title="Mirror top/bottom (Shift+Y)"
+              aria-pressed="false"
+            >
+              ⇅
+            </button>
+          </div>
+        </div>
+
+        <div class="section">
+          <span class="section-title">Transform</span>
+          <div class="size-grid" role="group" aria-label="Transform the selection or layer">
+            <button
+              class="btn"
+              data-transform="flipX"
+              title="Flip horizontally (Shift+H)"
+              aria-label="Flip horizontally"
+            >
+              ⇿
+            </button>
+            <button
+              class="btn"
+              data-transform="flipY"
+              title="Flip vertically (Shift+V)"
+              aria-label="Flip vertically"
+            >
+              ⇳
+            </button>
+            <button
+              class="btn"
+              data-transform="rotateCW"
+              title="Rotate 90° clockwise (Shift+R)"
+              aria-label="Rotate 90° clockwise"
+            >
+              ↻
+            </button>
+          </div>
+        </div>
+
+        <div class="section">
+          <span class="section-title">Pen size</span>
+          <div class="size-grid" role="radiogroup" aria-label="Pen size">
+            <button class="btn" data-size="1" title="1 px ([ / ])">1</button>
+            <button class="btn" data-size="2" title="2 px">2</button>
+            <button class="btn" data-size="3" title="3 px">3</button>
+            <button class="btn" data-size="4" title="4 px">4</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <span class="section-title">Color</span>
+          <color-picker-button
+            class="color-picker"
+            id="colorPicker"
+            value="#ffee00"
+          ></color-picker-button>
+          <div class="palette" aria-label="Palette"></div>
+          <div class="palette-actions">
+            <button
+              class="btn"
+              id="paletteAdd"
+              title="Add the current colour"
+              aria-label="Add colour"
+            >
+              +
+            </button>
+            <button class="btn" id="paletteImport" title="Import a .hex or .gpl palette">
+              Import
+            </button>
+            <select
+              class="input"
+              id="paletteExport"
+              title="Export the palette"
+              aria-label="Export palette"
+            >
+              <option value="" selected>Export</option>
+              <option value="hex">.hex (Lospec)</option>
+              <option value="gpl">.gpl (GIMP)</option>
+            </select>
+          </div>
+          <input type="file" id="paletteFile" accept=".hex,.gpl,.txt" hidden />
+        </div>
+      </aside>
+
+      <div class="center-column">
+        <section class="viewport" id="viewport" aria-label="Canvas">
+          <canvas id="paintCanvas"></canvas>
+        </section>
+
+        <section class="timeline" id="timeline" aria-label="Frames">
+          <div class="timeline-rail" role="toolbar" aria-label="Frame actions">
+            <button class="btn btn-small" data-frame-action="add" title="New frame (Shift+N)">
+              + Frame
+            </button>
+            <button
+              class="btn btn-small"
+              data-frame-action="duplicate"
+              title="Duplicate frame (Shift+D)"
+            >
+              Duplicate
+            </button>
+            <button
+              class="btn btn-small"
+              data-frame-action="left"
+              title="Move frame left"
+              aria-label="Move frame left"
+            >
+              ◀
+            </button>
+            <button
+              class="btn btn-small"
+              data-frame-action="right"
+              title="Move frame right"
+              aria-label="Move frame right"
+            >
+              ▶
+            </button>
+            <button
+              class="btn btn-small"
+              data-frame-action="delete"
+              title="Delete frame"
+              aria-label="Delete frame"
+            >
+              ✕
+            </button>
+            <span class="divider"></span>
+            <label class="inline-field" title="Duration of this frame; empty uses the FPS">
+              Duration
+              <input class="input" id="frameDuration" type="number" min="10" step="10" /> ms
+            </label>
+            <label class="inline-field"
+              >FPS <input class="input" id="spriteFps" type="number" min="1" max="60" step="1"
+            /></label>
+            <label class="inline-field" title="Show neighbouring frames (Alt+O)"
+              ><input id="onionSkin" type="checkbox" /> Onion skin</label
+            >
+            <span class="hint">, and . switch frames</span>
+          </div>
+          <div class="frames" id="framesList" role="listbox" aria-label="Frames"></div>
+        </section>
+      </div>
+
+      <aside class="side-column">
+        <section class="preview-panel" aria-label="Animation preview">
+          <div class="preview-header">
+            <span class="section-title">Preview</span>
+            <button id="previewPlay" class="btn btn-icon"></button>
+          </div>
+          <div class="preview-box"><canvas id="previewCanvas"></canvas></div>
+        </section>
+        <layers-panel id="layersPanel"></layers-panel>
+      </aside>
+    </main>
+
+    <footer class="statusbar">
+      <span class="status-value" id="coordsDisplay">—</span>
+      <span class="status-value" id="sizeDisplay"></span>
+      <span class="status-value" id="layerDisplay"></span>
+      <span class="status-value" id="zoomDisplay"></span>
+      <span class="status-value" id="fileDisplay"></span>
+      <span id="messageDisplay" class="statusbar-message" role="status" aria-live="polite"></span>
+    </footer>
+
+    <project-browser id="projectBrowser"></project-browser>
+    <guided-tour></guided-tour>
+
+    <dialog id="exportDialog" class="dialog dialog-compact" aria-labelledby="exportTitle">
+      <form method="dialog" class="dialog-header">
+        <h2 id="exportTitle">Export</h2>
+        <button class="btn btn-icon" value="cancel" aria-label="Close">✕</button>
+      </form>
+      <div class="tabs" role="tablist">
+        <button class="btn btn-small" role="tab" data-export-tab="image" aria-selected="true">
+          Image
+        </button>
+        <button class="btn btn-small" role="tab" data-export-tab="sheet" aria-selected="false">
+          Spritesheet
+        </button>
+        <button class="btn btn-small" role="tab" data-export-tab="gif" aria-selected="false">
+          GIF
+        </button>
+      </div>
+      <div class="dialog-body">
+        <div class="common-fields">
+          <label
+            >Scale
+            <select class="input" id="exScale">
+              <option value="1">1×</option>
+              <option value="2">2×</option>
+              <option value="4">4×</option>
+              <option value="8">8×</option>
+              <option value="16">16×</option>
+              <option value="32">32×</option>
+            </select>
+          </label>
+          <label
+            >Pixels
+            <select class="input" id="exSource">
+              <option value="flattened">All visible layers</option>
+              <option value="layer">Active layer only</option>
+            </select>
+          </label>
+        </div>
+
+        <section data-export-panel="image">
+          <label
+            >Format
+            <select class="input" id="exFormat">
+              <option value="png">PNG</option>
+              <option value="webp">WebP (lossless)</option>
+              <option value="webp-lossy">WebP (lossy)</option>
+              <option value="jpeg">JPEG</option>
+              <option value="bmp">BMP (32-bit)</option>
+            </select>
+          </label>
+          <label data-when="lossy"
+            >Quality <input id="exQuality" type="range" min="10" max="100" value="90"
+          /></label>
+          <label data-when="jpeg"
+            >Background <input id="exBackground" type="color" value="#ffffff"
+          /></label>
+          <label
+            >Frames
+            <select class="input" id="exFrames">
+              <option value="current">Current frame</option>
+              <option value="all">All frames (ZIP)</option>
+            </select>
+          </label>
+          <label class="check"
+            ><input id="exTrim" type="checkbox" /> Trim transparent borders</label
+          >
+          <label
+            >File name
+            <input class="input" id="exPattern" type="text" value="{name}" spellcheck="false"
+          /></label>
+          <p class="hint">Placeholders: {name} {frame} {w} {h}</p>
+        </section>
+
+        <section data-export-panel="sheet" hidden>
+          <label
+            >Layout
+            <select class="input" id="exLayout">
+              <option value="horizontal">Horizontal strip</option>
+              <option value="vertical">Vertical strip</option>
+              <option value="grid">Grid</option>
+              <option value="packed">Packed (trim-friendly)</option>
+            </select>
+          </label>
+          <label data-when="grid"
+            >Columns <input class="input" id="exColumns" type="number" min="1" placeholder="auto"
+          /></label>
+          <label
+            >Padding <input class="input" id="exPadding" type="number" min="0" value="0"
+          /></label>
+          <label
+            >Extrude <input class="input" id="exExtrude" type="number" min="0" value="0"
+          /></label>
+          <label class="check"><input id="exSheetTrim" type="checkbox" /> Trim frames</label>
+          <label
+            >Data
+            <select class="input" id="exData">
+              <option value="json-hash">TexturePacker JSON (Hash): Phaser, PixiJS</option>
+              <option value="json-array">TexturePacker JSON (Array): Phaser, PixiJS</option>
+              <option value="starling-xml">Starling / Sparrow XML</option>
+              <option value="godot-tres">Godot SpriteFrames (.tres)</option>
+              <option value="libgdx-atlas">LibGDX atlas</option>
+              <option value="css">CSS sprites</option>
+              <option value="none">Image only</option>
+            </select>
+          </label>
+          <label
+            >Download as
+            <select class="input" id="exOutput">
+              <option value="zip">One ZIP</option>
+              <option value="files">Separate files</option>
+            </select>
+          </label>
+        </section>
+
+        <section data-export-panel="gif" hidden>
+          <label class="check"><input id="exLoop" type="checkbox" checked /> Loop forever</label>
+          <label class="check" title="Only used when the sprite has more than 255 colours">
+            <input id="exDither" type="checkbox" /> Dither (smoother gradients above 255 colours)
+          </label>
+          <p class="hint">
+            Uses each frame's duration. GIF supports 255 colours plus on/off transparency: up to
+            that, colours are exact; above it, a palette is picked to cover the sprite's colours.
+          </p>
+        </section>
+
+        <p class="export-info" id="exInfo" role="status"></p>
+      </div>
+      <div class="dialog-footer">
+        <button class="btn" id="exCancel">Cancel</button>
+        <button id="exRun" class="btn btn-primary">Export</button>
+      </div>
+    </dialog>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

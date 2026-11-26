@@ -3,13 +3,13 @@ import { foundryPwa } from "../vite/pwa";
 
 describe("installable app build plugin (items 34 and 38)", () => {
   const plugin = foundryPwa({
-    name: "Foundry2D Test",
+    name: "Game Studio 2D Test",
     shortName: "Test",
     description: "test",
     themeColor: "#000000",
     backgroundColor: "#111111",
     iconSvg: "<svg/>",
-    fileTypes: { "application/vnd.foundry2d.sprite+json": [".f2dsprite"] },
+    fileTypes: { "application/vnd.gs2d.sprite+json": [".gs2dsprite"] },
   });
   const build = (files: string[]) => {
     const emitted = new Map<string, string>();
@@ -29,7 +29,7 @@ describe("installable app build plugin (items 34 and 38)", () => {
     };
     expect(manifest.display).toBe("standalone");
     expect(manifest.file_handlers[0].accept).toEqual({
-      "application/vnd.foundry2d.sprite+json": [".f2dsprite"],
+      "application/vnd.gs2d.sprite+json": [".gs2dsprite"],
     });
     expect(out.get("icon.svg")).toBe("<svg/>");
     const sw = out.get("sw.js")!;

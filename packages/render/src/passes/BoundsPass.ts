@@ -1,4 +1,4 @@
-import type { Rect } from "@foundry2d/core";
+import type { Rect } from "@gs2d/core";
 import type { RenderContext, RenderPass } from "../types";
 
 export interface BoundsPassOptions {

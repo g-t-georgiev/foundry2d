@@ -111,7 +111,7 @@ export function shortcutsArticle(app: string, shortcuts: readonly Shortcut[]): s
   return [
     "# Keyboard shortcuts",
     "",
-    `<!-- Generated from the ${app}'s key bindings by \`vp run docs\`. Edit the labels in its keys.ts, not this file. -->`,
+    `<!-- Generated from the key bindings of ${app} by \`vp run docs\`. Edit the labels in its keys.ts, not this file. -->`,
     "",
     "Ctrl means Cmd on macOS. Letter keys work while the canvas or a panel has the focus, not while you type in a field; Save, Save as, Open and Export work everywhere.",
     "",

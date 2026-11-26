@@ -31,8 +31,11 @@ describe("tours", () => {
     pixel.markSeen(["whats-new-1", "intro"]);
     expect([...new TourProgress("pixel", storage).seen()]).toEqual(["intro", "whats-new-1"]);
     expect(new TourProgress("level", storage).seen().size).toBe(0);
-    storage.setItem("foundry2d.tours.level", "{broken");
+    storage.setItem("gs2d.tours.level", "{broken");
     expect(new TourProgress("level", storage).seen().size).toBe(0);
+    // What was seen before Game Studio 2D counts.
+    storage.setItem("foundry2d.tours.pack", JSON.stringify(["intro"]));
+    expect([...new TourProgress("packer", storage).seen()]).toEqual(["intro"]);
     const none = new TourProgress("pack", null);
     none.markSeen(["intro"]);
     expect(none.seen().size).toBe(0);

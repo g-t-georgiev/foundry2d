@@ -1,4 +1,4 @@
-import { crc32 } from "@foundry2d/core";
+import { crc32 } from "@gs2d/core";
 import type { RgbaImage } from "./raster";
 
 /**

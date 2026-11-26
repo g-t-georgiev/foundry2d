@@ -1,4 +1,4 @@
-import type { ProjectMeta, RecentFileRecord } from "@foundry2d/core";
+import type { ProjectMeta, RecentFileRecord } from "@gs2d/core";
 import type { OpenedProject, ProjectSession } from "./ProjectSession";
 import type { FileHandleLike } from "./files";
 
@@ -75,7 +75,7 @@ async function storageUsage(): Promise<string | undefined> {
  * screen, and restoring unsaved work at startup. Every action that would
  * replace the open project asks first when it has unsaved changes.
  *
- * Its handler names match `bindProjectBrowser` in `@foundry2d/ui`, so the
+ * Its handler names match `bindProjectBrowser` in `@gs2d/ui`, so the
  * start screen's events can be bound to it directly.
  */
 export class ProjectFiles<Project> {

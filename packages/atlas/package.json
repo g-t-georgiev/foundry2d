@@ -1,5 +1,5 @@
 {
-  "name": "@foundry2d/atlas",
+  "name": "@gs2d/atlas",
   "version": "1.0.0",
   "type": "module",
   "main": "./src/index.ts",
@@ -12,8 +12,8 @@
     "tsc:check": "tsc --noEmit"
   },
   "dependencies": {
-    "@foundry2d/core": "workspace:*",
-    "@foundry2d/formats": "workspace:*"
+    "@gs2d/core": "workspace:*",
+    "@gs2d/formats": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.4.0",

@@ -1,6 +1,6 @@
-# foundry2d Roadmap
+# Game Studio 2D Roadmap
 
-> **Becoming Game Studio 2D** (decided 2026-11-25): see [Vision: Game Studio 2D](#vision-game-studio-2d-agreed-2026-11-25) and Phases 11–15. The name changes in Phase 11.1.
+> **Now Game Studio 2D** (decided 2026-11-25, renamed 2026-11-26 in Phase 11.1; called foundry2d before). See [Vision: Game Studio 2D](#vision-game-studio-2d-agreed-2026-11-25) and Phases 11–15. Entries before 11.1 keep the names of their time (`@foundry2d/*`, `apps/pixel-editor`, `.f2dsprite`…).
 
 Two apps on one engine:
 
@@ -529,9 +529,9 @@ Foundry2D already has both, but the line between them isn't drawn deliberately y
       - Layers with their own grid (item 17) and guide grids (46): the ruler should follow the active layer's grid, like the cell grid does.
     - Also review the pixel rulers' step choice at the zoom levels where it looks odd.
 
-48. ⚠️ **Naming and branding** (requested 2026-11-15; **names decided 2026-11-25**, done in Phase 11.1). Make each app's name consistent everywhere: package name, directory, page title, work-file extension and MIME type. Today they differ, e.g. the level designer is `@apps/level-designer` in `apps/level-designer/`, "Foundry2D · Level Designer" as the title, `.f2dlevel` files with `application/vnd.foundry2d.level+json`.
+48. ✅ **Naming and branding** (requested 2026-11-15; names decided 2026-11-25; **done 2026-11-26** in Phase 11.1). Make each app's name consistent everywhere: package name, directory, page title, work-file extension and MIME type. Today they differ, e.g. the level designer is `@apps/level-designer` in `apps/level-designer/`, "Foundry2D · Level Designer" as the title, `.f2dlevel` files with `application/vnd.foundry2d.level+json`.
     - **The product becomes Game Studio 2D** (short id `gs2d`), a studio of tools for 2D games. Files, work files, directories, metadata, ids, descriptions and documentation follow it.
-    - **Proposed names** (to confirm when 11.1 starts):
+    - **Names** (as built in 11.1):
 
       | What                       | Name                                                                                                       |
       | -------------------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -663,7 +663,12 @@ The three apps grow into **Game Studio 2D**: a desktop studio of tools for 2D ga
 
 Items 45 and 48: the new name, one site, and the hub as the entry point.
 
-- **11.1 Naming:** packages, directories, titles, ids, file extensions, MIME types, manifests and docs renamed as in item 48. Storage migrated in place (IndexedDB `foundry2d` → `gs2d`, `localStorage` keys), old work files and handlers still open. One commit, guarded by the full test suites.
+- **11.1 Naming** ✅ (2026-11-26): everything renamed as in item 48.
+  - **Code and layout:** packages `@gs2d/*`; apps in `apps/pixel`, `apps/levels`, `apps/packer` (`pnpm dev:pixel`, `dev:levels`, `dev:packer`); app ids `pixel`, `levels`, `packer` in storage, sessions and tours; e2e specs and projects, launch configurations, the manual's chapter folders and article ids (`#pixel/drawing`…) and screenshots follow.
+  - **Display names:** the apps are **Pixel**, **Levels** and **Packer**; titles "Game Studio 2D · Pixel" and so on; the brand in each toolbar and in the manual reads Game Studio 2D. The docs and tours call the apps by these names.
+  - **Files:** `.gs2dsprite`, `.gs2dlevel`, `.gs2dpack`; MIME types `application/vnd.gs2d.*+json`; `format` ids `gs2d.sprite`, `gs2d.level`, `gs2d.pack`. Old files open everywhere (Open dialogs, file handlers of the installed apps with the old MIME types, sprite import into Levels and Packer); saving writes the new names. Tests open old files in each app. Level presets are `*.gs2dlevel.json`.
+  - **Browser storage:** IndexedDB `gs2d` (version 3, with a `meta` store). On first open it copies the old `foundry2d` database once, with the app ids renamed (`level` → `levels`, `pack` → `packer`, also in recovery keys and recent-file ids), and leaves the old one in place as a safety copy (the hub's storage clean-up can offer removing it, 11.3). Seen tours carry over from their old keys; service-worker caches under the old name are deleted. An end-to-end test seeds an old database and finds its project on the start screen.
+  - **Unchanged:** the GitHub repository is still `g-t-georgiev/foundry2d` (its links in docs and in the TexturePacker JSON `meta.app` point there); renaming it is a GitHub setting for its owner. The split button's remembered choices keep their keys.
 - **11.2 One origin:** every app served under a path of one site (`/pixel/`, `/levels/`, `/packer/`, `/docs/`, hub at `/`): `base` per app, one development server for all of them, one build output. Shared storage then works across the apps.
 - **11.3 The hub** (`apps/studio`): Continue, In this browser (all apps, with search), Recent files, New (templates and presets, moved to shared data modules the apps and the hub both read), storage use and clean-up, the manual and the apps, its own first-run tour.
 - **11.4 Entry by URL:** apps open `?project=`, `?recent=` (permission asked in the hub, on the click), `?new=`; no start panel at startup; Open (Ctrl+O) on demand; a Home button. One installable web app, the hub, handling every work-file type and routing to the right tool; the tools stay usable on their own.

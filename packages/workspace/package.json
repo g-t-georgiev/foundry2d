@@ -1,5 +1,5 @@
 {
-  "name": "@foundry2d/workspace",
+  "name": "@gs2d/workspace",
   "version": "1.0.0",
   "type": "module",
   "main": "./src/index.ts",
@@ -12,8 +12,8 @@
     "tsc:check": "tsc --noEmit"
   },
   "dependencies": {
-    "@foundry2d/core": "workspace:*",
-    "@foundry2d/render": "workspace:*"
+    "@gs2d/core": "workspace:*",
+    "@gs2d/render": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.4.0",

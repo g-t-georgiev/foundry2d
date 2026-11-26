@@ -1,4 +1,4 @@
-import type { SheetFrame, Turn } from "@foundry2d/formats";
+import type { SheetFrame, Turn } from "@gs2d/formats";
 import {
   blit,
   createImage,

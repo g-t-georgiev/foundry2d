@@ -1,6 +1,6 @@
 # Spritesheet data
 
-The pixel editor's spritesheet export and the sprite packer write the same data formats. All describe where each frame (sprite) is on the sheet; they differ in what else they can say.
+Pixel's spritesheet export and Packer write the same data formats. All describe where each frame (sprite) is on the sheet; they differ in what else they can say.
 
 | Format                     | File     | Read by                                                     | Rotation              | Pivots | Animations               |
 | -------------------------- | -------- | ----------------------------------------------------------- | --------------------- | ------ | ------------------------ |
@@ -11,7 +11,7 @@ The pixel editor's spritesheet export and the sprite packer write the same data 
 | LibGDX atlas               | `.atlas` | LibGDX `TextureAtlas`                                       | 90° counter-clockwise | no     | no                       |
 | CSS sprites                | `.css`   | web pages                                                   | no                    | no     | no                       |
 
-Rotation only happens when you allow it in the sprite packer, and only with formats that can describe it.
+Rotation only happens when you allow it in Packer, and only with formats that can describe it.
 
 ## The common model
 
@@ -104,4 +104,4 @@ A class for the sheet and one per sprite, with its untrimmed size and background
 
 ## Reading sheets back
 
-The sprite packer can unpack TexturePacker JSON (including Phaser's multi-atlas), Starling XML and LibGDX atlases into separate sprites again, rotated and trimmed frames included. See [Adding sprites](../04-sprite-packer/02-adding-sprites.md).
+Packer can unpack TexturePacker JSON (including Phaser's multi-atlas), Starling XML and LibGDX atlases into separate sprites again, rotated and trimmed frames included. See [Adding sprites](../04-packer/02-adding-sprites.md).

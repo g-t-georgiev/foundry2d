@@ -1,4 +1,4 @@
-import type { Camera } from "@foundry2d/core";
+import type { Camera } from "@gs2d/core";
 import { defaultTheme, type PointerInfo, type RenderPass, type RenderTheme } from "./types";
 
 export interface FrameParams {

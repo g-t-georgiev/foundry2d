@@ -1,0 +1,53 @@
+{
+  "format": "gs2d.level",
+  "version": 1,
+  "preset": {
+    "label": "Blank",
+    "description": "One empty 32×32 level with a single IntGrid layer on a 16 px grid.",
+    "order": 0
+  },
+  "name": "untitled",
+  "gridSize": 16,
+  "worldLayout": "free",
+  "worldGrid": {
+    "width": 512,
+    "height": 512
+  },
+  "nextUid": 3,
+  "defs": {
+    "layers": [
+      {
+        "uid": 1,
+        "identifier": "intgrid",
+        "type": "IntGrid",
+        "intGridValues": [
+          {
+            "value": 1,
+            "identifier": "solid",
+            "color": "#4c9ffe"
+          }
+        ]
+      }
+    ],
+    "tilesets": []
+  },
+  "levels": [
+    {
+      "uid": 2,
+      "identifier": "level_0",
+      "worldX": 0,
+      "worldY": 0,
+      "width": 32,
+      "height": 32,
+      "activeDefUid": 1,
+      "layers": [
+        {
+          "defUid": 1,
+          "visible": true,
+          "opacity": 1,
+          "data": [1024, 0]
+        }
+      ]
+    }
+  ]
+}

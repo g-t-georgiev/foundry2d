@@ -1,23 +1,23 @@
 # Architecture
 
-foundry2d is a pnpm monorepo: three apps on seven shared packages. This page explains how they fit together. The [API reference](api/) (`vp run docs`) lists every export; the [roadmap](ROADMAP.md) records why things are the way they are.
+Game Studio 2D is a pnpm monorepo: three apps on seven shared packages. This page explains how they fit together. The [API reference](api/) (`vp run docs`) lists every export; the [roadmap](ROADMAP.md) records why things are the way they are.
 
 ## Packages and their boundaries
 
 ```
-              apps/pixel-editor   apps/level-designer   apps/sprite-packer
+              apps/pixel   apps/levels   apps/packer
                      │                    │                     │
         ┌────────────┼────────────────────┼─────────────────────┤
         ▼            ▼                    ▼                     ▼
-   @foundry2d/ui   @foundry2d/workspace   @foundry2d/store   @foundry2d/atlas
+   @gs2d/ui   @gs2d/workspace   @gs2d/store   @gs2d/atlas
    (components)    (canvas, input, files)  (UI state)        (packing)
                      │                                          │
                      ▼                                          ▼
-               @foundry2d/render                          @foundry2d/formats
+               @gs2d/render                          @gs2d/formats
                (render passes)                            (engine data)
                      │
                      ▼
-               @foundry2d/core
+               @gs2d/core
                (documents, tools, history, storage; no DOM)
 ```
 
@@ -37,16 +37,16 @@ The apps are the only place where these meet. They translate panel events into c
 
 Everything that is painted is a `GridDocument`: a width and height in cells and an ordered list of `GridLayer`s. A layer stores its cells in one typed array:
 
-- **Pixel editor:** `Uint32Array`, one RGBA colour per cell (bytes in R, G, B, A order; the apps check at startup that the machine is little-endian, which every browser platform is).
-- **Level designer:** `Int32Array`, an IntGrid value per cell, or for Tiles layers `tileId + 1` with flip flags in bits 29 and 30 (0 is empty).
+- **Pixel:** `Uint32Array`, one RGBA colour per cell (bytes in R, G, B, A order; the apps check at startup that the machine is little-endian, which every browser platform is).
+- **Levels:** `Int32Array`, an IntGrid value per cell, or for Tiles layers `tileId + 1` with flip flags in bits 29 and 30 (0 is empty).
 
 Layers have a name, visibility, opacity, a lock, and a `scale`: their cell size in document cells, so a level layer can use a coarser grid than the level (LDtk's per-layer grids). Documents emit events (`cells:changed` with the changed rectangle, `layers:changed`, `resized`) that the renderers and panels listen to.
 
 App models build on documents:
 
-- **Pixel editor:** a `Sprite` is a list of frames, each one `GridDocument` with the same layer structure, plus an FPS and a palette.
-- **Level designer:** a `LevelProject` has definitions (layers, tilesets, entity types, enums, level fields) and levels. Each level owns a `GridDocument<Int32Array>` with one layer per layer definition, plus its entities.
-- **Sprite packer:** a `PackProject` is a sorted list of sprites (name, original file, pivot) and the packing settings. It holds no cells; the sheets are rebuilt from it.
+- **Pixel:** a `Sprite` is a list of frames, each one `GridDocument` with the same layer structure, plus an FPS and a palette.
+- **Levels:** a `LevelProject` has definitions (layers, tilesets, entity types, enums, level fields) and levels. Each level owns a `GridDocument<Int32Array>` with one layer per layer definition, plus its entities.
+- **Packer:** a `PackProject` is a sorted list of sprites (name, original file, pivot) and the packing settings. It holds no cells; the sheets are rebuilt from it.
 
 ## Commands and history
 
@@ -54,7 +54,7 @@ Every change to a model is an `ICommand` with `execute()` and `undo()`, run thro
 
 - Painting tools produce one `DrawCommand` per stroke (the cells before and after, inside the changed rectangle).
 - Layer and document edits have their own commands (`AddLayerCommand`, `ResizeCommand`…); `CompositeCommand` joins several into one undo step, for example a layer edit applied to every frame of a sprite.
-- The level designer records definition edits as before/after snapshots restored in place (`DefinitionEditCommand`), so even "delete this layer type" is one Ctrl+Z.
+- Levels records definition edits as before/after snapshots restored in place (`DefinitionEditCommand`), so even "delete this layer type" is one Ctrl+Z.
 - The history has a size limit, reports `canUndo`/`canRedo` and labels to listeners, and can merge repeats (dragging a colour picker is one step).
 
 The rule for both stores: **the store holds UI state only** (tool, colour, toggles, the active view), never model data. Model data changes only through commands, so undo, saving and the screen always agree.
@@ -78,13 +78,13 @@ The expensive part, the layers, is cached: `LayerBitmapCache` keeps an `Offscree
 - What happens on pointer down, move, up and double-click?
 - Which cursor fits?
 
-The pixel editor has one `GridDocumentScene`. The level designer swaps between a world scene (levels as rectangles you drag) and a level scene (the layers you paint) in the same workspace. The sprite packer's scene shows the packed sheets side by side. Camera, input and rulers are written once for all of them.
+Pixel has one `GridDocumentScene`. Levels swaps between a world scene (levels as rectangles you drag) and a level scene (the layers you paint) in the same workspace. Packer's scene shows the packed sheets side by side. Camera, input and rulers are written once for all of them.
 
 `InputController` turns pointer events into scene calls and handles navigation itself (middle-drag or Space+drag pans, the wheel zooms at the pointer). `Keymap` maps key combos to handlers; each binding carries a label and group, and the manual's shortcut tables are generated from them.
 
 ## Files and storage
 
-Storage (`core/storage`) is one interface with four parts, backed by IndexedDB (database `foundry2d`) or by memory when IndexedDB is unavailable:
+Storage (`core/storage`) is one interface with four parts, backed by IndexedDB (database `Game Studio 2D`) or by memory when IndexedDB is unavailable:
 
 - `projects`: the library ("In this browser" on the start screen), with thumbnails and, for copies of files, the file they belong to;
 - `assets`: binary files (tileset and sprite images) stored once by their SHA-256, shared by every app;
@@ -95,11 +95,11 @@ Storage (`core/storage`) is one interface with four parts, backed by IndexedDB (
 
 ## Work files and exports
 
-Each app has a **work file** that keeps everything needed to continue (`.f2dsprite`, `.f2dlevel`, `.f2dpack`): the document, plus an `editor` block with the view state (camera, tool, open level…). Exports are the product for games and contain only game data. See [File formats](manual/05-file-formats/01-work-files.md).
+Each app has a **work file** that keeps everything needed to continue (`.gs2dsprite`, `.gs2dlevel`, `.gs2dpack`): the document, plus an `editor` block with the view state (camera, tool, open level…). Exports are the product for games and contain only game data. See [File formats](manual/05-file-formats/01-work-files.md).
 
-## Packing in the sprite packer
+## Packing in Packer
 
-Packing runs in a module worker (`apps/sprite-packer/src/pack/`): the page sends each decoded image once, the worker trims, stores identical sprites once, packs, extrudes and draws the sheets, and hands them back without copying. Export (scaling, premultiplying, PNG and WebP encoding, ZIP) runs there too. Where a worker can't start, the same code runs on the page.
+Packing runs in a module worker (`apps/packer/src/pack/`): the page sends each decoded image once, the worker trims, stores identical sprites once, packs, extrudes and draws the sheets, and hands them back without copying. Export (scaling, premultiplying, PNG and WebP encoding, ZIP) runs there too. Where a worker can't start, the same code runs on the page.
 
 ## Installable apps
 

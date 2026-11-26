@@ -1,5 +1,5 @@
 {
-  "name": "@foundry2d/core",
+  "name": "@gs2d/core",
   "version": "1.0.0",
   "type": "module",
   "main": "./src/index.ts",

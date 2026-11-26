@@ -2,7 +2,7 @@
  * Shared component styles for both apps (item 31): buttons, inputs, labelled
  * fields, panel sections, the status bar and dialogs. Apps import it after
  * `tokens.css` and add only their own layout rules. DOM helpers that build
- * these (`el`, `fieldRow`) are in `@foundry2d/ui`.
+ * these (`el`, `fieldRow`) are in `@gs2d/ui`.
  */
 
 /* ------------------------------------------------------------------ icons */

@@ -88,12 +88,17 @@ export interface Storage {
   readonly recentFiles: RecentFilesStore;
 }
 
-export interface FoundryDBSchema extends DBSchema {
+export interface Gs2dDBSchema extends DBSchema {
   recovery: { key: string; value: Uint8Array };
   projects: { key: string; value: ProjectRecord; indexes: { app: string } };
   assets: { key: string; value: AssetRecord };
   recentFiles: { key: string; value: RecentFileRecord; indexes: { app: string } };
+  /** Bookkeeping, e.g. "migrated" once the old database was copied. */
+  meta: { key: string; value: { from: string | null; at: number } };
 }
 
-/** @deprecated Use `FoundryDBSchema`. */
-export type RecoveryDBSchema = Pick<FoundryDBSchema, "recovery">;
+/** @deprecated Use `Gs2dDBSchema` (the name before Game Studio 2D). */
+export type FoundryDBSchema = Gs2dDBSchema;
+
+/** @deprecated Use `Gs2dDBSchema`. */
+export type RecoveryDBSchema = Pick<Gs2dDBSchema, "recovery">;

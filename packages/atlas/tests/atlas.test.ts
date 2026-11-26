@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vite-plus/test";
-import { readSheetData, SHEET_FORMATS } from "@foundry2d/formats";
+import { readSheetData, SHEET_FORMATS } from "@gs2d/formats";
 import {
   buildAtlas,
   createImage,

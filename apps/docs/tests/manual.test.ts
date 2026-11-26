@@ -30,14 +30,14 @@ describe("the manual", () => {
     expect(manual.problems).toEqual([]);
     expect(manual.chapters.map((c) => c.title)).toEqual([
       "Getting started",
-      "Pixel Editor",
-      "Level Designer",
-      "Sprite Packer",
+      "Pixel",
+      "Levels",
+      "Packer",
       "File formats",
     ]);
     const ids = manual.chapters.flatMap((c) => c.articles.map((a) => a.id));
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).toContain("pixel-editor/shortcuts");
+    expect(ids).toContain("pixel/shortcuts");
   });
 
   it("links between articles point at anchors that exist", () => {
@@ -98,6 +98,6 @@ describe("rendering", () => {
     expect([...search(manual.chapters, "second gone")]).toEqual(["two/second"]);
     expect([...search(manual.chapters, "FIRST")]).toEqual(["one/first"]);
     expect(search(manual.chapters, "nowhere").size).toBe(0);
-    expect(slug("02-Pixel Editor")).toBe("pixel-editor");
+    expect(slug("02-Pixel")).toBe("pixel");
   });
 });

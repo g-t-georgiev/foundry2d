@@ -9,9 +9,9 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import * as levels from "../apps/level-designer/src/manual";
-import * as packer from "../apps/sprite-packer/src/manual";
-import * as pixel from "../apps/pixel-editor/src/manual";
+import * as levels from "../apps/levels/src/manual";
+import * as packer from "../apps/packer/src/manual";
+import * as pixel from "../apps/pixel/src/manual";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 

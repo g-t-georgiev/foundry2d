@@ -17,7 +17,7 @@
   },
   "plugin": ["typedoc-plugin-markdown"],
   "out": "docs/api",
-  "name": "foundry2d API",
+  "name": "Game Studio 2D API",
   "readme": "none",
   "excludePrivate": true,
   "hideGenerator": true,

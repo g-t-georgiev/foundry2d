@@ -1,6 +1,6 @@
 /*
- * Foundry2D shared theme: design tokens, component tokens and base resets.
- * Each app imports this first (`@import "@foundry2d/ui/theme/tokens.css";`)
+ * Game Studio 2D shared theme: design tokens, component tokens and base resets.
+ * Each app imports this first (`@import "@gs2d/ui/theme/tokens.css";`)
  * and keeps only its own layout and component rules.
  */
 :root {

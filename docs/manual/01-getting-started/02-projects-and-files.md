@@ -4,9 +4,9 @@ All three apps save the same way. What you are working on is called a **project*
 
 ## The start screen
 
-Press **Ctrl+O** or click **Open** (**Projects…** in the pixel editor) to see it. It opens by itself at startup when you have saved work. It has:
+Press **Ctrl+O** or click **Open** (**Projects…** in Pixel) to see it. It opens by itself at startup when you have saved work. It has:
 
-- **New:** templates. The pixel editor offers empty sprites of 16, 32, 64 and 128 pixels; the level designer its presets (Blank, Pac-Man, Platformer); the sprite packer packs set up for an engine (Empty for Phaser and PixiJS, Godot 4, LibGDX, Web).
+- **New:** templates. Pixel offers empty sprites of 16, 32, 64 and 128 pixels; Levels its presets (Blank, Pac-Man, Platformer); Packer packs set up for an engine (Empty for Phaser and PixiJS, Godot 4, LibGDX, Web).
 - **Open file…:** a work file from your disk.
 - **Recent files:** files you opened or saved lately (Chrome and Edge).
 - **In this browser:** your library, with thumbnails, how much storage it uses, and buttons to duplicate (⧉) or delete (✕) an entry. Deleting asks first and never touches files on disk.
@@ -33,7 +33,7 @@ A moment after each change, the app keeps a snapshot of your unsaved work. If th
 
 - Use **Open file…** on the start screen, or pick one under **Recent files**.
 - Installed apps open their files from the desktop (see [The three apps](01-the-apps.md)). If you have unsaved work, you are asked before it is replaced.
-- Older file names (`.f2d.json`, `.f2dlevel.json`) still open.
+- Files from before Game Studio 2D (named Foundry2D then: `.f2dsprite`, `.f2dlevel`, `.f2dpack`, and the even older `.f2d.json` and `.f2dlevel.json`) still open; saving writes the new names.
 
 ## Where your data lives
 

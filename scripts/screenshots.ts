@@ -1,6 +1,6 @@
 /**
  * Takes the manual's screenshots (`docs/images/`) from running dev servers:
- * start the three apps (`pnpm dev:pixel`, `pnpm dev:level`, `pnpm dev:packer`),
+ * start the three apps (`pnpm dev:pixel`, `pnpm dev:levels`, `pnpm dev:packer`),
  * then run `vpx scripts/screenshots.ts`. Each app is driven in a fresh
  * browser profile, so your own work never shows up.
  */
@@ -209,15 +209,15 @@ const browser = await chromium.launch();
 try {
   const shots: Buffer[] = [];
   for (const [name, take] of [
-    ["pixel-editor", pixelEditor],
-    ["level-designer", levelDesigner],
-    ["sprite-packer", spritePacker],
+    ["pixel", pixelEditor],
+    ["levels", levelDesigner],
+    ["packer", spritePacker],
   ] as const) {
     const context = await browser.newContext({ viewport, colorScheme: "dark" });
     // The first-run tour would cover the app.
     await context.addInitScript(() => {
-      for (const app of ["pixel", "level", "pack"]) {
-        localStorage.setItem(`foundry2d.tours.${app}`, JSON.stringify(["intro"]));
+      for (const app of ["pixel", "levels", "packer"]) {
+        localStorage.setItem(`gs2d.tours.${app}`, JSON.stringify(["intro"]));
       }
     });
     const page = await context.newPage();

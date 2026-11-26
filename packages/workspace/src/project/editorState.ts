@@ -1,4 +1,4 @@
-import type { CameraState } from "@foundry2d/core";
+import type { CameraState } from "@gs2d/core";
 
 /**
  * Helpers for the `editor` block of work files: view and tool state that is

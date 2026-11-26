@@ -1,4 +1,4 @@
-import type { ProjectMeta, ProjectRecord, RecentFileRecord, Storage } from "@foundry2d/core";
+import type { ProjectMeta, ProjectRecord, RecentFileRecord, Storage } from "@gs2d/core";
 import {
   downloadBlob,
   ensurePermission,
@@ -22,7 +22,7 @@ export interface ProjectSessionOptions {
   serialize(): unknown;
   /**
    * The bytes or text written to a file for `serialize()`'s result. Defaults
-   * to JSON text; the level designer can write a packaged ZIP instead.
+   * to JSON text; Levels can write a packaged ZIP instead.
    */
   encodeFile?(json: unknown): Promise<Blob | string>;
   /** Reads a work file (`encodeFile`'s inverse). Defaults to parsing JSON. */

@@ -1,4 +1,4 @@
-import type { HistoryManager, ToolManager } from "@foundry2d/core";
+import type { HistoryManager, ToolManager } from "@gs2d/core";
 import {
   type CellBuffer,
   type Dimensions,
@@ -8,7 +8,7 @@ import {
   type Rect,
   type ToolContext,
   type Unsubscribe,
-} from "@foundry2d/core";
+} from "@gs2d/core";
 import {
   BoundsPass,
   CheckerboardPass,
@@ -21,7 +21,7 @@ import {
   type LayerStackMode,
   type RenderContext,
   type RenderPass,
-} from "@foundry2d/render";
+} from "@gs2d/render";
 import type { ScenePointerEvent, WorkspaceScene } from "../types";
 import type { Workspace } from "../Workspace";
 
@@ -80,7 +80,7 @@ export interface GridDocumentSceneOptions<Buffer extends CellBuffer> {
 
 /**
  * Edits a single `GridDocument` with a `ToolManager`. Used directly by the
- * pixel editor and by the level designer's level view.
+ * Pixel and by the level view of Levels.
  */
 export class GridDocumentScene<Buffer extends CellBuffer = CellBuffer> implements WorkspaceScene {
   readonly cellSize: Dimensions;

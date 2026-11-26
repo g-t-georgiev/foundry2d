@@ -1,7 +1,7 @@
 /**
  * Small DOM builders shared by the apps' hand-built panels and dialogs.
  * The class names they use (`field`, `label`, `field-pair`) are styled by
- * `@foundry2d/ui/theme/components.css`.
+ * `@gs2d/ui/theme/components.css`.
  */
 
 /** Creates an element with properties and children: `el("button", { textContent: "OK" })`. */

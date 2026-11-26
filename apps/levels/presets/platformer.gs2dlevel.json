@@ -1,0 +1,230 @@
+{
+  "format": "gs2d.level",
+  "version": 2,
+  "preset": {
+    "label": "Platformer (auto-tiles)",
+    "description": "40\u00d722 side-scroller: paint terrain on an IntGrid layer and auto-layer rules place grass, dirt, edges and planks.",
+    "order": 2
+  },
+  "name": "platformer",
+  "gridSize": 16,
+  "worldLayout": "linearH",
+  "worldGrid": {
+    "width": 640,
+    "height": 352
+  },
+  "nextUid": 30,
+  "defs": {
+    "layers": [
+      {
+        "uid": 1,
+        "identifier": "terrain",
+        "type": "IntGrid",
+        "intGridValues": [
+          {
+            "value": 1,
+            "identifier": "ground",
+            "color": "#8b5a2b"
+          },
+          {
+            "value": 2,
+            "identifier": "platform",
+            "color": "#d9a066"
+          }
+        ]
+      },
+      {
+        "uid": 2,
+        "identifier": "terrain_tiles",
+        "type": "Tiles",
+        "intGridValues": [],
+        "tilesetUid": 3,
+        "autoSourceUid": 1,
+        "autoRules": [
+          {
+            "uid": 10,
+            "active": true,
+            "size": 3,
+            "pattern": [0, -1, 0, -1, 1, 0, 0, 0, 0],
+            "tileIds": [3],
+            "chance": 1,
+            "flipX": true,
+            "flipY": false
+          },
+          {
+            "uid": 11,
+            "active": true,
+            "size": 3,
+            "pattern": [0, -1, 0, 0, 1, 0, 0, 0, 0],
+            "tileIds": [0],
+            "chance": 1,
+            "flipX": false,
+            "flipY": false
+          },
+          {
+            "uid": 12,
+            "active": true,
+            "size": 3,
+            "pattern": [0, 0, 0, -1, 1, 0, 0, 0, 0],
+            "tileIds": [4],
+            "chance": 1,
+            "flipX": true,
+            "flipY": false
+          },
+          {
+            "uid": 13,
+            "active": true,
+            "size": 3,
+            "pattern": [0, 0, 0, 0, 1, 0, 0, -1, 0],
+            "tileIds": [5],
+            "chance": 1,
+            "flipX": false,
+            "flipY": false
+          },
+          {
+            "uid": 14,
+            "active": true,
+            "size": 3,
+            "pattern": [0, 0, 0, 0, 1, 0, 0, 0, 0],
+            "tileIds": [1, 1, 1, 2],
+            "chance": 1,
+            "flipX": false,
+            "flipY": false
+          },
+          {
+            "uid": 15,
+            "active": true,
+            "size": 1,
+            "pattern": [2],
+            "tileIds": [6],
+            "chance": 1,
+            "flipX": false,
+            "flipY": false
+          }
+        ],
+        "autoSeed": 0
+      },
+      {
+        "uid": 20,
+        "identifier": "entities",
+        "type": "Entities",
+        "intGridValues": []
+      }
+    ],
+    "tilesets": [
+      {
+        "uid": 3,
+        "identifier": "terrain_sheet",
+        "tileSize": 16,
+        "spacing": 0,
+        "padding": 0,
+        "image": {
+          "dataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHAAAAAQCAYAAADOFPsRAAACa0lEQVR42rVYq04EQRC8D+EDCAJB0IgTBIkkCDQSfeoU6jQajeJH+CZIE5p0KtWvmdlLOrc7j93ure6amtmdvh6/Z+z14Tq05/252/f+cuuOj+bZubu/383xasj/u8uz/3fJM+175VpM2pmv6DOO0fsolsP9xZTtnj723zOWAcgCwg+VAR+NFfDEDwFwxH8LYJZ4CJCCi212LgPVjhEQPg9717L+TQHMQOrOYX1SRasA9CppJtGyZ08DKIFr8PgRbB+2aXsVAEYntiIrdIMfQ/49AFlcdoxeswr0AOywBsYXUegUgPIQDVYcsADpS1ibOGXvu2aD0uu30/HXKh9A2yyAme/MPArNAMWEq1Au61sCoM0gDR7BkXvG91WgLO9bOrEgIYAVurIAWsAwQWyC2pgqAHbBZWsiY5slImZWRGQKLVOcuDbYcawPn4MAdg0BrIBZrVhPldr23ezPozNPbXWCne2P1soIQC+hGBsogLg2e7TpKWj27Eq8SwCs7GkiKY17JRZkZeswolKjCoxi0TYFMBIuXtJmW4gKUy0D0NvAVvh9dN3wVBsTBro+2j5Uod5HjXxna2CFOVYkpMxfXoGd05DOYl5VZh49eQLHAtjxFyl0dN2rxB0l+nIAvQyuVhtWUWdTnFEUO+rCCuz4yCiU0SUuDUwzZKwSnSRtVoGRHF5hEVi24tgHY9uIyrllpEKZAo5oPxMrnsJerkJHRUbnbLNrCmCkCDvbCK9CPAplqjJLjJH+pRUYVcQW1sl8lihy390H4jvxLLRyjIb+ztgmFNrZnK46xK6eiXYA9JiB7QNHE1bmz9gsgD/7ukzSICTvtwAAAABJRU5ErkJggg==",
+          "width": 112,
+          "height": 16,
+          "fileName": "terrain_sheet.png"
+        }
+      }
+    ],
+    "enums": [],
+    "entities": [
+      {
+        "uid": 21,
+        "identifier": "Player",
+        "color": "#38bdf8",
+        "width": 12,
+        "height": 24,
+        "pivotX": 0.5,
+        "pivotY": 1,
+        "shape": "rectangle",
+        "tile": null,
+        "maxPerLevel": 1,
+        "fields": []
+      },
+      {
+        "uid": 22,
+        "identifier": "Coin",
+        "color": "#facc15",
+        "width": 10,
+        "height": 10,
+        "pivotX": 0.5,
+        "pivotY": 0.5,
+        "shape": "ellipse",
+        "tile": null,
+        "maxPerLevel": 0,
+        "fields": [
+          {
+            "uid": 23,
+            "identifier": "value",
+            "type": "Int",
+            "defaultValue": 1,
+            "min": 1,
+            "max": null
+          }
+        ]
+      }
+    ]
+  },
+  "levels": [
+    {
+      "uid": 4,
+      "identifier": "level_0",
+      "worldX": 0,
+      "worldY": 0,
+      "width": 40,
+      "height": 22,
+      "activeDefUid": 1,
+      "layers": [
+        {
+          "defUid": 1,
+          "visible": true,
+          "opacity": 1,
+          "data": [
+            390, 0, 7, 1, 33, 0, 7, 1, 6, 0, 4, 2, 23, 0, 7, 1, 61, 0, 5, 2, 69, 0, 3, 1, 36, 0, 5,
+            1, 34, 0, 7, 1, 23, 0, 24, 1, 3, 0, 37, 1, 3, 0, 37, 1, 3, 0, 37, 1, 3, 0, 13, 1
+          ]
+        },
+        {
+          "defUid": 2,
+          "visible": true,
+          "opacity": 1,
+          "data": [880, 0]
+        },
+        {
+          "defUid": 20,
+          "visible": true,
+          "opacity": 1,
+          "data": [880, 0]
+        }
+      ],
+      "entities": [
+        {
+          "iid": "player-spawn",
+          "defUid": 21,
+          "layerUid": 20,
+          "x": 40,
+          "y": 288,
+          "fields": {}
+        },
+        {
+          "iid": "coin-1",
+          "defUid": 22,
+          "layerUid": 20,
+          "x": 328,
+          "y": 200,
+          "fields": {}
+        },
+        {
+          "iid": "coin-2",
+          "defUid": 22,
+          "layerUid": 20,
+          "x": 536,
+          "y": 136,
+          "fields": {
+            "23": 5
+          }
+        }
+      ]
+    }
+  ]
+}
