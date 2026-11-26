@@ -7,10 +7,8 @@ import {
   type Tour,
 } from "@gs2d/ui";
 
-/** The manual site: next to the built app, or the docs dev server (`VITE_DOCS_URL` overrides). */
-const DOCS =
-  (import.meta.env.VITE_DOCS_URL as string | undefined) ??
-  (import.meta.env.DEV ? "http://localhost:3003/" : "../docs/");
+/** The manual: next to the app on the studio's site (`VITE_DOCS_URL` overrides). */
+const DOCS = (import.meta.env.VITE_DOCS_URL as string | undefined) ?? "../docs/";
 const manual = (article: string) => `${DOCS}#${article}`;
 const more = (article: string) => ({ label: "More in the manual", href: manual(article) });
 

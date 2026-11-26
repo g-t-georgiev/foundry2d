@@ -425,7 +425,7 @@ test("a first-run tour shows the app, and the Help menu brings it back", async (
 
 test("work kept in the browser before Game Studio 2D is carried over", async ({ page }) => {
   // Any page of the site without the app, so nothing opens the databases yet.
-  await page.goto("/presets/README.md");
+  await page.goto("./presets/README.md");
   await page.evaluate(async () => {
     const request = indexedDB.open("foundry2d", 2);
     request.onupgradeneeded = () => {

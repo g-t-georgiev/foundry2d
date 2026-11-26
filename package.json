@@ -2,6 +2,9 @@
   "name": "gs2d",
   "private": true,
   "scripts": {
+    "dev": "pnpm -r --parallel --filter \"./apps/*\" dev",
+    "build:site": "vpx scripts/build-site.ts",
+    "preview:site": "pnpm --dir apps/studio exec vp preview --outDir ../../build/site --port 4180 --strictPort",
     "dev:pixel": "pnpm --dir apps/pixel dev",
     "dev:levels": "pnpm --dir apps/levels dev",
     "dev:packer": "pnpm --dir apps/packer dev",

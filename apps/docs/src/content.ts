@@ -31,20 +31,14 @@ export const manual = buildManual(
 export const APP_LINKS: Record<string, { label: string; url: string }> = {
   pixel: {
     label: "Open Pixel",
-    url:
-      import.meta.env.VITE_PIXEL_URL ??
-      (import.meta.env.DEV ? "http://localhost:3000/" : "../pixel/"),
+    url: import.meta.env.VITE_PIXEL_URL ?? "../pixel/",
   },
   levels: {
     label: "Open Levels",
-    url:
-      import.meta.env.VITE_LEVELS_URL ??
-      (import.meta.env.DEV ? "http://localhost:3001/" : "../levels/"),
+    url: import.meta.env.VITE_LEVELS_URL ?? "../levels/",
   },
   packer: {
     label: "Open Packer",
-    url:
-      import.meta.env.VITE_PACKER_URL ??
-      (import.meta.env.DEV ? "http://localhost:3002/" : "../packer/"),
+    url: import.meta.env.VITE_PACKER_URL ?? "../packer/",
   },
 };

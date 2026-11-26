@@ -1,21 +1,22 @@
 import { defineConfig } from "vite-plus";
 import path from "path";
 import url from "url";
+import { siteBase, siteServer } from "../../packages/workspace/vite/site";
 
 const __filename = url.fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export default defineConfig({
-  // Relative URLs, so the built site works from any folder.
-  base: "./",
+export default defineConfig(({ command }) => ({
+  // Served under /docs/ of the studio's site (see vite/site.ts).
+  base: siteBase("docs", command),
   resolve: {
     alias: {
       "@gs2d/ui": path.resolve(__dirname, "../../packages/ui/src"),
     },
   },
   server: {
-    port: 3003,
+    ...siteServer("docs"),
     // The manual lives in docs/ at the repository root.
     fs: { allow: [path.resolve(__dirname, "../..")] },
   },
-});
+}));

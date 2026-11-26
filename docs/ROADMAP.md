@@ -546,6 +546,11 @@ Foundry2D already has both, but the line between them isn't drawn deliberately y
     - **Old files keep opening:** `.f2dsprite`, `.f2dlevel`, `.f2dpack` and the `.f2d.json` names, and their MIME types in the file handlers, as older names do today.
     - **Before going public:** check the name for conflicts with existing products.
 
+49. ⚠️ **Bun instead of pnpm** (requested 2026-11-27, planned as stage 11.6). Use Bun as the package manager and runtime, driven through Vite+ (`vp install`, `vp run`…), and drop pnpm.
+    - **To check first:** how far Vite+ supports Bun as its package manager (install, workspaces, the version catalog in `pnpm-workspace.yaml`, `vp env doctor`), and whether Playwright, TypeDoc and the scripts run under it.
+    - **What moves:** `pnpm-workspace.yaml` (workspaces and the `vite`/`vite-plus` catalog) into `package.json` workspaces and Bun's catalogs; `packageManager`; scripts using `pnpm --dir` or `pnpm -r` (dev, build, the site, the end-to-end web servers, `launch.json`); the lockfile; docs (README, CONTRIBUTING, AGENTS notes).
+    - **Done when:** `vp install`, `vp check`, every unit and end-to-end test, `pnpm dev`'s replacement and the site build work with Bun alone.
+
 ### Phase 9: Sprite Packer app (TexturePacker-style) ✅ (2026-11-22)
 
 **Stages** (planned 2026-11-17, like Phase 8):
@@ -669,10 +674,17 @@ Items 45 and 48: the new name, one site, and the hub as the entry point.
   - **Files:** `.gs2dsprite`, `.gs2dlevel`, `.gs2dpack`; MIME types `application/vnd.gs2d.*+json`; `format` ids `gs2d.sprite`, `gs2d.level`, `gs2d.pack`. Old files open everywhere (Open dialogs, file handlers of the installed apps with the old MIME types, sprite import into Levels and Packer); saving writes the new names. Tests open old files in each app. Level presets are `*.gs2dlevel.json`.
   - **Browser storage:** IndexedDB `gs2d` (version 3, with a `meta` store). On first open it copies the old `foundry2d` database once, with the app ids renamed (`level` → `levels`, `pack` → `packer`, also in recovery keys and recent-file ids), and leaves the old one in place as a safety copy (the hub's storage clean-up can offer removing it, 11.3). Seen tours carry over from their old keys; service-worker caches under the old name are deleted. An end-to-end test seeds an old database and finds its project on the start screen.
   - **Unchanged:** the GitHub repository is still `g-t-georgiev/foundry2d` (its links in docs and in the TexturePacker JSON `meta.app` point there); renaming it is a GitHub setting for its owner. The split button's remembered choices keep their keys.
-- **11.2 One origin:** every app served under a path of one site (`/pixel/`, `/levels/`, `/packer/`, `/docs/`, hub at `/`): `base` per app, one development server for all of them, one build output. Shared storage then works across the apps.
+- **11.2 One origin** ✅ (2026-11-26): every app under a path of one site, so they share browser storage.
+  - **Site layout** (`packages/workspace/vite/site.ts`): the studio at `/` (new `apps/studio`, a start page with the tools until the hub in 11.3), `/pixel/`, `/levels/`, `/packer/`, `/docs/`. Ports from `GS2D_PORT_BASE` (3000: studio, then 3001–3004).
+  - **Development:** `pnpm dev` starts every app and the studio, whose server forwards each path to the app's own server (hot reload included; `/pixel` redirects to `/pixel/`). Forwarded connections are kept alive: one connection per module ran Windows out of local ports during the tests.
+  - **Build:** `pnpm build:site` writes one site to `build/site/` (apps with relative URLs in their folders), `pnpm preview:site` serves it on 4180. Checked: every page, the manual's images, the links between apps, no development paths (preview had inherited the dev forwarding; it now has none).
+  - **Links:** the manual's "Open …" links and the apps' Help → Manual are relative (`../pixel/`, `../docs/`), the same in development and builds.
+  - **Tests:** the end-to-end suite runs through the site (ports 4170–4174), and a new `site.spec.ts` checks the studio's links, the paths, and that a sprite saved in Pixel is in the storage Levels sees.
+  - Each app still installs on its own for now; one installable studio comes with 11.4.
 - **11.3 The hub** (`apps/studio`): Continue, In this browser (all apps, with search), Recent files, New (templates and presets, moved to shared data modules the apps and the hub both read), storage use and clean-up, the manual and the apps, its own first-run tour.
 - **11.4 Entry by URL:** apps open `?project=`, `?recent=` (permission asked in the hub, on the click), `?new=`; no start panel at startup; Open (Ctrl+O) on demand; a Home button. One installable web app, the hub, handling every work-file type and routing to the right tool; the tools stay usable on their own.
 - **11.5** Tests (end-to-end across apps on one origin), manual and screenshots.
+- **11.6 Bun:** the package manager and runtime become Bun, through Vite+ (item 49).
 
 ### Phase 12: Studio projects, with the Pac-Man pilot ⚠️ (planned)
 

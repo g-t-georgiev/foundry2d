@@ -32,7 +32,7 @@ declare global {
 /** Waits until the app has booted, started its session and drawn once. */
 export async function openApp(
   page: Page,
-  path = "/",
+  path = "./",
   options: { tour?: boolean } = {}
 ): Promise<void> {
   // Confirmations are accepted: tests reload and delete on purpose.
@@ -110,11 +110,11 @@ export async function expectLaunchedFileOpens(page: Page, name: string): Promise
     { name, content }
   );
 
-  await page.goto("/?launched");
+  await page.goto("./?launched");
   await expect.poll(async () => (await state()).fileName).toBe(name);
   await expect(dialog).toBeHidden();
 
-  await page.goto("/");
+  await page.goto("./");
   await expect(dialog).toBeVisible();
   await page.evaluate(() => (window as unknown as { launchNow(): void }).launchNow());
   await expect.poll(async () => (await state()).fileName).toBe(name);
@@ -170,7 +170,7 @@ export async function expectOneCopyPerFile(page: Page): Promise<void> {
 export async function expectFirstRunTour(shared: Page): Promise<void> {
   // A page of its own: the usual setup marks the tour as seen on every load.
   const page = await shared.context().newPage();
-  await openApp(page, "/", { tour: true });
+  await openApp(page, "./", { tour: true });
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.waitForFunction(() => window.foundry !== undefined);
@@ -206,7 +206,7 @@ export async function expectFirstRunTour(shared: Page): Promise<void> {
   await help.getByRole("button", { name: "Help" }).click();
   await expect(help.getByRole("menuitem", { name: /Manual/ })).toHaveAttribute(
     "href",
-    /localhost:3003\/#[a-z-]+\/tour$/
+    /\/docs\/#[a-z-]+\/tour$/
   );
   await expect(help.getByRole("menuitem", { name: /Keyboard shortcuts/ })).toHaveAttribute(
     "href",

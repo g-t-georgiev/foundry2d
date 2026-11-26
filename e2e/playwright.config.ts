@@ -1,20 +1,38 @@
 import process from "node:process";
 import { defineConfig, devices } from "@playwright/test";
+import { appPort, SITE_APPS, type SiteApp } from "../packages/workspace/vite/site";
 
 /**
- * Browser end-to-end smoke tests for the apps (`vp run test:e2e`).
+ * Browser end-to-end tests for the apps (`vp run test:e2e`).
  * Paths are relative to this file (`e2e/`); web servers start from here too.
  *
- * Each app runs its own dev server on a dedicated port (4170–4173), never
- * the ports you develop on. Locally an already running test server is
- * reused (e.g. one kept alive by the VS Code Playwright extension); on CI a
- * fresh one is always started. Every test gets a fresh browser context,
- * which also means empty IndexedDB storage.
+ * The tests use the site as it is developed (roadmap 11.2): every app on
+ * one origin under its path, the studio forwarding to the apps' own dev
+ * servers. They run on ports 4170–4174 (`GS2D_PORT_BASE`), never the ones
+ * you develop on. Locally an already running test server is reused (e.g.
+ * one kept alive by the VS Code Playwright extension); on CI fresh ones are
+ * always started. Every test gets a fresh browser context, which also means
+ * empty IndexedDB storage.
  */
-const PIXEL_PORT = 4170;
-const LEVEL_PORT = 4171;
-const PACKER_PORT = 4172;
-const DOCS_PORT = 4173;
+const PORT_BASE = "4170";
+process.env.GS2D_PORT_BASE = PORT_BASE;
+const SITE = `http://localhost:${appPort("studio")}`;
+
+/** A project whose tests open one app, at its path on the site. */
+const project = (app: SiteApp, spec: string) => ({
+  name: app,
+  testMatch: spec,
+  use: { baseURL: `${SITE}${SITE_APPS[app].path}` },
+});
+
+/** Every app's dev server, and the studio in front of them. */
+const server = (app: SiteApp) => ({
+  command: `pnpm --dir ../apps/${app} exec vp dev`,
+  url: `http://localhost:${appPort(app)}${SITE_APPS[app].path}`,
+  env: { GS2D_PORT_BASE: PORT_BASE },
+  reuseExistingServer: !process.env.CI,
+  timeout: 60_000,
+});
 
 export default defineConfig({
   testDir: ".",
@@ -31,51 +49,11 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [
-    {
-      name: "pixel",
-      testMatch: "pixel.spec.ts",
-      use: { baseURL: `http://localhost:${PIXEL_PORT}` },
-    },
-    {
-      name: "levels",
-      testMatch: "levels.spec.ts",
-      use: { baseURL: `http://localhost:${LEVEL_PORT}` },
-    },
-    {
-      name: "packer",
-      testMatch: "packer.spec.ts",
-      use: { baseURL: `http://localhost:${PACKER_PORT}` },
-    },
-    {
-      name: "docs",
-      testMatch: "docs.spec.ts",
-      use: { baseURL: `http://localhost:${DOCS_PORT}` },
-    },
+    project("pixel", "pixel.spec.ts"),
+    project("levels", "levels.spec.ts"),
+    project("packer", "packer.spec.ts"),
+    project("docs", "docs.spec.ts"),
+    project("studio", "site.spec.ts"),
   ],
-  webServer: [
-    {
-      command: `pnpm --dir ../apps/pixel exec vp dev --port ${PIXEL_PORT} --strictPort`,
-      url: `http://localhost:${PIXEL_PORT}`,
-      reuseExistingServer: !process.env.CI,
-      timeout: 60_000,
-    },
-    {
-      command: `pnpm --dir ../apps/levels exec vp dev --port ${LEVEL_PORT} --strictPort`,
-      url: `http://localhost:${LEVEL_PORT}`,
-      reuseExistingServer: !process.env.CI,
-      timeout: 60_000,
-    },
-    {
-      command: `pnpm --dir ../apps/packer exec vp dev --port ${PACKER_PORT} --strictPort`,
-      url: `http://localhost:${PACKER_PORT}`,
-      reuseExistingServer: !process.env.CI,
-      timeout: 60_000,
-    },
-    {
-      command: `pnpm --dir ../apps/docs exec vp dev --port ${DOCS_PORT} --strictPort`,
-      url: `http://localhost:${DOCS_PORT}`,
-      reuseExistingServer: !process.env.CI,
-      timeout: 60_000,
-    },
-  ],
+  webServer: (Object.keys(SITE_APPS) as SiteApp[]).map(server),
 });

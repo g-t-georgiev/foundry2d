@@ -101,6 +101,10 @@ Each app has a **work file** that keeps everything needed to continue (`.gs2dspr
 
 Packing runs in a module worker (`apps/packer/src/pack/`): the page sends each decoded image once, the worker trims, stores identical sprites once, packs, extrudes and draws the sheets, and hands them back without copying. Export (scaling, premultiplying, PNG and WebP encoding, ZIP) runs there too. Where a worker can't start, the same code runs on the page.
 
+## One site
+
+The apps are served as one site (`packages/workspace/vite/site.ts`): the studio at `/`, the tools at `/pixel/`, `/levels/` and `/packer/`, the manual at `/docs/`. Being on one origin is what lets them share browser storage, so the studio can list every tool's work. In development the studio's server forwards each path to the app's own Vite server (hot reload included); a build (`pnpm build:site`) puts every app in its folder with relative URLs, so the site works from any address. Links between the apps and to the manual are relative for the same reason.
+
 ## Installable apps
 
 A build plugin (`packages/workspace/vite/pwa.ts`) writes each app's web manifest (with its file handlers), icon and service worker. The worker caches every built file for offline use; a new version waits until the user chooses to reload, so an open tab never changes version mid-edit.

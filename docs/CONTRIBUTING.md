@@ -6,10 +6,11 @@ Notes for working on the monorepo: setup, the commands that check a change, and 
 
 | Path                 | What it is                                                                                |
 | -------------------- | ----------------------------------------------------------------------------------------- |
-| `apps/pixel`         | Piskel-like sprite editor (port 3000 in development)                                      |
-| `apps/levels`        | LDtk-like level design (port 3001)                                                        |
-| `apps/packer`        | Packs images into spritesheets with engine data (port 3002)                               |
-| `apps/docs`          | The manual site, built from `docs/manual` (port 3003)                                     |
+| `apps/studio`        | The site's root: start page, and in development the server in front of every app (3000)   |
+| `apps/pixel`         | Piskel-like sprite editor, at `/pixel/` (its own server: 3001)                            |
+| `apps/levels`        | LDtk-like level design, at `/levels/` (3002)                                              |
+| `apps/packer`        | Packs images into spritesheets with engine data, at `/packer/` (3003)                     |
+| `apps/docs`          | The manual site, built from `docs/manual`, at `/docs/` (3004)                             |
 | `packages/core`      | Documents, layers, tools, commands, selection, storage, ZIP writer (no DOM)               |
 | `packages/render`    | Canvas render passes (layers, grid, cursor, rulers…)                                      |
 | `packages/workspace` | Canvas workspace, input, key map, project session and file workflow                       |
@@ -26,16 +27,12 @@ vp install
 ```
 
 ```bash
-pnpm dev:pixel
+pnpm dev
 ```
 
-```bash
-pnpm dev:levels
-```
+`pnpm dev` starts every app and the studio in front of them: open http://localhost:3000/, the tools are under `/pixel/`, `/levels/`, `/packer/` and `/docs/`. All on one origin, so they share browser storage (roadmap 11.2). One app alone (`pnpm dev:pixel`, `dev:levels`, `dev:packer`, `dev:docs`) is served under its path on its own port (http://localhost:3001/pixel/); its storage is then its own. Ports come from `packages/workspace/vite/site.ts` and start at `GS2D_PORT_BASE` (3000).
 
-```bash
-pnpm dev:packer
-```
+The whole site builds into `build/site/` with `pnpm build:site` (each app with relative URLs, in its folder) and `pnpm preview:site` serves it on port 4180.
 
 Before committing (the pre-commit hook also runs `vp check --fix` on staged files):
 
@@ -51,7 +48,7 @@ pnpm -r --if-present test
 vp run test:e2e
 ```
 
-The first end-to-end run on a machine needs the browser: `pnpm exec playwright install chromium`. The tests start their own dev servers on ports 4170 to 4173 and reuse running ones outside CI, so they can also be run from VS Code's Testing tab with the Playwright extension.
+The first end-to-end run on a machine needs the browser: `pnpm exec playwright install chromium`. The tests run the site as in development (the studio and every app on one origin, ports 4170 to 4174) and reuse running servers outside CI, so they can also be run from VS Code's Testing tab with the Playwright extension.
 
 ## Conventions
 
@@ -91,4 +88,4 @@ The project pins Vite+ 1.4.0 (`pnpm-workspace.yaml` catalog); 1.6.0 was the late
 
 ### Ports already in use
 
-If a port from 4170 to 4173 is taken when running the end-to-end tests, a dev server from an earlier run (or from the VS Code Playwright extension) is probably still running. Outside CI the tests reuse it, which is usually what you want; stop it if it serves old code.
+If a port from 4170 to 4174 is taken when running the end-to-end tests, a dev server from an earlier run (or from the VS Code Playwright extension) is probably still running. Outside CI the tests reuse it, which is usually what you want; stop it if it serves old code.

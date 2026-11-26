@@ -2,42 +2,39 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "site",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev"],
+      "port": 3000
+    },
+    {
       "name": "pixel",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--dir", "apps/pixel", "dev"],
-      "port": 3000
+      "port": 3001
     },
     {
       "name": "levels",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--dir", "apps/levels", "dev"],
-      "port": 3001
+      "port": 3002
     },
     {
       "name": "packer",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--dir", "apps/packer", "dev"],
-      "port": 3002
+      "port": 3003
     },
     {
       "name": "docs",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--dir", "apps/docs", "dev"],
-      "port": 3003
+      "port": 3004
     },
     {
-      "name": "pixel-build",
+      "name": "site-build",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--dir",
-        "apps/pixel",
-        "exec",
-        "vp",
-        "preview",
-        "--port",
-        "4180",
-        "--strictPort"
-      ],
+      "runtimeArgs": ["preview:site"],
       "port": 4180
     }
   ]

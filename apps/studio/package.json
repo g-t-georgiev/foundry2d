@@ -1,0 +1,20 @@
+{
+  "name": "@apps/studio",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "tsc && vp build",
+    "preview": "vp preview",
+    "tsc:check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gs2d/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.0",
+    "typescript": "^5.4.0",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

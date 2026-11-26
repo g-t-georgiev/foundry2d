@@ -2,11 +2,14 @@ import { defineConfig } from "vite-plus";
 import path from "path";
 import url from "url";
 import { foundryPwa } from "../../packages/workspace/vite/pwa";
+import { siteBase, siteServer } from "../../packages/workspace/vite/site";
 
 const __filename = url.fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  // Served under /levels/ of the studio's site (see vite/site.ts).
+  base: siteBase("levels", command),
   // Installable app: manifest, icon, offline service worker and file handlers (build only).
   plugins: [
     foundryPwa({
@@ -32,7 +35,5 @@ export default defineConfig({
       "@gs2d/store": path.resolve(__dirname, "../../packages/store/src"),
     },
   },
-  server: {
-    port: 3001,
-  },
-});
+  server: siteServer("levels"),
+}));

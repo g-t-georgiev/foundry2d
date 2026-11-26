@@ -22,21 +22,17 @@ You need [Vite+](https://viteplus.dev/guide/) (the `vp` command) and Node.js.
 vp install
 ```
 
-Then start the app you want:
+Then start the studio with every tool:
 
 ```bash
-pnpm dev:pixel
+pnpm dev
 ```
+
+and open http://localhost:3000/. The tools are at `/pixel/`, `/levels/` and `/packer/`, the manual at `/docs/`, all on one site so they share your saved work. To build the whole site into `build/site/`:
 
 ```bash
-pnpm dev:levels
+pnpm build:site
 ```
-
-```bash
-pnpm dev:packer
-```
-
-They open on ports 3000, 3001 and 3002.
 
 ## Documentation
 
@@ -51,9 +47,10 @@ They open on ports 3000, 3001 and 3002.
 
 ```
 apps/
-  pixel/     Pixel
-  levels/   Levels (presets/ holds its project templates)
-  packer/    Packer
+  studio/           the studio: the site's start page and dev server
+  pixel/            Pixel
+  levels/           Levels (presets/ holds its project templates)
+  packer/           Packer
   docs/             the manual site
 packages/
   core/             documents, layers, tools, commands, selection, storage, ZIP (no DOM)

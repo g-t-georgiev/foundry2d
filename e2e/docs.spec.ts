@@ -7,7 +7,7 @@ const topOf = (page: Page, id: string) =>
 const current = (page: Page) => page.locator('#tree a[aria-current="true"]');
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  await page.goto("./");
   await expect(page.locator(".article-title").first()).toBeVisible();
 });
 
@@ -69,7 +69,7 @@ test("links inside articles jump to other articles and their sections", async ({
   await expect.poll(() => topOf(page, "levels/workflow-tileset")).toBeLessThan(100);
   await expect(current(page)).toHaveText("Workflow: a sprite as a tileset");
 
-  await page.goto("/#packer/settings/sheet");
+  await page.goto("./#packer/settings/sheet");
   await expect.poll(() => topOf(page, "packer/settings/sheet")).toBeLessThan(100);
   await expect(current(page)).toHaveText("Packing settings");
 });
@@ -100,7 +100,7 @@ test("chapters link to their app; themes switch and stay; print shows only the t
 }) => {
   await expect(page.getByRole("link", { name: "Open Levels ↗" })).toHaveAttribute(
     "href",
-    /localhost:3001|levels/
+    /\/levels\/$/
   );
   const theme = page.locator("#themeToggle");
   const root = page.locator("html");

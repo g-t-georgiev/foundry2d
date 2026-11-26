@@ -1,0 +1,51 @@
+@import "@gs2d/ui/theme/tokens.css";
+@import "@gs2d/ui/theme/components.css";
+
+body {
+  overflow: auto;
+  font-size: 15px;
+}
+
+.home {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 64px 24px;
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 32px;
+}
+
+.lead {
+  margin: 0 0 32px;
+  color: var(--theme-text-muted);
+}
+
+.apps {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.app-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  color: var(--theme-text-main);
+  text-decoration: none;
+  background: var(--theme-bg-card);
+  border: 1px solid var(--theme-border-color);
+  border-radius: 10px;
+}
+
+.app-card:hover {
+  background: var(--theme-bg-card-hover);
+  border-color: var(--theme-border-active);
+}
+
+.app-card span {
+  color: var(--theme-text-muted);
+  font-size: 13px;
+}
