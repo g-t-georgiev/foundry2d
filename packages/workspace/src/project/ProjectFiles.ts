@@ -46,6 +46,41 @@ export interface ProjectFilesOptions<Project> {
   promptName?(message: string, initial: string): string | null;
 }
 
+/**
+ * What the address asks a tool to open, e.g. from the studio's hub:
+ * `?project=<library id>`, `?recent=<recent file id>` or `?new=<template id>`.
+ */
+export interface EntryRequest {
+  kind: "project" | "recent" | "new";
+  id: string;
+}
+
+/** The request in a query string, or `null`. */
+export function readEntry(search: string): EntryRequest | null {
+  const params = new URLSearchParams(search);
+  for (const kind of ["project", "recent", "new"] as const) {
+    const id = params.get(kind);
+    if (id) return { kind, id };
+  }
+  return null;
+}
+
+/** The address without the request, so a reload doesn't open it again. */
+function forgetEntry(): void {
+  if (typeof location === "undefined" || typeof history === "undefined") return;
+  const params = new URLSearchParams(location.search);
+  for (const kind of ["project", "recent", "new"]) params.delete(kind);
+  const query = params.toString();
+  history.replaceState(
+    history.state,
+    "",
+    `${location.pathname}${query ? `?${query}` : ""}${location.hash}`
+  );
+}
+
+const entryFromAddress = (): EntryRequest | null =>
+  typeof location === "undefined" ? null : readEntry(location.search);
+
 const formatBytes = (bytes: number): string => {
   const units = ["B", "KB", "MB", "GB", "TB"];
   let value = bytes;
@@ -296,21 +331,31 @@ export class ProjectFiles<Project> {
   /**
    * Restores unsaved work from the last session, or shows the start screen
    * when there is saved work to pick from. Work started before storage
-   * answered is never replaced. A file the app was launched with comes last,
-   * asking first when there is unsaved work.
+   * answered is never replaced. A file the app was launched with, or what
+   * the address asks for (`entry`, see `readEntry`), comes last, asking first
+   * when there is unsaved work; neither shows the start screen.
    */
-  async startup(): Promise<void> {
+  async startup(entry: EntryRequest | null = entryFromAddress()): Promise<void> {
     try {
-      await this.restoreOrAsk();
+      await this.restoreOrAsk(entry !== null);
     } finally {
       this.started = true;
       const launched = this.launched;
       this.launched = null;
       if (launched) await this.openHandle(launched);
+      else if (entry) await this.openEntry(entry);
+      if (entry) forgetEntry();
     }
   }
 
-  private async restoreOrAsk(): Promise<void> {
+  /** Opens what the address asked for. */
+  private async openEntry(entry: EntryRequest): Promise<void> {
+    if (entry.kind === "new") this.newFromTemplate(entry.id);
+    else if (entry.kind === "project") await this.openLibrary(entry.id);
+    else await this.openRecent(entry.id);
+  }
+
+  private async restoreOrAsk(hasEntry = false): Promise<void> {
     const recovered = await this.session.loadRecovery();
     if (recovered && !this.session.state.dirty) {
       try {
@@ -327,7 +372,7 @@ export class ProjectFiles<Project> {
       this.session.listRecent(),
     ]);
     const choice = library.length > 0 || recent.length > 0;
-    if (choice && !this.launched && !this.session.state.dirty) {
+    if (choice && !hasEntry && !this.launched && !this.session.state.dirty) {
       await this.showBrowser();
     }
   }

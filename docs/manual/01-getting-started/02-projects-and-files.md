@@ -2,7 +2,17 @@
 
 All three apps save the same way. What you are working on is called a **project** here (a sprite, a level project or a pack).
 
-## The start screen
+## The studio's start page
+
+The studio's start page (the hub, the site's address without a tool, e.g. http://localhost:3000/ in development) is where everything begins:
+
+- **Continue:** unsaved work from your last session, one card per tool. A click opens the tool, which restores it.
+- **New:** each tool's templates. A click opens the tool with it.
+- **In this browser:** what you saved in any tool, with thumbnails, filters per tool and search. A click opens it in its tool; **✕** deletes it from the browser (never from your disk).
+- **Recent files:** files you opened or saved lately (Chrome and Edge). Opening one asks for access to the file once, then opens it in its tool.
+- **Storage:** how much the studio keeps in this browser. **Remove unused images** frees space left by deleted projects; **Remove the copy from before Game Studio 2D** appears while the old Foundry2D storage is still there (its work was copied over).
+
+## The start screen in a tool
 
 Press **Ctrl+O** or click **Open** (**Projects…** in Pixel) to see it. It opens by itself at startup when you have saved work. It has:
 

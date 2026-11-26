@@ -17,6 +17,10 @@ export default defineConfig(({ command }) => ({
   plugins: [siteRedirects()],
   resolve: {
     alias: {
+      "@gs2d/core": path.resolve(__dirname, "../../packages/core/src"),
+      "@gs2d/render": path.resolve(__dirname, "../../packages/render/src"),
+      "@gs2d/workspace": path.resolve(__dirname, "../../packages/workspace/src"),
+      "@gs2d/store": path.resolve(__dirname, "../../packages/store/src"),
       "@gs2d/ui": path.resolve(__dirname, "../../packages/ui/src"),
     },
   },

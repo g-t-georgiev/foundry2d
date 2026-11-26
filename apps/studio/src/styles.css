@@ -1,51 +1,317 @@
 @import "@gs2d/ui/theme/tokens.css";
 @import "@gs2d/ui/theme/components.css";
 
+/* The hub scrolls like a page, unlike the tools. */
 body {
   overflow: auto;
+  user-select: text;
+  font-size: 14px;
+  height: auto;
+  min-height: 100%;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  height: var(--theme-toolbar-height);
+  padding: 0 20px;
+  background: var(--theme-bg-panel);
+  border-bottom: 1px solid var(--theme-border-color);
+}
+
+.brand {
+  font-weight: 600;
   font-size: 15px;
 }
 
-.home {
-  max-width: 880px;
+.tool-links {
+  display: flex;
+  gap: 4px;
+  margin-right: auto;
+}
+
+.tool-links a {
+  padding: 6px 10px;
+  color: var(--theme-text-muted);
+  text-decoration: none;
+  border-radius: 6px;
+}
+
+.tool-links a:hover {
+  color: var(--theme-text-main);
+  background: var(--theme-bg-card);
+}
+
+.hub {
+  max-width: 1080px;
   margin: 0 auto;
-  padding: 64px 24px;
+  padding: 24px 20px 64px;
 }
 
-h1 {
-  margin: 0 0 8px;
-  font-size: 32px;
+.hub-section {
+  margin-top: 28px;
 }
 
-.lead {
-  margin: 0 0 32px;
+.hub-section h2 {
+  margin: 0 0 10px;
+  font-size: 17px;
+}
+
+.hint {
+  margin: 0 0 10px;
   color: var(--theme-text-muted);
 }
 
-.apps {
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-bottom: 10px;
+}
+
+.section-head h2 {
+  margin: 0;
+}
+
+.section-head .input {
+  margin-left: auto;
+  width: min(260px, 100%);
+}
+
+.filters {
+  display: flex;
+  gap: 4px;
+}
+
+.filters [aria-pressed="true"] {
+  background: var(--theme-bg-selected);
+  border-color: var(--theme-border-active);
+}
+
+/* ------------------------------------------------------------------ badges */
+
+.badge {
+  display: inline-block;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  border-radius: 9px;
+  color: #fff;
+}
+
+.badge-pixel {
+  background: #b45309;
+}
+
+.badge-levels {
+  background: #15803d;
+}
+
+.badge-packer {
+  background: #1d4ed8;
+}
+
+/* ------------------------------------------------------------------ new */
+
+.tool-columns {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 12px;
 }
 
-.app-card {
+.tool-column {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 16px;
-  color: var(--theme-text-main);
-  text-decoration: none;
-  background: var(--theme-bg-card);
+  padding: 14px;
+  background: var(--theme-bg-panel);
   border: 1px solid var(--theme-border-color);
   border-radius: 10px;
 }
 
-.app-card:hover {
+.tool-column h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.tool-column h3 a {
+  color: var(--theme-text-main);
+  text-decoration: none;
+}
+
+.tool-column h3 a:hover {
+  color: var(--theme-color-accent);
+}
+
+.tool-column .hint {
+  margin-bottom: 4px;
+}
+
+.template {
+  display: flex;
+  flex-direction: column;
+  padding: 7px 10px;
+  color: var(--theme-text-main);
+  text-decoration: none;
+  background: var(--theme-bg-card);
+  border: 1px solid var(--theme-border-color);
+  border-radius: 6px;
+}
+
+.template:hover {
+  background: var(--theme-bg-card-hover);
+}
+
+.template small {
+  color: var(--theme-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ cards */
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.card-wrap {
+  position: relative;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  padding: 8px;
+  color: var(--theme-text-main);
+  text-decoration: none;
+  background: var(--theme-bg-card);
+  border: 1px solid var(--theme-border-color);
+  border-radius: 8px;
+}
+
+.card:hover {
   background: var(--theme-bg-card-hover);
   border-color: var(--theme-border-active);
 }
 
-.app-card span {
+.continue-card {
+  border-color: var(--theme-color-accent);
+}
+
+.card > .badge {
+  align-self: flex-start;
+}
+
+.thumb {
+  display: grid;
+  place-items: center;
+  height: 100px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: repeating-conic-gradient(#26262c 0% 25%, #1e1e23 0% 50%) 0 0 / 12px 12px;
+}
+
+.thumb img {
+  max-width: 100%;
+  max-height: 100%;
+  image-rendering: pixelated;
+}
+
+.card-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-meta {
   color: var(--theme-text-muted);
-  font-size: 13px;
+  font-size: 12px;
+}
+
+.remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  opacity: 0;
+}
+
+.card-wrap:hover .remove,
+.remove:focus-visible {
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------------ recent */
+
+.recent {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.recent li {
+  display: flex;
+  gap: 6px;
+}
+
+.recent-open {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  font: inherit;
+  text-align: left;
+  color: var(--theme-text-main);
+  background: var(--theme-bg-card);
+  border: 1px solid var(--theme-border-color);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.recent-open:hover {
+  background: var(--theme-bg-card-hover);
+}
+
+.recent-name {
+  flex: 1;
+}
+
+.recent time {
+  color: var(--theme-text-muted);
+  font-size: 12px;
+}
+
+.storage .button-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 600px) {
+  .tool-links {
+    display: none;
+  }
+
+  .section-head .input {
+    margin-left: 0;
+    width: 100%;
+  }
 }

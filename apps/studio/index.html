@@ -7,28 +7,59 @@
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
-    <main class="home">
-      <h1>Game Studio 2D</h1>
-      <p class="lead">Tools for 2D games. Pick one to start.</p>
-      <nav class="apps" aria-label="Tools">
-        <a class="app-card" href="./pixel/">
-          <strong>Pixel</strong>
-          <span>Draw sprites and animations, export images, GIFs and spritesheets.</span>
-        </a>
-        <a class="app-card" href="./levels/">
-          <strong>Levels</strong>
-          <span>Build levels from values, tiles and entities, laid out in a world.</span>
-        </a>
-        <a class="app-card" href="./packer/">
-          <strong>Packer</strong>
-          <span>Pack images into spritesheets with data for your engine.</span>
-        </a>
-        <a class="app-card" href="./docs/">
-          <strong>Manual</strong>
-          <span>How every tool works, workflows and file formats.</span>
-        </a>
-      </nav>
+    <header class="topbar">
+      <span class="brand">Game Studio 2D</span>
+      <nav class="tool-links" aria-label="Tools" id="toolLinks"></nav>
+      <help-button></help-button>
+    </header>
+
+    <main class="hub">
+      <section class="hub-section" id="continueSection" aria-labelledby="continueTitle" hidden>
+        <h2 id="continueTitle">Continue</h2>
+        <p class="hint">Unsaved work from your last session, kept safe in this browser.</p>
+        <div class="cards" id="continueList"></div>
+      </section>
+
+      <section class="hub-section" id="newSection" aria-labelledby="newTitle">
+        <h2 id="newTitle">New</h2>
+        <div class="tool-columns" id="newList"></div>
+      </section>
+
+      <section class="hub-section" id="librarySection" aria-labelledby="libraryTitle">
+        <div class="section-head">
+          <h2 id="libraryTitle">In this browser</h2>
+          <div class="filters" role="group" aria-label="Show" id="libraryFilters"></div>
+          <input
+            id="librarySearch"
+            class="input"
+            type="search"
+            placeholder="Search"
+            aria-label="Search saved projects"
+          />
+        </div>
+        <div class="cards" id="libraryList"></div>
+        <p class="hint" id="libraryEmpty" hidden></p>
+      </section>
+
+      <section class="hub-section" id="recentSection" aria-labelledby="recentTitle" hidden>
+        <h2 id="recentTitle">Recent files</h2>
+        <ul class="recent" id="recentList"></ul>
+      </section>
+
+      <section class="hub-section storage" id="storageSection" aria-labelledby="storageTitle">
+        <h2 id="storageTitle">Storage</h2>
+        <p id="storageUsage" class="hint"></p>
+        <div class="button-row">
+          <button class="btn btn-small" id="pruneAssets">Remove unused images</button>
+          <button class="btn btn-small" id="removeLegacy" hidden>
+            Remove the copy from before Game Studio 2D
+          </button>
+        </div>
+        <p id="storageMessage" class="hint" role="status" aria-live="polite"></p>
+      </section>
     </main>
+
+    <guided-tour></guided-tour>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

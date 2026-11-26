@@ -28,7 +28,7 @@ Then start the studio with every tool:
 pnpm dev
 ```
 
-and open http://localhost:3000/. The tools are at `/pixel/`, `/levels/` and `/packer/`, the manual at `/docs/`, all on one site so they share your saved work. To build the whole site into `build/site/`:
+and open http://localhost:3000/: the studio's start page, with unsaved work to continue, each tool's templates, everything saved in the browser and recent files. The tools are at `/pixel/`, `/levels/` and `/packer/`, the manual at `/docs/`, all on one site so they share your saved work. To build the whole site into `build/site/`:
 
 ```bash
 pnpm build:site

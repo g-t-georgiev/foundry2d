@@ -63,6 +63,7 @@ import {
   toProjectFile,
 } from "./io/project";
 import { bindKeys } from "./keys";
+import { TEMPLATES } from "./templates";
 
 export interface ApplicationElements {
   viewport: HTMLElement;
@@ -78,7 +79,6 @@ export interface ApplicationElements {
 
 /** Name of a new, not yet named sprite (same as Levels' blank project). */
 const DEFAULT_NAME = "untitled";
-const NEW_SIZES = [16, 32, 64, 128];
 const ONION_ALPHA = 0.28;
 
 /** What a Pixel project file holds. */
@@ -224,12 +224,7 @@ export default class Application implements ApplicationContext {
         this.loadSprite(sprite, name);
         if (editor) this.restoreEditorState(editor);
       },
-      templates: () =>
-        NEW_SIZES.map((s) => ({
-          id: String(s),
-          label: `${s} × ${s}`,
-          description: "Empty sprite with one layer",
-        })),
+      templates: () => [...TEMPLATES],
       createFromTemplate: (id) => {
         const width = Number(id) || this.sprite.width;
         const height = Number(id) || this.sprite.height;

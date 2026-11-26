@@ -34,8 +34,9 @@ import {
 } from "./io/liveFolder";
 import { detectAnimations, frameTags, packOrder, type Animation } from "./model/animations";
 import { DEFAULT_NAME, PackProject } from "./model/PackProject";
-import { atlasOptions, DEFAULT_SETTINGS, writesPivots, type PackSettings } from "./model/settings";
+import { atlasOptions, DEFAULT_SETTINGS, writesPivots } from "./model/settings";
 import { bindKeys } from "./keys";
+import { TEMPLATES } from "./templates";
 import { Packer } from "./pack/Packer";
 import { SheetScene } from "./SheetScene";
 import { AnimationPreview } from "./ui/AnimationPreview";
@@ -47,39 +48,6 @@ const $ = <T extends Element = HTMLElement>(selector: string) =>
   document.querySelector<T>(selector)!;
 
 type PackWork = ReturnType<typeof fromPackFile>;
-
-/** Start-screen templates: an empty pack set up for an engine. */
-const TEMPLATES: {
-  id: string;
-  label: string;
-  description: string;
-  settings: Partial<PackSettings>;
-}[] = [
-  {
-    id: "empty",
-    label: "Empty pack",
-    description: "TexturePacker JSON (Phaser, PixiJS), tight MaxRects packing.",
-    settings: {},
-  },
-  {
-    id: "godot",
-    label: "Godot 4",
-    description: "SpriteFrames resource next to the sheet.",
-    settings: { dataFormat: "godot-tres" },
-  },
-  {
-    id: "libgdx",
-    label: "LibGDX",
-    description: "TextureAtlas file, power-of-two sheets.",
-    settings: { dataFormat: "libgdx-atlas", powerOfTwo: true },
-  },
-  {
-    id: "css",
-    label: "Web (CSS sprites)",
-    description: "One class per sprite.",
-    settings: { dataFormat: "css" },
-  },
-];
 
 /** A folder kept in sync, and the sprites each of its files gave. */
 interface Watched {

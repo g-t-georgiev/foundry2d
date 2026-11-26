@@ -217,6 +217,48 @@ describe("files the installed app is launched with", () => {
   });
 });
 
+describe("what the address asks for", () => {
+  it("reads ?project, ?recent and ?new", async () => {
+    const { readEntry } = await import("../src/project/ProjectFiles");
+    expect(readEntry("?project=abc")).toEqual({ kind: "project", id: "abc" });
+    expect(readEntry("?x=1&recent=r%201")).toEqual({ kind: "recent", id: "r 1" });
+    expect(readEntry("?new=small")).toEqual({ kind: "new", id: "small" });
+    expect(readEntry("?project=")).toBeNull();
+    expect(readEntry("")).toBeNull();
+  });
+
+  it("opens a library project or a template instead of the start screen", async () => {
+    const t = setup();
+    t.edit([1, 2]);
+    await t.files.save();
+    const [saved] = await t.session.listLibrary();
+    await t.session.clearRecovery();
+
+    const library = setup({ storage: t.storage });
+    await library.files.startup({ kind: "project", id: saved.id });
+    expect(library.current().cells).toEqual([1, 2]);
+    expect(library.session.state.libraryId).toBe(saved.id);
+    expect(library.screens).toHaveLength(0);
+
+    const fresh = setup({ storage: t.storage });
+    await fresh.files.startup({ kind: "new", id: "small" });
+    expect(fresh.current().name).toBe("new");
+    expect(fresh.screens).toHaveLength(0);
+  });
+
+  it("asks before it replaces unsaved work from the last session", async () => {
+    const before = setup();
+    before.edit([4, 5]);
+    await before.session.flushRecovery();
+    for (const confirm of [false, true]) {
+      const t = setup({ storage: before.storage, confirm });
+      await t.files.startup({ kind: "new", id: "small" });
+      expect(t.prompts).toHaveLength(1);
+      expect(t.current().cells).toEqual(confirm ? [] : [4, 5]);
+    }
+  });
+});
+
 describe("ProjectFiles library extras", () => {
   it("duplicates a library entry under a free name", async () => {
     const t = setup();

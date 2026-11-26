@@ -39,6 +39,7 @@ import type { DefinitionSnapshot, Level, LevelProject } from "./model/LevelProje
 import { WORLD_LAYOUTS, type LayerDef, type WorldLayout } from "./model/types";
 import { createProjectFromPreset, presets, DEFAULT_PRESET_ID } from "./model/presets";
 import { bindKeys } from "./keys";
+import { TEMPLATES } from "./templates";
 import { bindStatusBar } from "./ui/StatusBar";
 import {
   DefinitionEditCommand,
@@ -267,8 +268,7 @@ export default class Application {
         this.loadProject(project);
         if (editor) this.restoreEditorState(editor);
       },
-      templates: () =>
-        presets.map((p) => ({ id: p.id, label: p.label, description: p.description })),
+      templates: () => [...TEMPLATES],
       createFromTemplate: (id) => {
         const label = presets.find((p) => p.id === id)?.label ?? id;
         return {
