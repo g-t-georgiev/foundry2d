@@ -546,7 +546,7 @@ Foundry2D already has both, but the line between them isn't drawn deliberately y
     - **Old files keep opening:** `.f2dsprite`, `.f2dlevel`, `.f2dpack` and the `.f2d.json` names, and their MIME types in the file handlers, as older names do today.
     - **Before going public:** check the name for conflicts with existing products.
 
-49. ⚠️ **Bun instead of pnpm** (requested 2026-11-27, planned as stage 11.6). Use Bun as the package manager and runtime, driven through Vite+ (`vp install`, `vp run`…), and drop pnpm.
+49. ✅ **Bun instead of pnpm** (requested 2026-11-27, done in stage 11.6). Use Bun as the package manager and runtime, driven through Vite+ (`vp install`, `vp run`…), and drop pnpm.
     - **To check first:** how far Vite+ supports Bun as its package manager (install, workspaces, the version catalog in `pnpm-workspace.yaml`, `vp env doctor`), and whether Playwright, TypeDoc and the scripts run under it.
     - **What moves:** `pnpm-workspace.yaml` (workspaces and the `vite`/`vite-plus` catalog) into `package.json` workspaces and Bun's catalogs; `packageManager`; scripts using `pnpm --dir` or `pnpm -r` (dev, build, the site, the end-to-end web servers, `launch.json`); the lockfile; docs (README, CONTRIBUTING, AGENTS notes).
     - **Done when:** `vp install`, `vp check`, every unit and end-to-end test, `pnpm dev`'s replacement and the site build work with Bun alone.
@@ -664,7 +664,7 @@ The three apps grow into **Game Studio 2D**: a desktop studio of tools for 2D ga
 - **Pilot game: Pac-Man**, from the parallel project. It draws in plain canvas code today; moving it to sprites with an animation system (like PixiJS or Phaser) is game-side work, and its `SoundAsset` contract is the model for the adapter's contracts. Contracts are grown from this real game rather than designed in the abstract.
 - **Agents:** the tools become MCP servers, so agents can use them like their own tools (Phase 15).
 
-### Phase 11: Game Studio 2D hub and identity ⚠️ (planned)
+### Phase 11: Game Studio 2D hub and identity ✅ (2026-11-27)
 
 Items 45 and 48: the new name, one site, and the hub as the entry point.
 
@@ -696,7 +696,11 @@ Items 45 and 48: the new name, one site, and the hub as the entry point.
   - **Fixed after that check:** offline, the manual showed a blank page: it had no worker, so the studio's worker (scope `/`) answered with the hub's page under `/docs/`, whose files didn't exist there. The manual now has an offline-only worker (`offlineWorker()` in `vite/pwa.ts`, no manifest), registered by the hub and by visiting it; and a worker serves its cached page only at its own address, other unknown pages get a short "You're offline" page. Checked offline on a built site: hub, tools and manual (with images) start, an unknown address shows the offline page.
   - **Also fixed:** Vite+ 1.8's type checker reported TS5088 for the UI package's component base classes (it wants annotations when declarations are emitted); the package is used from its sources, so its tsconfig emits none.
 - **11.5 Tests, manual and screenshots** ✅ (2026-11-27). Mostly done along the way: the end-to-end suite runs every tool through the site, with `site.spec.ts` across them (the hub's flows, shared storage, recent files, launched files, storage clean-up, the hub's tour), and the manual describes the studio, installing it and getting around. Added here: `scripts/screenshots.ts` drives the running site in one browser profile, so the tools' saved work appears in a new picture of the hub (`docs/images/studio.png`, in the manual and the README).
-- **11.6 Bun:** the package manager and runtime become Bun, through Vite+ (item 49).
+- **11.6 Bun** ✅ (2026-11-27), item 49:
+  - **Package manager:** `packageManager: bun@1.4.5`; the workspaces and the Vite+ version catalog moved from `pnpm-workspace.yaml` into `package.json` (`workspaces.catalog`, `overrides` for `vite`, `trustedDependencies` for esbuild's install script). `pnpm-workspace.yaml`, the pnpm-only `.npmrc` and the lockfile are gone; `bun.lock` is ignored, as the pnpm lockfile was.
+  - **Vite+ only:** Turbo is gone; `vp run -r test` and `vp run -r tsc:check` run every package's script. Root scripts use `vp run` (`vp run dev` for the site, `--filter` for one app), the site build `vp build`, the docs `vp exec typedoc`, the end-to-end web servers `vp dev` in each app's folder, and `launch.json` `vp run`.
+  - **Checked:** a clean `vp install`, `vp check`, every unit test, the end-to-end suite, the site build, `vp run docs`, and `vp run dev` serving every path.
+  - **Runtime:** the tools still run their scripts on Node through Vite+ (`vp`, `vpx`); Bun installs and links the workspace.
 
 ### Phase 12: Studio projects, with the Pac-Man pilot ⚠️ (planned)
 

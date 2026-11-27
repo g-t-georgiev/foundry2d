@@ -1,6 +1,6 @@
 /**
  * Takes the manual's screenshots (`docs/images/`) from the running site:
- * start it (`pnpm dev`), then run `vpx scripts/screenshots.ts`
+ * start it (`vp run dev`), then run `vpx scripts/screenshots.ts`
  * (`GS2D_SITE` points it elsewhere). The tools are driven in a fresh browser
  * profile, so your own work never shows up; each saves its work, which the
  * hub's picture then shows.

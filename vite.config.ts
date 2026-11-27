@@ -222,6 +222,7 @@ export default defineConfig({
     ignorePatterns: [
       "node_modules",
       "pnpm-lock.yaml",
+      "bun.lock",
       "dist",
       ".turbo",
       ".cache",

@@ -3,38 +3,38 @@
   "configurations": [
     {
       "name": "site",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["dev"],
+      "runtimeExecutable": "vp",
+      "runtimeArgs": ["run", "dev"],
       "port": 3000
     },
     {
       "name": "pixel",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--dir", "apps/pixel", "dev"],
+      "runtimeExecutable": "vp",
+      "runtimeArgs": ["run", "dev:pixel"],
       "port": 3001
     },
     {
       "name": "levels",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--dir", "apps/levels", "dev"],
+      "runtimeExecutable": "vp",
+      "runtimeArgs": ["run", "dev:levels"],
       "port": 3002
     },
     {
       "name": "packer",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--dir", "apps/packer", "dev"],
+      "runtimeExecutable": "vp",
+      "runtimeArgs": ["run", "dev:packer"],
       "port": 3003
     },
     {
       "name": "docs",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--dir", "apps/docs", "dev"],
+      "runtimeExecutable": "vp",
+      "runtimeArgs": ["run", "dev:docs"],
       "port": 3004
     },
     {
       "name": "site-build",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["preview:site"],
+      "runtimeExecutable": "vp",
+      "runtimeArgs": ["run", "preview:site"],
       "port": 4180
     }
   ]

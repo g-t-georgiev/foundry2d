@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 /**
  * The studio: the site's root. In development it forwards /pixel/,
  * /levels/, /packer/ and /docs/ to the apps' own dev servers, so every app
- * runs on one origin and they share browser storage (`pnpm dev` starts them
+ * runs on one origin and they share browser storage (`vp run dev` starts them
  * all).
  */
 export default defineConfig(({ command }) => ({

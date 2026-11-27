@@ -27,7 +27,8 @@ const project = (app: SiteApp, spec: string) => ({
 
 /** Every app's dev server, and the studio in front of them. */
 const server = (app: SiteApp) => ({
-  command: `pnpm --dir ../apps/${app} exec vp dev`,
+  command: "vp dev",
+  cwd: `../apps/${app}`,
   url: `http://localhost:${appPort(app)}${SITE_APPS[app].path}`,
   env: { GS2D_PORT_BASE: PORT_BASE },
   reuseExistingServer: !process.env.CI,

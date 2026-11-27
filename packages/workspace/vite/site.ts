@@ -5,7 +5,7 @@ import process from "node:process";
  * The Game Studio 2D site: every app under a path of one origin, so they
  * share browser storage (roadmap 11.2). The studio (the hub, at "/") serves
  * the others in development by forwarding their paths to their own servers;
- * a build puts them in folders of one output (`pnpm build:site`).
+ * a build puts them in folders of one output (`vp run build:site`).
  *
  * Ports start at `GS2D_PORT_BASE` (3000 by default; the end-to-end tests
  * use 4170): the studio on the base, the apps on the next ones.

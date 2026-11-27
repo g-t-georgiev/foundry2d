@@ -23,5 +23,5 @@ for (const app of [pixel, levels, packer]) {
 }
 
 if (!process.argv.includes("--no-api")) {
-  execSync("pnpm exec typedoc", { cwd: root, stdio: "inherit" });
+  execSync("vp exec typedoc", { cwd: root, stdio: "inherit" });
 }

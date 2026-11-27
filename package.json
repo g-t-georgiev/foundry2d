@@ -1,19 +1,26 @@
 {
   "name": "gs2d",
   "private": true,
+  "workspaces": {
+    "packages": [
+      "packages/*",
+      "apps/*"
+    ],
+    "catalog": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@8.3.8001",
+      "vite-plus": "1.8.0"
+    }
+  },
   "scripts": {
-    "dev": "pnpm -r --parallel --filter \"./apps/*\" dev",
+    "dev": "vp run --parallel --filter \"./apps/*\" dev",
     "build:site": "vpx scripts/build-site.ts",
-    "preview:site": "pnpm --dir apps/studio exec vp preview --outDir ../../build/site --port 4180 --strictPort",
-    "dev:pixel": "pnpm --dir apps/pixel dev",
-    "dev:levels": "pnpm --dir apps/levels dev",
-    "dev:packer": "pnpm --dir apps/packer dev",
-    "dev:docs": "pnpm --dir apps/docs dev",
-    "test": "turbo run test",
-    "test:store": "turbo run test --filter=@gs2d/store",
-    "turbo:telemetry:enable": "turbo telemetry enable",
-    "turbo:telemetry:disable": "turbo telemetry disable",
-    "tsc:check": "turbo run tsc:check",
+    "preview:site": "vp run --filter ./apps/studio preview:site",
+    "dev:pixel": "vp run --filter ./apps/pixel dev",
+    "dev:levels": "vp run --filter ./apps/levels dev",
+    "dev:packer": "vp run --filter ./apps/packer dev",
+    "dev:docs": "vp run --filter ./apps/docs dev",
+    "test": "vp run -r test",
+    "tsc:check": "vp run -r tsc:check",
     "lint": "vp lint .",
     "lint:fix": "vp lint . --fix",
     "format": "vp fmt .",
@@ -25,11 +32,16 @@
   "devDependencies": {
     "@playwright/test": "^1.65.0",
     "@types/node": "^26.6.5",
-    "turbo": "^2.11.10",
     "typedoc": "^0.28.20",
     "typedoc-plugin-markdown": "^4.14.1",
     "typescript": "^5.4.0",
     "vite-plus": "catalog:"
   },
-  "packageManager": "pnpm@12.14.0"
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@8.3.8001"
+  },
+  "trustedDependencies": [
+    "esbuild"
+  ],
+  "packageManager": "bun@1.4.5"
 }

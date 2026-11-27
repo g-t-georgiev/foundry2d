@@ -6,7 +6,8 @@
     "dev": "vp dev",
     "build": "tsc && vp build",
     "preview": "vp preview",
-    "tsc:check": "tsc --noEmit"
+    "tsc:check": "tsc --noEmit",
+    "preview:site": "vp preview --outDir ../../build/site --port 4180 --strictPort"
   },
   "dependencies": {
     "@gs2d/core": "workspace:*",

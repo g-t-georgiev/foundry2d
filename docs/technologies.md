@@ -5,7 +5,7 @@ What Game Studio 2D is built with, and why. Nothing here needs a server: the app
 ## Toolchain
 
 - **[Vite+](https://viteplus.dev/guide/)** (`vp`): one command for installing, the dev server, builds, tests, linting and formatting. It wraps Vite (dev server and bundling with Rolldown), Vitest, Oxlint and Oxfmt. `vp check --fix` formats, lints and type-checks in one go; a pre-commit hook runs it on staged files. See [AGENTS.md](../AGENTS.md) for the commands.
-- **pnpm workspaces** hold the monorepo together; packages point their `main` at their TypeScript sources, so there is no build step between them.
+- **Bun workspaces**, driven through Vite+ (`vp install`, `vp run`), hold the monorepo together; packages point their `main` at their TypeScript sources, so there is no build step between them.
 - **TypeScript**, strict, everywhere. Lint rules include the type-aware ones (no floating promises, no unsafe `any`).
 - **TypeDoc** with its Markdown plugin generates the [API reference](api/) from the TSDoc comments (`vp run docs`).
 

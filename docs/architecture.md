@@ -1,6 +1,6 @@
 # Architecture
 
-Game Studio 2D is a pnpm monorepo: three apps on seven shared packages. This page explains how they fit together. The [API reference](api/) (`vp run docs`) lists every export; the [roadmap](ROADMAP.md) records why things are the way they are.
+Game Studio 2D is a Bun monorepo: three apps on seven shared packages. This page explains how they fit together. The [API reference](api/) (`vp run docs`) lists every export; the [roadmap](ROADMAP.md) records why things are the way they are.
 
 ## Packages and their boundaries
 
@@ -103,7 +103,7 @@ Packing runs in a module worker (`apps/packer/src/pack/`): the page sends each d
 
 ## One site
 
-The apps are served as one site (`packages/workspace/vite/site.ts`): the studio at `/`, the tools at `/pixel/`, `/levels/` and `/packer/`, the manual at `/docs/`. Being on one origin is what lets them share browser storage, so the studio can list every tool's work. In development the studio's server forwards each path to the app's own Vite server (hot reload included); a build (`pnpm build:site`) puts every app in its folder with relative URLs, so the site works from any address. Links between the apps and to the manual are relative for the same reason.
+The apps are served as one site (`packages/workspace/vite/site.ts`): the studio at `/`, the tools at `/pixel/`, `/levels/` and `/packer/`, the manual at `/docs/`. Being on one origin is what lets them share browser storage, so the studio can list every tool's work. In development the studio's server forwards each path to the app's own Vite server (hot reload included); a build (`vp run build:site`) puts every app in its folder with relative URLs, so the site works from any address. Links between the apps and to the manual are relative for the same reason.
 
 ## Installable apps
 
@@ -111,5 +111,5 @@ A build plugin (`packages/workspace/vite/pwa.ts`) writes each app's web manifest
 
 ## Tests
 
-- **Unit tests** (Vitest, `pnpm -r --if-present test`) next to each package and app, in Node.
+- **Unit tests** (Vitest, `vp run -r test`) next to each package and app, in Node.
 - **End-to-end tests** (Playwright, `vp run test:e2e`) drive every app in Chromium with real mouse and keyboard input, check downloads byte by byte, and cover crash recovery, files on disk and the installed-app launch.

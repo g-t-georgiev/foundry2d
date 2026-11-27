@@ -27,18 +27,18 @@ vp install
 Then start the studio with every tool:
 
 ```bash
-pnpm dev
+vp run dev
 ```
 
 and open http://localhost:3000/: the studio's start page, with unsaved work to continue, each tool's templates, everything saved in the browser and recent files. The tools are at `/pixel/`, `/levels/` and `/packer/`, the manual at `/docs/`, all on one site so they share your saved work. To build the whole site into `build/site/`:
 
 ```bash
-pnpm build:site
+vp run build:site
 ```
 
 ## Documentation
 
-- **[User manual](docs/manual/README.md)**: every tool, panel and dialog, step-by-step workflows, the file formats, and keyboard shortcuts. `pnpm dev:docs` serves it as a site (port 3003) with search.
+- **[User manual](docs/manual/README.md)**: every tool, panel and dialog, step-by-step workflows, the file formats, and keyboard shortcuts. `vp run dev:docs` serves it as a site (port 3003) with search.
 - **[Architecture](docs/architecture.md)**: the packages and how documents, commands, rendering, the workspace and storage fit together.
 - **[Technologies](docs/technologies.md)**: what the project is built with, and why.
 - **API reference**: generated from the source comments with `vp run docs` (into `docs/api/`).
@@ -74,7 +74,7 @@ vp check --fix
 ```
 
 ```bash
-pnpm -r --if-present test
+vp run -r test
 ```
 
 ```bash
