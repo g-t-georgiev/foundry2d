@@ -1,17 +1,20 @@
 /**
- * Takes the manual's screenshots (`docs/images/`) from running dev servers:
- * start the three apps (`pnpm dev:pixel`, `pnpm dev:levels`, `pnpm dev:packer`),
- * then run `vpx scripts/screenshots.ts`. Each app is driven in a fresh
- * browser profile, so your own work never shows up.
+ * Takes the manual's screenshots (`docs/images/`) from the running site:
+ * start it (`pnpm dev`), then run `vpx scripts/screenshots.ts`
+ * (`GS2D_SITE` points it elsewhere). The tools are driven in a fresh browser
+ * profile, so your own work never shows up; each saves its work, which the
+ * hub's picture then shows.
  */
 import { Buffer } from "node:buffer";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { chromium, type Page } from "@playwright/test";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(root, "docs/images");
+const SITE = process.env.GS2D_SITE ?? "http://localhost:3000/";
 const viewport = { width: 1400, height: 860 };
 
 interface Camera {
@@ -53,7 +56,7 @@ async function setColor(page: Page, hex: string) {
 }
 
 async function pixelEditor(page: Page): Promise<Buffer> {
-  await page.goto("http://localhost:3000/");
+  await page.goto(`${SITE}pixel/`);
   await page.waitForFunction(() => window.foundry !== undefined);
   const canvas = "#paintCanvas";
   await page.locator("#spriteName").fill("slime");
@@ -85,7 +88,7 @@ async function pixelEditor(page: Page): Promise<Buffer> {
 }
 
 async function levelDesigner(page: Page): Promise<Buffer> {
-  await page.goto("http://localhost:3001/");
+  await page.goto(`${SITE}levels/`);
   await page.waitForFunction(() => window.foundry !== undefined);
   await page.keyboard.press("Control+o");
   await page
@@ -99,7 +102,7 @@ async function levelDesigner(page: Page): Promise<Buffer> {
 }
 
 async function spritePacker(page: Page): Promise<Buffer> {
-  await page.goto("http://localhost:3002/");
+  await page.goto(`${SITE}packer/`);
   await page.waitForFunction(() => window.foundry !== undefined);
   const files = await page.evaluate(() => {
     const image = (w: number, h: number, draw: (c: CanvasRenderingContext2D) => void) => {
@@ -205,31 +208,46 @@ async function combined(page: Page, shots: Buffer[]): Promise<Buffer> {
   return Buffer.from(png, "base64");
 }
 
+/** The hub, with the work the tools saved. */
+async function studio(page: Page): Promise<Buffer> {
+  await page.goto(SITE);
+  await page.waitForFunction(() => "studio" in window);
+  await page.evaluate(async () => {
+    await (window as unknown as { studio: { ready: Promise<unknown> } }).studio.ready;
+  });
+  await page.waitForTimeout(400);
+  return page.screenshot();
+}
+
 const browser = await chromium.launch();
 try {
+  // One profile for all of them, so the hub sees what the tools saved.
+  const context = await browser.newContext({ viewport, colorScheme: "dark" });
+  // The first-run tours would cover the pages.
+  await context.addInitScript(() => {
+    for (const app of ["studio", "pixel", "levels", "packer"]) {
+      localStorage.setItem(`gs2d.tours.${app}`, JSON.stringify(["intro"]));
+    }
+  });
+  const page = await context.newPage();
+  page.on("dialog", (d) => void d.accept());
   const shots: Buffer[] = [];
+  mkdirSync(out, { recursive: true });
   for (const [name, take] of [
     ["pixel", pixelEditor],
     ["levels", levelDesigner],
     ["packer", spritePacker],
   ] as const) {
-    const context = await browser.newContext({ viewport, colorScheme: "dark" });
-    // The first-run tour would cover the app.
-    await context.addInitScript(() => {
-      for (const app of ["pixel", "levels", "packer"]) {
-        localStorage.setItem(`gs2d.tours.${app}`, JSON.stringify(["intro"]));
-      }
-    });
-    const page = await context.newPage();
-    page.on("dialog", (d) => void d.accept());
     const shot = await take(page);
     shots.push(shot);
-    mkdirSync(out, { recursive: true });
     writeFileSync(join(out, `${name}.png`), shot);
     console.log(`wrote docs/images/${name}.png`);
-    await context.close();
+    // Kept in the browser, for the hub's picture.
+    await page.keyboard.press("Control+s");
+    await page.waitForTimeout(600);
   }
-  const page = await browser.newPage();
+  writeFileSync(join(out, "studio.png"), await studio(page));
+  console.log("wrote docs/images/studio.png");
   writeFileSync(join(out, "apps.png"), await combined(page, shots));
   console.log("wrote docs/images/apps.png");
 } finally {

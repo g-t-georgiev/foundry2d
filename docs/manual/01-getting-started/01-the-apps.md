@@ -12,6 +12,8 @@ Game Studio 2D is three editors for 2D games that share one engine and one look.
 
 The tools are parts of one site: the studio's start page at the root, and the tools at `pixel/`, `levels/` and `packer/` next to it, with the manual at `docs/`. They share what the browser keeps for them, so the start page shows the work of every tool (see [Projects, saving and files](02-projects-and-files.md)).
 
+![The studio's start page](../../images/studio.png)
+
 ## How they work together
 
 - A sprite from **Pixel** can become a **tileset** in Levels (Project settings → Tilesets → Import…), and it can be re-imported after you change it. See [A sprite as a tileset](../03-levels/09-workflow-tileset.md).
