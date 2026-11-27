@@ -84,7 +84,7 @@ What fixes it:
 - For the glob case, change the importing file (any edit, even whitespace), or restart the test run.
 - Editing through an editor or IDE, which writes files the usual way, hasn't shown the problem.
 
-The project pins Vite+ 1.4.0 (`pnpm-workspace.yaml` catalog); 1.6.0 was the latest when this was written. Whether the newer version fixes the watcher is untested, because the quirk can't be reproduced on demand. Check it when upgrading: run a dev server, append to a source file from a shell, and see whether the change arrives.
+The project pins Vite+ 1.8.0 (`pnpm-workspace.yaml` catalog; it was 1.4.0 when the quirk was seen). Whether the newer version fixes the watcher is untested, because the quirk can't be reproduced on demand. To check: run a dev server, append to a source file from a shell, and see whether the change arrives.
 
 ### Ports already in use
 
