@@ -1,4 +1,4 @@
-import { el } from "@gs2d/ui";
+import { el, registerAppUpdates } from "@gs2d/ui";
 import { APP_LINKS, manual } from "./content";
 import { search, type Chapter } from "./manual";
 
@@ -232,6 +232,7 @@ function bindLayout(): void {
 
 // The URL's hash says where to be; the browser restoring an old position would fight it.
 history.scrollRestoration = "manual";
+registerAppUpdates({ enabled: import.meta.env.PROD, appName: "manual" });
 applyTheme(storedTheme());
 renderTree(manual.chapters);
 renderContent(manual.chapters);

@@ -321,10 +321,9 @@ function bindLaunchQueue(storage: Storage): void {
  */
 function prepareToolsOffline(): void {
   if (!import.meta.env.PROD || !("serviceWorker" in navigator)) return;
-  // The manual is a plain page, cached by the browser when visited.
-  for (const tool of TOOLS) {
+  for (const folder of [...TOOLS.map((t) => t.id), "docs"]) {
     void navigator.serviceWorker
-      .register(`./${tool.id}/sw.js`, { scope: `./${tool.id}/` })
+      .register(`./${folder}/sw.js`, { scope: `./${folder}/` })
       .catch(() => undefined);
   }
 }

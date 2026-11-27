@@ -1,4 +1,11 @@
 {
   "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // The package is used from its sources (no build step), so it emits no
+    // declarations; with them, Vite+ 1.8's checker wants every component
+    // base class annotated (TS5088).
+    "declaration": false,
+    "declarationMap": false
+  },
   "include": ["src", "tests"]
 }

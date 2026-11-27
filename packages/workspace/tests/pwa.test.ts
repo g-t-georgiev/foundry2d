@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vite-plus/test";
-import { foundryPwa } from "../vite/pwa";
+import { foundryPwa, offlineWorker } from "../vite/pwa";
 
 describe("installable app build plugin (items 34 and 38)", () => {
   const plugin = foundryPwa({
@@ -35,6 +35,23 @@ describe("installable app build plugin (items 34 and 38)", () => {
     const sw = out.get("sw.js")!;
     expect(sw).toContain('"./assets/index-abc.js"');
     expect(sw).not.toContain("index-abc.js.map");
+  });
+
+  it("serves its cached page offline only at its own address", () => {
+    const sw = build(["index.html"]).get("sw.js")!;
+    expect(sw).toContain("pathname === new URL(self.registration.scope).pathname");
+    expect(sw).toContain("You're offline");
+  });
+
+  it("can write only the offline copy, for pages that don't install", () => {
+    const emitted = new Map<string, string>();
+    offlineWorker().generateBundle.call(
+      { emitFile: (f) => emitted.set(f.fileName, f.source) },
+      {},
+      { "assets/a.js": {}, "assets/a.js.map": {}, "index.html": {} }
+    );
+    expect([...emitted.keys()]).toEqual(["sw.js"]);
+    expect(emitted.get("sw.js")).toContain('"./assets/a.js"');
   });
 
   it("gives every build with other files a new worker version", () => {

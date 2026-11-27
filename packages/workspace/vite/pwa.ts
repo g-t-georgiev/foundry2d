@@ -46,6 +46,11 @@ const CACHE = PREFIX + VERSION;
 // Caches from before Game Studio 2D.
 const LEGACY_PREFIX = "foundry2d:" + self.registration.scope + ":";
 const FILES = ${JSON.stringify(["./", ...files])};
+const OFFLINE_PAGE =
+  '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">' +
+  '<title>Offline</title><body style="font:15px system-ui;background:#0e0e11;color:#f4f4f5;padding:40px">' +
+  "<h1>You're offline</h1><p>This page isn't saved for offline use yet. Open it once while online.</p>" +
+  '<p><a style="color:#38bdf8" href="' + self.registration.scope + '">Back to the start page</a></p>';
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(FILES)));
@@ -76,7 +81,17 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET" || new URL(request.url).origin !== self.location.origin) return;
   if (request.mode === "navigate") {
     // Pages: the network when online (so a new build is noticed), the cached shell offline.
-    event.respondWith(fetch(request).catch(() => caches.match("./", { ignoreSearch: true })));
+    // Only for this app's own page: the studio's worker covers the whole site, and its page
+    // under another app's address would load nothing (that app's worker answers for it, or
+    // nobody does).
+    const own = new URL(request.url).pathname === new URL(self.registration.scope).pathname;
+    event.respondWith(
+      fetch(request).catch(() =>
+        own
+          ? caches.match("./", { ignoreSearch: true, ignoreVary: true })
+          : new Response(OFFLINE_PAGE, { headers: { "Content-Type": "text/html; charset=utf-8" } })
+      )
+    );
     return;
   }
   // Built files have hashed names and never change: the cache first.
@@ -105,6 +120,29 @@ interface OutputBundle {
 
 interface EmitContext {
   emitFile(file: { type: "asset"; fileName: string; source: string }): void;
+}
+
+/**
+ * Only the offline copy (a service worker, no manifest): for pages that
+ * aren't apps to install but should work offline inside the installed
+ * studio, like the manual.
+ */
+export function offlineWorker() {
+  return {
+    name: "gs2d-offline-worker",
+    apply: "build" as const,
+    generateBundle(this: EmitContext, _output: unknown, bundle: OutputBundle): void {
+      const files = Object.keys(bundle)
+        .filter((f) => !f.endsWith(".map"))
+        .sort()
+        .map((f) => `./${f}`);
+      this.emitFile({
+        type: "asset",
+        fileName: "sw.js",
+        source: serviceWorkerSource(hash(files.join("\n")), files),
+      });
+    },
+  };
 }
 
 /** The Vite plugin; add it to `plugins` in an app's `vite.config.ts`. */
