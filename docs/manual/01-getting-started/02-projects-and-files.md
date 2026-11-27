@@ -14,7 +14,7 @@ The studio's start page (the hub, the site's address without a tool, e.g. http:/
 
 ## The start screen in a tool
 
-Press **Ctrl+O** or click **Open** (**Projects…** in Pixel) to see it. It opens by itself at startup when you have saved work. It has:
+Press **Ctrl+O** or click **Open** (**Projects…** in Pixel) to switch to other work without leaving the tool. It never opens by itself: a tool opened directly opens the file it was given, brings back unsaved work, or starts a new blank project. It has:
 
 - **New:** templates. Pixel offers empty sprites of 16, 32, 64 and 128 pixels; Levels its presets (Blank, Pac-Man, Platformer); Packer packs set up for an engine (Empty for Phaser and PixiJS, Godot 4, LibGDX, Web).
 - **Open file…:** a work file from your disk.
@@ -42,7 +42,7 @@ A moment after each change, the app keeps a snapshot of your unsaved work. If th
 ## Opening files
 
 - Use **Open file…** on the start screen, or pick one under **Recent files**.
-- Installed apps open their files from the desktop (see [The three apps](01-the-apps.md)). If you have unsaved work, you are asked before it is replaced.
+- The installed studio opens work files from the desktop in their tool (see [The three apps](01-the-apps.md)). If you have unsaved work, you are asked before it is replaced.
 - Files from before Game Studio 2D (named Foundry2D then: `.f2dsprite`, `.f2dlevel`, `.f2dpack`, and the even older `.f2d.json` and `.f2dlevel.json`) still open; saving writes the new names.
 
 ## Where your data lives

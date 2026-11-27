@@ -201,3 +201,42 @@ test("storage: unused images and the copy from before Game Studio 2D can be remo
   await page.getByRole("button", { name: "Remove unused images" }).click();
   await expect(page.locator("#storageMessage")).toHaveText("Every stored image is in use.");
 });
+
+test("the installed studio opens any work file in its tool", async ({ page }) => {
+  // A level work file on "disk" (the browser's private file system).
+  await page.addInitScript(() => {
+    Object.assign(window, {
+      showSaveFilePicker: async () =>
+        (await navigator.storage.getDirectory()).getFileHandle("maze.gs2dlevel", { create: true }),
+    });
+    // Stands in for the launch queue: `?launch=name` hands that file over.
+    const name = new URLSearchParams(location.search).get("launch");
+    Object.defineProperty(window, "launchQueue", {
+      value: {
+        setConsumer(consumer: (params: { files: unknown[] }) => void) {
+          if (!name) return;
+          void navigator.storage
+            .getDirectory()
+            .then((root) => root.getFileHandle(name))
+            .then((handle) => consumer({ files: [handle] }));
+        },
+      },
+    });
+  });
+  await page.goto("./levels/");
+  await toolReady(page);
+  await page.keyboard.press("Control+Shift+s");
+  await expect(page.locator("#statFile")).toContainText("maze.gs2dlevel");
+
+  // Given to the studio: it goes to Levels.
+  await page.goto("./?launch=maze.gs2dlevel");
+  await expect(page).toHaveURL(/\/levels\/$/);
+  await toolReady(page);
+  await expect(page.locator("#statFile")).toContainText("maze.gs2dlevel");
+
+  // Given while Pixel is open (the app window shows a tool): Pixel passes it on.
+  await page.goto("./pixel/?launch=maze.gs2dlevel");
+  await expect(page).toHaveURL(/\/levels\/$/);
+  await toolReady(page);
+  await expect(page.locator("#statFile")).toContainText("maze.gs2dlevel");
+});

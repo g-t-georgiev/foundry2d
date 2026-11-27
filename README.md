@@ -10,7 +10,7 @@ A studio of tools for 2D games, built on one shared engine. Three apps today, wh
 
 ![The three apps](docs/images/apps.png)
 
-They run in any modern browser and keep your work there (with crash recovery), or in files on your disk. In Chrome and Edge they can be installed as apps that work offline and open their files from the desktop.
+They run in any modern browser and keep your work there (with crash recovery), or in files on your disk. In Chrome and Edge the studio installs as one app that works offline and opens every tool's files from the desktop.
 
 The project was called Foundry2D until November 2026; its files (`.f2dsprite`, `.f2dlevel`, `.f2dpack`) still open, and work kept in the browser is carried over. Where it is going next (a desktop studio connected to your games) is in the [roadmap](docs/ROADMAP.md).
 

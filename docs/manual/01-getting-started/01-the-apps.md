@@ -23,13 +23,19 @@ The tools are parts of one site: the studio's start page at the root, and the to
 - A current **Chrome, Edge, Firefox or Safari**. Everything works in all of them, with two extras in Chrome and Edge: saving back to the file you opened (instead of downloading a copy), and Packer's live folders.
 - Nothing to install, and no account. Your work stays on your computer: in the browser's storage and in the files you save.
 
-## Installing the apps
+## Installing the studio
 
-In Chrome and Edge each app can be installed (the install icon in the address bar, or the browser menu → Install). An installed app:
+In Chrome and Edge, install the studio from its start page (the install icon in the address bar, or the browser menu → Install). The installed studio:
 
-- opens in its own window and works offline;
-- opens its work files when you double-click them on the desktop or in your file manager;
+- opens in its own window, with every tool in it, and works offline (its first start gets every tool ready);
+- opens work files when you double-click them on the desktop or in your file manager (`.gs2dsprite`, `.gs2dlevel`, `.gs2dpack`, and the older `.f2d*` ones), each in its tool;
 - tells you when a new version is ready, and switches only when you choose **Reload**.
+
+Each tool can still be installed on its own, but only the studio opens files from the desktop.
+
+## Getting around
+
+Each tool's toolbar starts with a **house** button that goes back to the studio's start page. From there, or from the links at its top, you reach every tool and the manual.
 
 ## Help and the tour
 

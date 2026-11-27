@@ -7,8 +7,13 @@ import {
   type RecentFileRecord,
   type Storage,
 } from "@gs2d/core";
-import { el, setupAppHelp, type GuidedTour, type HelpButton } from "@gs2d/ui";
-import { ensurePermission, type FileHandleLike } from "@gs2d/workspace";
+import { el, registerAppUpdates, setupAppHelp, type GuidedTour, type HelpButton } from "@gs2d/ui";
+import {
+  ensurePermission,
+  sendFileToTool,
+  toolForFile,
+  type FileHandleLike,
+} from "@gs2d/workspace";
 import { TOURS } from "./help";
 import { toolOf, TOOLS, toolUrl, type Tool } from "./tools";
 
@@ -284,7 +289,51 @@ function bindStorage(storage: Storage, library: Library): void {
   });
 }
 
+/**
+ * The installed studio handles every work-file type: a file it is opened
+ * with goes to its tool. Files of other kinds are named in the status line.
+ */
+function bindLaunchQueue(storage: Storage): void {
+  const queue = (
+    globalThis as {
+      launchQueue?: {
+        setConsumer(consumer: (params: { files: readonly FileHandleLike[] }) => void): void;
+      };
+    }
+  ).launchQueue;
+  queue?.setConsumer((params) => {
+    const [first] = params.files;
+    if (!first) return;
+    const tool = toolForFile(first.name);
+    if (!tool) {
+      $("#storageMessage").textContent = `${first.name} isn't a Game Studio 2D work file.`;
+      return;
+    }
+    void sendFileToTool(storage, first, tool, new URL("./", location.href)).then((url) =>
+      location.assign(url)
+    );
+  });
+}
+
+/**
+ * The tools' offline copies: the installed studio is one app, so its first
+ * visit gets every tool ready to work without a network.
+ */
+function prepareToolsOffline(): void {
+  if (!import.meta.env.PROD || !("serviceWorker" in navigator)) return;
+  // The manual is a plain page, cached by the browser when visited.
+  for (const tool of TOOLS) {
+    void navigator.serviceWorker
+      .register(`./${tool.id}/sw.js`, { scope: `./${tool.id}/` })
+      .catch(() => undefined);
+  }
+}
+
+registerAppUpdates({ enabled: import.meta.env.PROD, appName: "Game Studio 2D" });
+prepareToolsOffline();
+
 const storage = await openStorage();
+bindLaunchQueue(storage);
 renderToolLinks();
 renderNew();
 const library = new Library(storage);

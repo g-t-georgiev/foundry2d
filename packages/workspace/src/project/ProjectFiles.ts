@@ -1,6 +1,7 @@
 import type { ProjectMeta, RecentFileRecord } from "@gs2d/core";
 import type { OpenedProject, ProjectSession } from "./ProjectSession";
 import type { FileHandleLike } from "./files";
+import { sendFileToTool, toolForFile } from "./tools";
 
 /** What the start screen shows (structurally the `<project-browser>` data). */
 export interface StartScreenData {
@@ -189,9 +190,26 @@ export class ProjectFiles<Project> {
     queue?.setConsumer((params) => {
       const [first] = params.files;
       if (!first) return;
+      // The installed studio may show this tool when another tool's file arrives.
+      const tool = toolForFile(first.name);
+      if (tool && tool !== this.session.app) {
+        void this.sendToTool(first, tool);
+        return;
+      }
       if (this.started) void this.openHandle(first);
       else this.launched = first;
     });
+  }
+
+  /** Opens another tool's file in that tool (the tools are folders of one site). */
+  private async sendToTool(handle: FileHandleLike, tool: Parameters<typeof sendFileToTool>[2]) {
+    const url = await sendFileToTool(
+      this.session.storage,
+      handle,
+      tool,
+      new URL("../", location.href)
+    );
+    location.assign(url);
   }
 
   async openRecent(id: string): Promise<void> {
@@ -329,15 +347,16 @@ export class ProjectFiles<Project> {
   }
 
   /**
-   * Restores unsaved work from the last session, or shows the start screen
-   * when there is saved work to pick from. Work started before storage
-   * answered is never replaced. A file the app was launched with, or what
-   * the address asks for (`entry`, see `readEntry`), comes last, asking first
-   * when there is unsaved work; neither shows the start screen.
+   * Restores unsaved work from the last session; otherwise the tool starts
+   * with a new blank project. Work started before storage answered is never
+   * replaced. A file the app was launched with, or what the address asks for
+   * (`entry`, see `readEntry`), comes last, asking first when there is
+   * unsaved work. The start screen never opens by itself (roadmap item 45):
+   * saved work is on the studio's hub and in Open (Ctrl+O).
    */
   async startup(entry: EntryRequest | null = entryFromAddress()): Promise<void> {
     try {
-      await this.restoreOrAsk(entry !== null);
+      await this.restoreUnsaved();
     } finally {
       this.started = true;
       const launched = this.launched;
@@ -355,25 +374,17 @@ export class ProjectFiles<Project> {
     else await this.openRecent(entry.id);
   }
 
-  private async restoreOrAsk(hasEntry = false): Promise<void> {
+  /** Unsaved work from the last session comes back, unless work started before storage answered. */
+  private async restoreUnsaved(): Promise<void> {
     const recovered = await this.session.loadRecovery();
     if (recovered && !this.session.state.dirty) {
       try {
         this.options.load(this.options.parse(recovered));
         await this.session.adoptRecovered(recovered.snapshot);
         this.options.notify("Restored unsaved work from the last session");
-        return;
       } catch (error) {
         console.warn("Ignoring unreadable recovery snapshot", error);
       }
-    }
-    const [library, recent] = await Promise.all([
-      this.session.listLibrary(),
-      this.session.listRecent(),
-    ]);
-    const choice = library.length > 0 || recent.length > 0;
-    if (choice && !hasEntry && !this.launched && !this.session.state.dirty) {
-      await this.showBrowser();
     }
   }
 

@@ -454,6 +454,7 @@ test("work kept in the browser before Game Studio 2D is carried over", async ({ 
   });
   await openApp(page);
   const browser = page.locator("project-browser");
+  await page.keyboard.press("Control+o");
   await expect(browser.locator("dialog")).toBeVisible();
   await expect(browser.getByRole("button", { name: /^old maze/ })).toBeVisible();
   // Copied once: the old database stays as it was, the new one has the project.

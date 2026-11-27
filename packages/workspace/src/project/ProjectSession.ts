@@ -106,6 +106,11 @@ export class ProjectSession {
     };
   }
 
+  /** The tool's id in storage, e.g. "pixel". */
+  get app(): string {
+    return this.options.app;
+  }
+
   get storage(): Storage {
     return this.options.storage;
   }

@@ -341,3 +341,15 @@
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
   transform: translateX(-50%);
 }
+
+/* The link back to the studio's hub, at the start of each tool's toolbar. */
+.home-link {
+  flex: none;
+  text-decoration: none;
+}
+
+.home-link svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}

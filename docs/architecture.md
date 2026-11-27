@@ -107,7 +107,7 @@ The apps are served as one site (`packages/workspace/vite/site.ts`): the studio 
 
 ## Installable apps
 
-A build plugin (`packages/workspace/vite/pwa.ts`) writes each app's web manifest (with its file handlers), icon and service worker. The worker caches every built file for offline use; a new version waits until the user chooses to reload, so an open tab never changes version mid-edit.
+A build plugin (`packages/workspace/vite/pwa.ts`) writes each app's web manifest, icon and service worker. Only the studio's manifest has file handlers: it receives every work file and hands it to its tool (`project/tools.ts`: kept as that tool's recent file, then opened with `?recent=`); a tool that gets another tool's file passes it on the same way. The studio also registers the tools' workers, so one install works offline everywhere. The worker caches every built file for offline use; a new version waits until the user chooses to reload, so an open tab never changes version mid-edit.
 
 ## Tests
 

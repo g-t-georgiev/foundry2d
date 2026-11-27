@@ -686,7 +686,13 @@ Items 45 and 48: the new name, one site, and the hub as the entry point.
   - **Templates as data:** `src/templates.ts` in each tool (`ToolTemplate` in `@gs2d/workspace`), read by the tool and the hub. Levels' list reads only the presets' `preset` blocks (JSON named imports), so the hub doesn't bundle the projects.
   - **Opening by address:** a tool opens `?project=<library id>`, `?recent=<recent file id>` or `?new=<template>` instead of its start screen (`ProjectFiles.startup`, `readEntry`). Unsaved work from the last session is restored first, so replacing it asks; the request is then dropped from the address, so a reload doesn't repeat it.
   - **Tests:** unit tests for reading and opening requests (and the question before unsaved work is replaced); end-to-end: new work from the hub, saved and unsaved work coming back, filters and search, deleting, recent files, the shared storage, both storage clean-ups, and the hub's tour. The manual's getting-started chapter describes the studio.
-- **11.4 The rest:** no start panel at startup when a tool is opened directly; Open (Ctrl+O) on demand; a Home button to the hub. One installable web app, the hub, handling every work-file type and routing to the right tool; the tools stay usable on their own.
+- **11.4 Entry and install** ✅ (2026-11-27), the rest of it:
+  - **No start panel at startup** (item 45): a tool opened directly opens the file it was launched with, restores unsaved work, or starts blank; Open (Ctrl+O) stays on demand. Tests that relied on the panel now open it with Ctrl+O.
+  - **Home:** a house button at the start of each tool's toolbar goes to the hub; the manual has a Studio link.
+  - **One installable app:** only the studio's manifest has file handlers (every work-file type, the old `.f2d*` ones too). A file it gets goes to its tool (`project/tools.ts`: `toolForFile`, `sendFileToTool` keeps it as the tool's recent file and opens `?recent=`); a tool that gets another tool's file (the app window may be showing it) passes it on the same way. The tools still install on their own, without file handlers. An end-to-end test hands a level file to the hub and to Pixel and ends in Levels each time.
+  - **Offline:** the hub registers every tool's service worker, so the installed studio works offline everywhere; checked against a built site with its server stopped (hub and all three tools start).
+  - **Fixed on the way:** the service workers looked up cached files including the `Vary` header; servers send `Vary: Origin` and module scripts are requested with an Origin header, so a tool's scripts missed the cache offline. Lookups now ignore `Vary` (the files have hashed names).
+  - **Not checked:** installing the studio and double-clicking files on a real desktop (needs you, as in item 34).
 - **11.5** Tests (end-to-end across apps on one origin), manual and screenshots.
 - **11.6 Bun:** the package manager and runtime become Bun, through Vite+ (item 49).
 

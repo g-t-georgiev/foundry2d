@@ -8,4 +8,5 @@ export * from "./project/files";
 export * from "./project/ProjectSession";
 export * from "./project/ProjectFiles";
 export * from "./project/templates";
+export * from "./project/tools";
 export * from "./project/editorState";

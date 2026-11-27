@@ -23,7 +23,7 @@ export interface PwaOptions {
   /** SVG markup of the app icon. */
   iconSvg: string;
   /** Work files the installed app opens from the OS: MIME type → extensions. */
-  fileTypes: Record<string, string[]>;
+  fileTypes?: Record<string, string[]>;
 }
 
 /** Small, stable string hash (FNV-1a) for the cache version. */
@@ -81,7 +81,9 @@ self.addEventListener("fetch", (event) => {
   }
   // Built files have hashed names and never change: the cache first.
   event.respondWith(
-    caches.match(request).then(
+    // Ignoring Vary: servers send "Vary: Origin", and module scripts are requested with an
+    // Origin header the precache requests didn't have, so every lookup would miss offline.
+    caches.match(request, { ignoreVary: true }).then(
       (cached) =>
         cached ||
         fetch(request).then((response) => {
@@ -129,8 +131,12 @@ export function foundryPwa(options: PwaOptions) {
         theme_color: options.themeColor,
         background_color: options.backgroundColor,
         icons: [{ src: "./icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" }],
-        file_handlers: [{ action: "./", accept: options.fileTypes }],
-        launch_handler: { client_mode: "focus-existing" },
+        ...(options.fileTypes
+          ? {
+              file_handlers: [{ action: "./", accept: options.fileTypes }],
+              launch_handler: { client_mode: "focus-existing" },
+            }
+          : {}),
       };
       this.emitFile({ type: "asset", fileName: "icon.svg", source: options.iconSvg });
       this.emitFile({

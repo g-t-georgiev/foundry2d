@@ -115,6 +115,8 @@ export async function expectLaunchedFileOpens(page: Page, name: string): Promise
   await expect(dialog).toBeHidden();
 
   await page.goto("./");
+  await page.waitForFunction(() => window.foundry !== undefined);
+  await page.keyboard.press("Control+o");
   await expect(dialog).toBeVisible();
   await page.evaluate(() => (window as unknown as { launchNow(): void }).launchNow());
   await expect.poll(async () => (await state()).fileName).toBe(name);
@@ -154,6 +156,7 @@ export async function expectOneCopyPerFile(page: Page): Promise<void> {
   await page.reload();
   await page.waitForFunction(() => window.foundry !== undefined);
   const browser = page.locator("project-browser");
+  await page.keyboard.press("Control+o");
   await expect(browser.locator("dialog")).toBeVisible();
   await browser.getByRole("button", { name: "Open file" }).click();
   await expect.poll(async () => (await state()).libraryId).toBe(before.id);

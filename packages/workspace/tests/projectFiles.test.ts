@@ -138,7 +138,7 @@ describe("ProjectFiles", () => {
     expect(t.screens.at(-1)?.library).toEqual([]);
   });
 
-  it("restores unsaved work at startup, or opens the start screen when there is saved work", async () => {
+  it("restores unsaved work at startup, and never opens the start screen by itself", async () => {
     const t = setup();
     t.edit([4, 5]);
     await t.session.flushRecovery();
@@ -153,7 +153,8 @@ describe("ProjectFiles", () => {
     await fresh.files.save();
     await fresh.session.clearRecovery();
     await fresh.files.startup();
-    expect(fresh.screens).toHaveLength(1);
+    // Saved work is on the studio's hub and in Open (Ctrl+O), not in the way (item 45).
+    expect(fresh.screens).toHaveLength(0);
   });
 });
 
@@ -192,6 +193,9 @@ describe("files the installed app is launched with", () => {
     const t = setup({ storage: await saved() });
     t.files.bindLaunchQueue();
     await t.files.startup();
+    // Opened with Ctrl+O; it never opens by itself.
+    expect(t.startScreenShown()).toBe(false);
+    await t.files.showBrowser();
     expect(t.startScreenShown()).toBe(true);
     launch("bad.test.json", "{}");
     await vi.waitFor(() => expect(t.messages.at(-1)).toBe("Not a doc."));
@@ -311,5 +315,31 @@ describe("stripFileExtension", () => {
     expect(stripFileExtension("maze.F2DLEVEL.json", type)).toBe("maze");
     expect(stripFileExtension("export.json", type)).toBe("export");
     expect(stripFileExtension("notes.txt", type)).toBe("notes.txt");
+  });
+});
+
+describe("work files and their tools", () => {
+  it("knows each tool's work files, old names included", async () => {
+    const { toolForFile } = await import("../src/project/tools");
+    expect(toolForFile("hero.gs2dsprite")).toBe("pixel");
+    expect(toolForFile("hero.F2D.json")).toBe("pixel");
+    expect(toolForFile("maze.gs2dlevel")).toBe("levels");
+    expect(toolForFile("maze.f2dlevel.json")).toBe("levels");
+    expect(toolForFile("game.f2dpack")).toBe("packer");
+    expect(toolForFile("notes.json")).toBeNull();
+    expect(toolForFile("sheet.png")).toBeNull();
+  });
+
+  it("hand a file to its tool as a recent file", async () => {
+    const { sendFileToTool } = await import("../src/project/tools");
+    const storage = new MemoryStorage();
+    const handle = { kind: "file" as const, name: "maze.gs2dlevel" } as unknown as Parameters<
+      typeof sendFileToTool
+    >[1];
+    const url = await sendFileToTool(storage, handle, "levels", new URL("https://site.test/"));
+    expect(url).toBe("https://site.test/levels/?recent=levels%3Amaze.gs2dlevel");
+    expect(await storage.recentFiles.list("levels")).toMatchObject([
+      { id: "levels:maze.gs2dlevel", name: "maze.gs2dlevel" },
+    ]);
   });
 });

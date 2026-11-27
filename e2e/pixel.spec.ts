@@ -93,8 +93,11 @@ test("saves to the browser library and lists it on the start screen", async ({ p
   await expect(page.locator("#messageDisplay")).toContainText("Saved");
 
   await page.reload();
-  // With saved work and nothing to recover, the start screen opens.
+  await page.waitForFunction(() => window.foundry !== undefined);
+  // Saved work doesn't open the start screen by itself (item 45); Ctrl+O does.
   const browser = page.locator("project-browser");
+  await expect(browser.locator("dialog")).toBeHidden();
+  await page.keyboard.press("Control+o");
   await expect(browser.getByText("untitled", { exact: true })).toBeVisible();
 });
 
