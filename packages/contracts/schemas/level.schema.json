@@ -1,0 +1,293 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/LevelAsset",
+  "definitions": {
+    "LevelAsset": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1,
+          "description": "The contract's version; a game refuses versions it doesn't know."
+        },
+        "kind": {
+          "type": "string",
+          "const": "level"
+        },
+        "id": {
+          "type": "string",
+          "description": "Stable id, how other assets and the game refer to it (e.g. \"pacman-sprites\")."
+        },
+        "name": {
+          "type": "string",
+          "description": "For people."
+        },
+        "tileSize": {
+          "type": "number",
+          "description": "Pixels per cell."
+        },
+        "columns": {
+          "type": "number"
+        },
+        "rows": {
+          "type": "number"
+        },
+        "background": {
+          "type": "string",
+          "description": "Background colour, \"#rrggbb\"."
+        },
+        "grids": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/LevelGrid"
+          },
+          "description": "Value grids by layer name."
+        },
+        "tiles": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/LevelTiles"
+          },
+          "description": "Tile layers by name."
+        },
+        "entities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LevelEntity"
+          }
+        },
+        "fields": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/FieldValue"
+          },
+          "description": "The level's own fields (time limit, music…)."
+        }
+      },
+      "required": [
+        "columns",
+        "grids",
+        "id",
+        "kind",
+        "name",
+        "rows",
+        "tileSize",
+        "version"
+      ],
+      "additionalProperties": false,
+      "description": "One level: grids of named values (walls, pellets…), tile layers and placed entities with their fields. Written by Levels; a game reads cells by name through each grid's `values`, so renumbering values in the editor never breaks it."
+    },
+    "LevelGrid": {
+      "type": "object",
+      "properties": {
+        "values": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "What each value means: name → value (0 is always empty)."
+        },
+        "cells": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "Row by row, `columns × rows` long (the grid's own size when it has one)."
+        },
+        "grid": {
+          "type": "object",
+          "properties": {
+            "size": {
+              "type": "number"
+            },
+            "columns": {
+              "type": "number"
+            },
+            "rows": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "size",
+            "columns",
+            "rows"
+          ],
+          "additionalProperties": false,
+          "description": "Set when the layer has its own grid: its cell size in pixels and size in cells."
+        }
+      },
+      "required": [
+        "values",
+        "cells"
+      ],
+      "additionalProperties": false
+    },
+    "LevelTiles": {
+      "type": "object",
+      "properties": {
+        "sheet": {
+          "type": "string",
+          "description": "The sprite sheet the tiles come from."
+        },
+        "tileNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Tile sprite names in the sheet, by tile id (cells hold id + 1)."
+        },
+        "cells": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "Row by row: tile id + 1 (0 empty), flip X in bit 29 and flip Y in bit 30."
+        },
+        "grid": {
+          "type": "object",
+          "properties": {
+            "size": {
+              "type": "number"
+            },
+            "columns": {
+              "type": "number"
+            },
+            "rows": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "size",
+            "columns",
+            "rows"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "sheet",
+        "tileNames",
+        "cells"
+      ],
+      "additionalProperties": false
+    },
+    "LevelEntity": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Entity type, e.g. \"Ghost\"."
+        },
+        "id": {
+          "type": "string",
+          "description": "Stable instance id."
+        },
+        "layer": {
+          "type": "string",
+          "description": "The layer it is on."
+        },
+        "x": {
+          "type": "number",
+          "description": "Position of its pivot, in pixels."
+        },
+        "y": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        },
+        "pivot": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        },
+        "fields": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/FieldValue"
+          }
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "layer",
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "additionalProperties": false
+    },
+    "FieldValue": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "entity": {
+              "type": "string"
+            },
+            "level": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "entity",
+            "level"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FieldValue"
+          }
+        }
+      ]
+    }
+  },
+  "$id": "https://gs2d.dev/schemas/level.schema.json",
+  "title": "LevelAsset"
+}

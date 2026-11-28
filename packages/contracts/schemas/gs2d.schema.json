@@ -1,0 +1,131 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/GameManifest",
+  "definitions": {
+    "GameManifest": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1
+        },
+        "game": {
+          "type": "string",
+          "description": "The game's name."
+        },
+        "contracts": {
+          "type": "object",
+          "properties": {
+            "spritesheet": {
+              "$ref": "#/definitions/ContractUse"
+            },
+            "animation": {
+              "$ref": "#/definitions/ContractUse"
+            },
+            "level": {
+              "$ref": "#/definitions/ContractUse"
+            },
+            "sound": {
+              "$ref": "#/definitions/ContractUse%3CSoundFeature%3E",
+              "description": "With the optional features the game's sound engine plays."
+            }
+          },
+          "additionalProperties": false
+        },
+        "assets": {
+          "type": "object",
+          "properties": {
+            "spritesheet": {
+              "type": "string"
+            },
+            "animation": {
+              "type": "string"
+            },
+            "level": {
+              "type": "string"
+            },
+            "sound": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "description": "Where each kind is written, relative to the game's folder."
+        },
+        "workFiles": {
+          "type": "string",
+          "description": "Where the tools keep their work files in the game's repository."
+        }
+      },
+      "required": [
+        "version",
+        "game",
+        "contracts",
+        "assets"
+      ],
+      "additionalProperties": false,
+      "description": "`gs2d.json` at the root of a game's folder (roadmap 12.2): which contracts the game reads, where each kind of asset goes, and where the tools keep their work files. The studio writes nothing the game didn't ask for."
+    },
+    "ContractUse": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "number"
+            },
+            "features": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "version"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "A contract's version, or the version and the optional features the game supports."
+    },
+    "ContractUse<SoundFeature>": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "number"
+            },
+            "features": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/SoundFeature"
+              }
+            }
+          },
+          "required": [
+            "version"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "A contract's version, or the version and the optional features the game supports."
+    },
+    "SoundFeature": {
+      "type": "string",
+      "enum": [
+        "harmonicWaves",
+        "envelope",
+        "noise"
+      ]
+    }
+  },
+  "$id": "https://gs2d.dev/schemas/gs2d.schema.json",
+  "title": "GameManifest"
+}

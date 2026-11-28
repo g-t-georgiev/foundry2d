@@ -40,6 +40,7 @@ vp run build:site
 
 - **[User manual](docs/manual/README.md)**: every tool, panel and dialog, step-by-step workflows, the file formats, and keyboard shortcuts. `vp run dev:docs` serves it as a site (port 3003) with search.
 - **[Architecture](docs/architecture.md)**: the packages and how documents, commands, rendering, the workspace and storage fit together.
+- **[Asset contracts](docs/contracts.md)** (draft): the files the tools write into a game.
 - **[Technologies](docs/technologies.md)**: what the project is built with, and why.
 - **API reference**: generated from the source comments with `vp run docs` (into `docs/api/`).
 - **[Contributing](docs/CONTRIBUTING.md)**: setup, the checks to run, conventions and toolchain quirks.

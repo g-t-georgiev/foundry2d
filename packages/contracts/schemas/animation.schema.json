@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/AnimationAsset",
+  "definitions": {
+    "AnimationAsset": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1,
+          "description": "The contract's version; a game refuses versions it doesn't know."
+        },
+        "kind": {
+          "type": "string",
+          "const": "animation"
+        },
+        "id": {
+          "type": "string",
+          "description": "Stable id, how other assets and the game refer to it (e.g. \"pacman-sprites\")."
+        },
+        "name": {
+          "type": "string",
+          "description": "For people."
+        },
+        "sheet": {
+          "type": "string",
+          "description": "The sprite sheet's id."
+        },
+        "timing": {
+          "$ref": "#/definitions/TimingBasis"
+        },
+        "clips": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/AnimationClip"
+          }
+        }
+      },
+      "required": [
+        "clips",
+        "id",
+        "kind",
+        "name",
+        "sheet",
+        "version"
+      ],
+      "additionalProperties": false,
+      "description": "Animations over the sprites of one sheet: named clips of frames with their durations. Durations are milliseconds, or frames of `timing.fpsBasis` for games that step in fixed frames (the pilot runs at the arcade's 60.606 Hz)."
+    },
+    "TimingBasis": {
+      "type": "object",
+      "properties": {
+        "fpsBasis": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "fpsBasis"
+      ],
+      "additionalProperties": false,
+      "description": "Ties durations given in frames to a frame rate, as the pilot game's sounds do (e.g. the arcade's 60.606 Hz)."
+    },
+    "AnimationClip": {
+      "type": "object",
+      "properties": {
+        "frames": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AnimationFrame"
+          }
+        },
+        "playback": {
+          "type": "string",
+          "enum": [
+            "loop",
+            "once",
+            "pingpong"
+          ],
+          "description": "How it repeats. Default \"loop\"."
+        }
+      },
+      "required": [
+        "frames"
+      ],
+      "additionalProperties": false
+    },
+    "AnimationFrame": {
+      "type": "object",
+      "properties": {
+        "sprite": {
+          "type": "string",
+          "description": "A sprite's name on the sheet."
+        },
+        "ms": {
+          "type": "number",
+          "description": "How long it shows: milliseconds…"
+        },
+        "frames": {
+          "type": "number",
+          "description": "…or frames at `timing.fpsBasis`."
+        }
+      },
+      "required": [
+        "sprite"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$id": "https://gs2d.dev/schemas/animation.schema.json",
+  "title": "AnimationAsset"
+}

@@ -702,11 +702,15 @@ Items 45 and 48: the new name, one site, and the hub as the entry point.
   - **Checked:** a clean `vp install`, `vp check`, every unit test, the end-to-end suite, the site build, `vp run docs`, and `vp run dev` serving every path.
   - **Runtime:** the tools still run their scripts on Node through Vite+ (`vp`, `vpx`); Bun installs and links the workspace.
 
-### Phase 12: Studio projects, with the Pac-Man pilot ⚠️ (planned)
+### Phase 12: Studio projects, with the Pac-Man pilot ⚠️ (in progress)
 
 The adapter's declarative part, and most of the value without any runtime connection.
 
 - **12.1 Asset contracts:** versioned JSON schemas for sprite sheets, animations, levels and sounds, written with the pilot game (its `SoundAsset` as the model), and exports that produce them.
+  - **Draft** (2026-11-28): `@gs2d/contracts` with the `spritesheet`, `animation` and `level` contracts (types, validators listing every problem, tests) in the style of the pilot's `SoundAsset`, and [docs/contracts.md](contracts.md) with their shapes, a draft `gs2d.json`, how Pac-Man's mazes and spawns map onto them, and open questions. Found on the way: `SoundAsset` exists twice, in the game and in Sound DSP Studio, which adds harmonic waves, envelopes and noise tracks; neither JSON schema describes the additions. Next: agree the shapes, then the tools' exporters.
+  - **Sound contract** (2026-11-28, decided with the owner): Sound DSP Studio's `SoundAsset` (a superset of the game's) is the one `sound` contract, in `@gs2d/contracts` without the playback parts. Harmonic waves, envelopes and noise tracks are optional features a game lists in `gs2d.json`; `soundProblems` warns a tool before writing what the game can't play. Version 1 only gains optional fields; breaking changes are version 2. All 15 of the game's sounds pass, using no optional feature.
+  - **Manifest and schemas:** `GameManifest` and `validateManifest` (the draft `gs2d.json`: contracts with versions and features, asset folders inside the game, work files). JSON schemas for every contract and the manifest are generated from the types (`ts-json-schema-generator`, written by `vp run docs` to `packages/contracts/schemas/`); a test fails when they fall behind and checks them with Ajv against the same real files as the validators.
+  - **Sheets and animations** (2026-11-28, decided with the owner): two files. An `animation` names its `spritesheet` by id, so several animation files share a sheet, a sheet repacks without rewriting clips, and animations can grow richer data on their own.
 - **12.2 The manifest** (`gs2d.json`): contracts the game reads, where each asset kind goes, naming, which tools may write where. Validated, with clear errors.
 - **12.3 Game folders:** open a game's folder in the hub (File System Access now, the desktop core from Phase 13); work files live in the game's repository next to its code; **export on save** writes the game-ready files where the manifest says.
 - **12.4 Send to:** between tools (a sprite to Packer or to a tileset, a pack to the game) without going through files by hand; the existing sprite-to-tileset and sprite-to-packer paths join it.

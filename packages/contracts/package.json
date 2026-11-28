@@ -1,0 +1,21 @@
+{
+  "name": "@gs2d/contracts",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vp test run",
+    "tsc:check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.11",
+    "ajv": "^8.20.0",
+    "ts-json-schema-generator": "^2.10.0",
+    "typescript": "^5.4.0",
+    "vite-plus": "catalog:"
+  }
+}

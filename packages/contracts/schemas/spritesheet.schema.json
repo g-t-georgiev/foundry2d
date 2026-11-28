@@ -1,0 +1,134 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/SpriteSheetAsset",
+  "definitions": {
+    "SpriteSheetAsset": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1,
+          "description": "The contract's version; a game refuses versions it doesn't know."
+        },
+        "kind": {
+          "type": "string",
+          "const": "spritesheet"
+        },
+        "id": {
+          "type": "string",
+          "description": "Stable id, how other assets and the game refer to it (e.g. \"pacman-sprites\")."
+        },
+        "name": {
+          "type": "string",
+          "description": "For people."
+        },
+        "image": {
+          "type": "string",
+          "description": "The image file, relative to this file."
+        },
+        "width": {
+          "type": "number",
+          "description": "The image's size in pixels."
+        },
+        "height": {
+          "type": "number"
+        },
+        "scale": {
+          "type": "number",
+          "description": "Pixels of the sheet per pixel of the art (2 for an"
+        },
+        "frames": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/SpriteFrame"
+          }
+        }
+      },
+      "required": [
+        "frames",
+        "height",
+        "id",
+        "image",
+        "kind",
+        "name",
+        "version",
+        "width"
+      ],
+      "additionalProperties": false,
+      "description": "A sprite sheet: one image and the named sprites on it. Written by Pixel and Packer; a game draws a sprite by its name without knowing how the sheet was packed."
+    },
+    "SpriteFrame": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "number",
+          "description": "The sprite's rectangle on the sheet, with its upright width and height."
+        },
+        "y": {
+          "type": "number"
+        },
+        "w": {
+          "type": "number"
+        },
+        "h": {
+          "type": "number"
+        },
+        "rotated": {
+          "type": "boolean",
+          "description": "Stored turned 90° clockwise (then it covers h × w on the sheet). Draw it turned back counter-clockwise."
+        },
+        "source": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "w": {
+              "type": "number"
+            },
+            "h": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y",
+            "w",
+            "h"
+          ],
+          "additionalProperties": false,
+          "description": "Set when transparent edges were trimmed: the untrimmed size and where the stored rectangle sits in it. Draw at (x, y) inside a (w, h) box."
+        },
+        "pivot": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false,
+          "description": "The point placed at the sprite's position, 0..1 of the untrimmed size."
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "w",
+        "h"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$id": "https://gs2d.dev/schemas/spritesheet.schema.json",
+  "title": "SpriteSheetAsset"
+}

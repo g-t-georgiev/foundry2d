@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "id": "siren-normal-0",
+  "name": "Normal Siren Stage 0",
+  "kind": "loop",
+  "wave": "soft",
+  "level": 0.07,
+  "loopMode": "lfo",
+  "timing": {
+    "fpsBasis": 60.60606,
+    "lockToFps": false
+  },
+  "lfo": {
+    "shape": "triangle",
+    "loHz": 440,
+    "hiHz": 1000,
+    "periodSec": 0.42
+  }
+}

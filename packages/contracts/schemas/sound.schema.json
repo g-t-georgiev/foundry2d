@@ -1,0 +1,391 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/SoundAsset",
+  "definitions": {
+    "SoundAsset": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/SoundSequenceAsset"
+        },
+        {
+          "$ref": "#/definitions/SoundLoopAsset"
+        }
+      ]
+    },
+    "SoundSequenceAsset": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "customWaves": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/WaveTable"
+          },
+          "description": "Optional custom 4-bit (0-15) wavetables referenced by tracks or loop carrier."
+        },
+        "harmonicWaves": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/HarmonicWaveSpec"
+          },
+          "description": "Optional full-precision Fourier partial waves (real/imag) eliminating 4-bit quantization loss."
+        },
+        "timing": {
+          "$ref": "#/definitions/SoundTimingBasis",
+          "description": "Frame-rate metadata captured or configured by the external analyzer."
+        },
+        "kind": {
+          "type": "string",
+          "const": "sequence"
+        },
+        "durationSec": {
+          "type": "number"
+        },
+        "scalable": {
+          "type": "boolean",
+          "description": "Whether the sound is intended to stretch/fit a caller-provided target duration."
+        },
+        "tracks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SoundSequenceTrack"
+          }
+        }
+      },
+      "required": [
+        "durationSec",
+        "id",
+        "kind",
+        "name",
+        "tracks",
+        "version"
+      ],
+      "additionalProperties": false,
+      "description": "Discrete, multi-sweep, or polyphonic overlapping sound cue (e.g. intro tune, death sound, extra life dual-voice beeps, alternating chomp)."
+    },
+    "WaveTable": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "description": "A 32-step (or custom-length) 4-bit wavetable with integer sample levels 0-15."
+    },
+    "HarmonicWaveSpec": {
+      "type": "object",
+      "properties": {
+        "real": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "imag": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        }
+      },
+      "required": [
+        "real",
+        "imag"
+      ],
+      "additionalProperties": false,
+      "description": "Complex harmonic partials [0..N] where index k corresponds to harmonic k (0 = DC)."
+    },
+    "SoundTimingBasis": {
+      "type": "object",
+      "properties": {
+        "fpsBasis": {
+          "type": "number"
+        },
+        "durationFrames": {
+          "type": "number"
+        },
+        "lockToFps": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "fpsBasis"
+      ],
+      "additionalProperties": false,
+      "description": "Links a recorded or authored sound back to a simulation/display frame rate (such as the arcade's 60.60606 Hz or the 60 Hz simulation base)."
+    },
+    "SoundSequenceTrack": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "tone",
+            "noise"
+          ]
+        },
+        "wave": {
+          "$ref": "#/definitions/WaveRef"
+        },
+        "level": {
+          "type": "number"
+        },
+        "noise": {
+          "$ref": "#/definitions/SoundNoiseTrackConfig"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SoundSequenceEvent"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "wave",
+        "level",
+        "events"
+      ],
+      "additionalProperties": false
+    },
+    "WaveRef": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/BuiltinWaveName"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Any built-in wavetable name or a custom wave key declared in `customWaves`."
+    },
+    "BuiltinWaveName": {
+      "type": "string",
+      "enum": [
+        "soft",
+        "buzz",
+        "rasp",
+        "pulse"
+      ],
+      "description": "Built-in 32-step wavetable names provided by SoundEngine."
+    },
+    "SoundNoiseTrackConfig": {
+      "type": "object",
+      "properties": {
+        "centerHz": {
+          "type": "number"
+        },
+        "q": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SoundSequenceEvent": {
+      "type": "object",
+      "properties": {
+        "delaySec": {
+          "type": "number",
+          "description": "Delay from sequence start in seconds (may overlap other events/tracks)."
+        },
+        "delayFrames": {
+          "type": "number",
+          "description": "Frame offset at `timing.fpsBasis`, used if `delaySec` is omitted."
+        },
+        "sweep": {
+          "$ref": "#/definitions/SoundSweep",
+          "description": "Piecewise-linear frequency points: [[offsetSec, hz], ...]."
+        },
+        "envelope": {
+          "$ref": "#/definitions/SoundSweep",
+          "description": "Optional piecewise-linear relative amplitude points: [[offsetSec, gainMultiplier 0..1], ...]."
+        },
+        "level": {
+          "type": "number",
+          "description": "Optional per-event gain override (0-1); falls back to track `level`."
+        },
+        "wave": {
+          "$ref": "#/definitions/WaveRef",
+          "description": "Optional per-event waveform override; falls back to track `wave`."
+        },
+        "releaseSec": {
+          "type": "number",
+          "description": "Optional click-free release ramp duration in seconds (default 0.01)."
+        }
+      },
+      "required": [
+        "sweep"
+      ],
+      "additionalProperties": false
+    },
+    "SoundSweep": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/SweepPoint"
+      },
+      "description": "Piecewise-linear frequency curve fed into `SoundEngine.tone()`."
+    },
+    "SweepPoint": {
+      "type": "array",
+      "minItems": 2,
+      "items": [
+        {
+          "type": "number",
+          "title": "offsetSec"
+        },
+        {
+          "type": "number",
+          "title": "hz"
+        }
+      ],
+      "maxItems": 2,
+      "description": "One linear-ramp frequency point: seconds from event start, frequency in Hz."
+    },
+    "SoundLoopAsset": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "customWaves": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/WaveTable"
+          },
+          "description": "Optional custom 4-bit (0-15) wavetables referenced by tracks or loop carrier."
+        },
+        "harmonicWaves": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/HarmonicWaveSpec"
+          },
+          "description": "Optional full-precision Fourier partial waves (real/imag) eliminating 4-bit quantization loss."
+        },
+        "timing": {
+          "$ref": "#/definitions/SoundTimingBasis",
+          "description": "Frame-rate metadata captured or configured by the external analyzer."
+        },
+        "kind": {
+          "type": "string",
+          "const": "loop"
+        },
+        "wave": {
+          "$ref": "#/definitions/WaveRef"
+        },
+        "level": {
+          "type": "number"
+        },
+        "loopMode": {
+          "type": "string",
+          "enum": [
+            "lfo",
+            "pattern"
+          ]
+        },
+        "lfo": {
+          "$ref": "#/definitions/SoundLfoConfig"
+        },
+        "pattern": {
+          "$ref": "#/definitions/SoundPatternLoopConfig"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "level",
+        "loopMode",
+        "name",
+        "version",
+        "wave"
+      ],
+      "additionalProperties": false,
+      "description": "Continuous looping sound: either an LFO-swept carrier (sirens) or a repeating multi-track loop pattern synced to a period / frame count."
+    },
+    "SoundLfoConfig": {
+      "type": "object",
+      "properties": {
+        "shape": {
+          "$ref": "#/definitions/LfoShape"
+        },
+        "loHz": {
+          "type": "number"
+        },
+        "hiHz": {
+          "type": "number"
+        },
+        "rateHz": {
+          "type": "number",
+          "description": "LFO modulation cycles per second (Hz). Optional if `periodSec` or `framesPerCycle` is set."
+        },
+        "periodSec": {
+          "type": "number",
+          "description": "Duration of one LFO cycle in seconds. Optional if `rateHz` or `framesPerCycle` is set."
+        },
+        "framesPerCycle": {
+          "type": "number",
+          "description": "Number of frames per cycle at `timing.fpsBasis` (e.g. 25 frames @ 60.60606 Hz)."
+        }
+      },
+      "required": [
+        "shape",
+        "loHz",
+        "hiHz"
+      ],
+      "additionalProperties": false
+    },
+    "LfoShape": {
+      "type": "string",
+      "enum": [
+        "triangle",
+        "sawtooth_up",
+        "sawtooth_down",
+        "sine",
+        "square"
+      ],
+      "description": "LFO shapes supported by `SoundEngine` continuous looping sirens/tones."
+    },
+    "SoundPatternLoopConfig": {
+      "type": "object",
+      "properties": {
+        "periodSec": {
+          "type": "number"
+        },
+        "framesPerCycle": {
+          "type": "number"
+        },
+        "tracks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SoundSequenceTrack"
+          }
+        }
+      },
+      "required": [
+        "tracks"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$id": "https://gs2d.dev/schemas/sound.schema.json",
+  "title": "SoundAsset"
+}
