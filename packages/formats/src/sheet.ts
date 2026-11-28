@@ -8,6 +8,8 @@
  * untrimmed `sourceSize`.
  */
 
+import { gs2dAnimation, gs2dSheet } from "./gs2d";
+
 /**
  * Which way a format stores rotated sprites: turned 90° clockwise
  * (TexturePacker, Starling) or counter-clockwise (LibGDX).
@@ -64,6 +66,7 @@ export interface SheetWriteOptions {
 }
 
 export type SheetFormatId =
+  | "gs2d"
   | "json-hash"
   | "json-array"
   | "starling-xml"
@@ -85,6 +88,40 @@ export interface SheetFormat {
   /** Writes sprite pivots. */
   supportsPivot: boolean;
   write(sheet: SheetData, options: SheetWriteOptions): string;
+  /**
+   * A second file some formats write beside the data (Game Studio 2D's
+   * animations), with its extension; `null` when there's nothing to write.
+   */
+  companion?: {
+    extension: string;
+    mime: string;
+    write(sheet: SheetData, options: SheetWriteOptions): string | null;
+  };
+}
+
+/** A data file of an export. */
+export interface SheetDataFile {
+  name: string;
+  text: string;
+  mime: string;
+}
+
+/** Every data file `format` writes for one sheet, named `base` + the extension. */
+export function sheetDataFiles(
+  format: SheetFormat,
+  base: string,
+  sheet: SheetData,
+  options: SheetWriteOptions
+): SheetDataFile[] {
+  const files = [
+    { name: `${base}${format.extension}`, text: format.write(sheet, options), mime: format.mime },
+  ];
+  const companion = format.companion;
+  const text = companion?.write(sheet, options);
+  if (companion && text) {
+    files.push({ name: `${base}${companion.extension}`, text, mime: companion.mime });
+  }
+  return files;
 }
 
 /** Fails loudly on rotated sprites the format can't describe, rather than writing wrong data. */
@@ -330,6 +367,20 @@ function cssSprites(sheet: SheetData, options: SheetWriteOptions): string {
 // ------------------------------------------------------------------ registry
 
 export const SHEET_FORMATS: readonly SheetFormat[] = [
+  {
+    id: "gs2d",
+    label: "Game Studio 2D (sheet + animations)",
+    readers: "Games with a gs2d.json (the spritesheet and animation contracts)",
+    extension: ".sheet.json",
+    mime: "application/json",
+    rotation: "cw",
+    supportsPivot: true,
+    write: (sheet, options) => {
+      checkRotation("Game Studio 2D", sheet, "cw");
+      return gs2dSheet(sheet, options);
+    },
+    companion: { extension: ".animation.json", mime: "application/json", write: gs2dAnimation },
+  },
   {
     id: "json-hash",
     label: "TexturePacker JSON (Hash)",

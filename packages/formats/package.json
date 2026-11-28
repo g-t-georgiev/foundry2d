@@ -7,6 +7,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "dependencies": {
+    "@gs2d/contracts": "workspace:*"
+  },
   "scripts": {
     "test": "vp test run",
     "tsc:check": "tsc --noEmit"

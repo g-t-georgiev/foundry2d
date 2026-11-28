@@ -2,14 +2,15 @@
 
 Pixel's spritesheet export and Packer write the same data formats. All describe where each frame (sprite) is on the sheet; they differ in what else they can say.
 
-| Format                     | File     | Read by                                                     | Rotation              | Pivots | Animations               |
-| -------------------------- | -------- | ----------------------------------------------------------- | --------------------- | ------ | ------------------------ |
-| TexturePacker JSON (Hash)  | `.json`  | Phaser, PixiJS, Aseprite-style tools                        | 90° clockwise         | yes    | frame tags, `animations` |
-| TexturePacker JSON (Array) | `.json`  | Phaser, PixiJS                                              | 90° clockwise         | yes    | frame tags, `animations` |
-| Starling / Sparrow XML     | `.xml`   | Starling, HaxeFlixel, Phaser (`atlasXML`, without rotation) | 90° clockwise         | yes    | no                       |
-| Godot SpriteFrames         | `.tres`  | Godot 4 (`AnimatedSprite2D`)                                | no                    | no     | yes                      |
-| LibGDX atlas               | `.atlas` | LibGDX `TextureAtlas`                                       | 90° counter-clockwise | no     | no                       |
-| CSS sprites                | `.css`   | web pages                                                   | no                    | no     | no                       |
+| Format                     | File                              | Read by                                                     | Rotation              | Pivots | Animations               |
+| -------------------------- | --------------------------------- | ----------------------------------------------------------- | --------------------- | ------ | ------------------------ |
+| Game Studio 2D             | `.sheet.json` + `.animation.json` | games with a `gs2d.json`                                    | 90° clockwise         | yes    | a separate file          |
+| TexturePacker JSON (Hash)  | `.json`                           | Phaser, PixiJS, Aseprite-style tools                        | 90° clockwise         | yes    | frame tags, `animations` |
+| TexturePacker JSON (Array) | `.json`                           | Phaser, PixiJS                                              | 90° clockwise         | yes    | frame tags, `animations` |
+| Starling / Sparrow XML     | `.xml`                            | Starling, HaxeFlixel, Phaser (`atlasXML`, without rotation) | 90° clockwise         | yes    | no                       |
+| Godot SpriteFrames         | `.tres`                           | Godot 4 (`AnimatedSprite2D`)                                | no                    | no     | yes                      |
+| LibGDX atlas               | `.atlas`                          | LibGDX `TextureAtlas`                                       | 90° counter-clockwise | no     | no                       |
+| CSS sprites                | `.css`                            | web pages                                                   | no                    | no     | no                       |
 
 Rotation only happens when you allow it in Packer, and only with formats that can describe it.
 
@@ -23,6 +24,33 @@ Every format is written from the same frame data, with TexturePacker's names:
 - **`sourceSize`:** the original image's size.
 - **`duration`:** milliseconds (animations).
 - **`pivot`:** 0 to 1 from the top-left of the original image.
+
+## Game Studio 2D
+
+Game Studio 2D's own contracts, for games that list them in a `gs2d.json` (see [Asset contracts](https://github.com/g-t-georgiev/foundry2d/blob/dev/docs/contracts.md)). Two files:
+
+- **`name.sheet.json`** (`kind: "spritesheet"`): the image and its sprites by name, without the `.png`: `x`, `y`, `w`, `h` (upright), `rotated` when stored turned 90° clockwise, `source` (the untrimmed size and where the sprite sits in it) when trimmed, and `pivot`.
+- **`name.animation.json`** (`kind: "animation"`), when there are animations: clips of sprite names with each frame's `ms`, naming the sheet by its `id`. Ping-pong animations get `"playback": "pingpong"`; reversed ones are written in reverse order.
+
+```json
+{
+  "version": 1,
+  "kind": "animation",
+  "id": "hero-animation",
+  "name": "hero",
+  "sheet": "hero",
+  "clips": {
+    "walk": {
+      "frames": [
+        { "sprite": "walk_0", "ms": 100 },
+        { "sprite": "walk_1", "ms": 100 }
+      ]
+    }
+  }
+}
+```
+
+Several animation files can name one sheet, and a sheet can be repacked without touching them, since clips name sprites rather than rectangles.
 
 ## TexturePacker JSON
 
@@ -104,4 +132,4 @@ A class for the sheet and one per sprite, with its untrimmed size and background
 
 ## Reading sheets back
 
-Packer can unpack TexturePacker JSON (including Phaser's multi-atlas), Starling XML and LibGDX atlases into separate sprites again, rotated and trimmed frames included. See [Adding sprites](../04-packer/02-adding-sprites.md).
+Packer can unpack Game Studio 2D sheets, TexturePacker JSON (including Phaser's multi-atlas), Starling XML and LibGDX atlases into separate sprites again, rotated and trimmed frames included. See [Adding sprites](../04-packer/02-adding-sprites.md).

@@ -44,7 +44,7 @@ describe("spritesheet data formats", () => {
   it("every format has a unique id and an extension", () => {
     const ids = SHEET_FORMATS.map((f) => f.id);
     expect(new Set(ids).size).toBe(ids.length);
-    for (const f of SHEET_FORMATS) expect(f.extension).toMatch(/^\.[a-z]+$/);
+    for (const f of SHEET_FORMATS) expect(f.extension).toMatch(/^(\.[a-z]+)+$/);
   });
 
   it("TexturePacker JSON keys frames by name (hash) or lists them (array)", () => {

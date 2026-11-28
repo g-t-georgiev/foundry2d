@@ -1,9 +1,10 @@
+import { validateSpriteSheet, type SpriteSheetAsset } from "@gs2d/contracts";
 import type { SheetFrame, Turn } from "./sheet";
 
 /**
  * Reads spritesheet data written by other tools (and by our own writers), so
  * existing atlases can be unpacked: TexturePacker JSON (hash, array and
- * Phaser multi-atlas), Starling/Sparrow XML and LibGDX atlases. Rotated
+ * Phaser multi-atlas), Game Studio 2D sheets, Starling/Sparrow XML and LibGDX atlases. Rotated
  * frames are normalised to the upright size; `turn` says which way the
  * format stores them.
  */
@@ -58,6 +59,28 @@ function jsonFrames(frames: unknown): SheetFrame[] {
   return Object.entries(frames as object).map(([name, f]) => jsonFrame(name, f));
 }
 
+/** Game Studio 2D's spritesheet contract; sprites get a ".png" key like the other formats. */
+function readContract(json: unknown): SheetPage {
+  const check = validateSpriteSheet(json);
+  if (!check.valid) throw new SheetReadError(check.errors[0]);
+  const asset = json as SpriteSheetAsset;
+  const frames = Object.entries(asset.frames).map(([name, f]): SheetFrame => {
+    const frame = { x: f.x, y: f.y, w: f.w, h: f.h };
+    const s = f.source;
+    return {
+      filename: `${name}.png`,
+      frame,
+      rotated: f.rotated === true,
+      trimmed: s !== undefined,
+      spriteSourceSize: s ? { x: s.x, y: s.y, w: f.w, h: f.h } : { x: 0, y: 0, w: f.w, h: f.h },
+      sourceSize: s ? { w: s.w, h: s.h } : { w: f.w, h: f.h },
+      duration: 100,
+      ...(f.pivot && { pivot: { ...f.pivot } }),
+    };
+  });
+  return { image: asset.image, frames, turn: "cw" };
+}
+
 function readJson(text: string): SheetPage[] | null {
   let json: unknown;
   try {
@@ -73,6 +96,7 @@ function readJson(text: string): SheetPage[] | null {
       turn: "cw",
     }));
   }
+  if (json.kind === "spritesheet") return [readContract(json)];
   if (!isRecord(json.frames)) return null;
   const image = isRecord(json.meta) ? json.meta.image : undefined;
   return [

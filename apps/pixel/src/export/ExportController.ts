@@ -10,7 +10,7 @@ import {
   type RgbaImage,
 } from "./raster";
 import { createZip, encodeBmp, encodeGif, type ZipEntry } from "./encoders";
-import { sheetFormat, type SheetFormatId } from "@gs2d/formats";
+import { sheetDataFiles, sheetFormat, type SheetFormatId } from "@gs2d/formats";
 import { buildSpritesheet, sheetData, type SheetLayout, type Spritesheet } from "./spritesheet";
 
 export type ImageFormat = "png" | "webp" | "webp-lossy" | "jpeg" | "bmp";
@@ -223,22 +223,24 @@ export class ExportController {
     const png = await this.encode(sheet.image, "png", 1, "#000000");
     const imageName = `${base}.png`;
     const format = options.data === "none" ? null : sheetFormat(options.data);
-    const data = format?.write(sheetData(sheet), {
-      image: imageName,
-      scale: options.scale,
-      frameTags: [{ name: base, from: 0, to: this.sprite.frames.length - 1, direction: "forward" }],
-    });
-    const dataName = format ? `${base}${format.extension}` : "";
+    const data = format
+      ? sheetDataFiles(format, base, sheetData(sheet), {
+          image: imageName,
+          scale: options.scale,
+          frameTags: [
+            { name: base, from: 0, to: this.sprite.frames.length - 1, direction: "forward" },
+          ],
+        })
+      : [];
 
-    if (options.output === "files" || !format || data === undefined) {
+    if (options.output === "files" || !data.length) {
       downloadBlob(png, imageName);
-      if (format && data !== undefined)
-        downloadBlob(new Blob([data], { type: format.mime }), dataName);
-      return format ? `${imageName} + ${dataName}` : imageName;
+      for (const f of data) downloadBlob(new Blob([f.text], { type: f.mime }), f.name);
+      return [imageName, ...data.map((f) => f.name)].join(" + ");
     }
     const zip = createZip([
       { name: imageName, data: new Uint8Array(await png.arrayBuffer()) },
-      { name: dataName, data: new TextEncoder().encode(data) },
+      ...data.map((f) => ({ name: f.name, data: new TextEncoder().encode(f.text) })),
     ]);
     const zipName = `${base}-spritesheet.zip`;
     downloadBlob(new Blob([zip as Uint8Array<ArrayBuffer>], { type: "application/zip" }), zipName);

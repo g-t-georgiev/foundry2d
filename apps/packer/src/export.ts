@@ -7,7 +7,7 @@ import {
   type RgbaImage,
 } from "@gs2d/atlas";
 import { createZip } from "@gs2d/core";
-import { sheetFormat } from "@gs2d/formats";
+import { sheetDataFiles, sheetFormat, type SheetDataFile } from "@gs2d/formats";
 import { frameTags, type Animation } from "./model/animations";
 import { MAX_SHEET_SIDE, type PackSettings } from "./model/settings";
 
@@ -15,11 +15,11 @@ import { MAX_SHEET_SIDE, type PackSettings } from "./model/settings";
 export const frameName = (sprite: string) => `${sprite}.png`;
 export const spriteOfFrame = (frame: string) => frame.replace(/\.png$/, "");
 
-/** One sheet's files: the image and, unless the format is "none", its data. */
+/** One sheet's files: the image and its data files (none for "none"). */
 export interface SheetFiles {
   image: RgbaImage;
   imageName: string;
-  data: { name: string; text: string; mime: string } | null;
+  data: SheetDataFile[];
 }
 
 /** A file name without characters file systems or engines trip over. */
@@ -55,11 +55,13 @@ export function* sheetFiles(
       yield {
         image: sheet.image,
         imageName,
-        data: format && {
-          name: `${base}${format.extension}`,
-          text: format.write(sheetData(sheet), { image: imageName, scale, frameTags: tags }),
-          mime: format.mime,
-        },
+        data: format
+          ? sheetDataFiles(format, base, sheetData(sheet), {
+              image: imageName,
+              scale,
+              frameTags: tags,
+            })
+          : [],
       };
     }
   }
@@ -120,8 +122,7 @@ export async function exportFiles(request: ExportRequest): Promise<ExportFile[]>
     const image = settings.premultiply ? premultiply(f.image) : f.image;
     const bytes = await (settings.imageFormat === "png" ? encodePng(image) : encodeWebp(image));
     files.push({ name: f.imageName, mime: `image/${settings.imageFormat}`, bytes });
-    if (f.data) {
-      const { name, mime, text } = f.data;
+    for (const { name, mime, text } of f.data) {
       files.push({ name, mime, bytes: new TextEncoder().encode(text) });
     }
   }

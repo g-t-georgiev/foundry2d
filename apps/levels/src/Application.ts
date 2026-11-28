@@ -1,6 +1,7 @@
 import {
   CompositeCommand,
   createZip,
+  dataUrlToBytes,
   HistoryManager,
   RectangleTool,
   StampTool,
@@ -85,6 +86,13 @@ import {
   toGameFormat,
 } from "./io/gameFormat";
 import { externalizeAssets, internalizeAssets } from "./io/assets";
+import {
+  contractJson,
+  levelTilesets,
+  tilesetImageName,
+  tilesetSheet,
+  toLevelContract,
+} from "./io/contractFormat";
 import { renderProjectThumbnail } from "./io/thumbnail";
 import { renderLevelPng } from "./io/levelImage";
 
@@ -731,9 +739,10 @@ export default class Application {
     if (!this.loading) this.session.markDirty();
   }
 
-  /** Runs an export action: "json", "csv" or "copy-array" (the split button's options). */
+  /** Runs an export action: one of the split button's options ("json", "gs2d", "csv"…). */
   runExport(action: string): void {
     if (action === "csv") this.exportCsv();
+    else if (action === "gs2d") this.exportContract();
     else if (action === "png") void this.exportPng(false);
     else if (action === "png-layer") void this.exportPng(true);
     else if (action === "copy-array") void this.copyActiveLayer();
@@ -779,6 +788,33 @@ export default class Application {
       `${this.exportBaseName(level)}.json`
     );
     this.showMessage(`Exported ${level.identifier} as JSON`);
+  }
+
+  /**
+   * The level as Game Studio 2D's level contract, with a sprite sheet and
+   * the image of every tileset it uses, in one ZIP.
+   */
+  exportContract(): void {
+    const level = this.exportLevel();
+    const encoder = new TextEncoder();
+    const json = (value: unknown) => encoder.encode(contractJson(value));
+    const base = this.exportBaseName(level);
+    const entries: { name: string; data: Uint8Array }[] = [
+      { name: `${base}.level.json`, data: json(toLevelContract(this.project, level)) },
+    ];
+    for (const tileset of levelTilesets(this.project)) {
+      entries.push({ name: `${tileset.identifier}.sheet.json`, data: json(tilesetSheet(tileset)) });
+      if (tileset.image.dataUrl.startsWith("data:")) {
+        const { bytes } = dataUrlToBytes(tileset.image.dataUrl);
+        entries.push({ name: tilesetImageName(tileset), data: bytes });
+      }
+    }
+    const zip = createZip(entries);
+    downloadBlob(
+      new Blob([zip as Uint8Array<ArrayBuffer>], { type: "application/zip" }),
+      `${base}-gs2d.zip`
+    );
+    this.showMessage(`Exported ${level.identifier} for Game Studio 2D`);
   }
 
   /** One CSV per layer; zipped when there is more than one. */

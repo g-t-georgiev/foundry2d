@@ -67,6 +67,18 @@ if (value !== 0) {
 }
 ```
 
+## Game Studio 2D
+
+**Export (Game Studio 2D)** writes a ZIP for games that read Game Studio 2D's contracts (see [Asset contracts](https://github.com/g-t-georgiev/foundry2d/blob/dev/docs/contracts.md)):
+
+- **`name.level.json`** (`kind: "level"`): `tileSize`, `columns`, `rows`, `background`, and
+  - `grids`: each IntGrid layer with `values`, its value names (`{ "wall": 1 }`), and `cells`, row by row. A game reads cells by name, so renumbering values never breaks it; cells with a value that has no name are written as 0.
+  - `tiles`: each Tiles layer with its tileset's id as `sheet`, `tileNames` (`tile_0`, `tile_1`… by tile id) and `cells` (tile id + 1, flips in bits 29 and 30, as above). Auto-layers keep the top tile of each cell.
+  - `entities`: one list, each with `type`, `id`, `layer`, its pivot position `x`, `y`, `width`, `height`, `pivot` and `fields`. References are `{ "entity", "level" }`.
+  - `fields`: the level fields.
+  - `grid` on a layer with its own cell size: `{ size, columns, rows }`.
+- **`tileset.sheet.json`** and the tileset's image for every tileset used: a sprite sheet with a sprite per tile, named as in `tileNames`.
+
 ## CSV
 
 **Export (CSV)** writes one file per layer, zipped when there are several. Grid layers are a row of comma-separated cells per line, like Tiled's CSV layers. Entity layers have a header row (`id`, `iid`, `x`, `y`, `cx`, `cy`, `left`, `top`, `width`, `height`, then one column per field) and a row per entity; references are written as their iid, and list entries are joined with `|`.

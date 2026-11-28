@@ -330,6 +330,7 @@ describe("pivots, scales and unpacking", () => {
   it("every format with rotation survives writing, reading and unpacking", () => {
     const rotating = SHEET_FORMATS.filter((f) => f.rotation);
     expect(rotating.map((f) => f.id)).toEqual([
+      "gs2d",
       "json-hash",
       "json-array",
       "starling-xml",

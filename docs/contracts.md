@@ -2,7 +2,7 @@
 
 A game connects to Game Studio 2D through **asset contracts**: small, versioned JSON files the tools write into the game, and the game reads without the studio. They follow the pilot game's `SoundAsset`: every file has `version`, `kind`, `id` and `name`, is plain data, and comes with a validator that lists every problem (`@gs2d/contracts`).
 
-Status: **draft for review** with the pilot game and Sound DSP Studio; the sound contract and the split of sheets and animations are decided. Nothing writes these files yet; the tools' exporters follow once the shapes are agreed.
+Status: **draft for review** with the pilot game and Sound DSP Studio; the sound contract and the split of sheets and animations are decided. The tools write them (see [The exporters](#the-exporters)); writing into a game's folder follows with `gs2d.json` support (12.2, 12.3).
 
 ## The kinds
 
@@ -83,21 +83,21 @@ Status: **draft for review** with the pilot game and Sound DSP Studio; the sound
   "background": "#000000",
   "grids": {
     "collision": {
-      "values": { "wall": 1, "gate": 2, "ghost_house": 3, "tunnel": 4, "no_up": 5 },
+      "values": { "wall": 1, "gate": 2, "enemy_house": 3, "tunnel": 4, "no_up": 5 },
       "cells": []
     },
     "collectibles": { "values": { "dot": 1, "energizer": 2 }, "cells": [] }
   },
   "entities": [
     {
-      "type": "Ghost",
+      "type": "Enemy",
       "id": "g1",
       "layer": "entities",
       "x": 108,
       "y": 116,
       "width": 16,
       "height": 16,
-      "fields": { "kind": "blinky", "scatterTarget": { "x": 25, "y": 0 } }
+      "fields": { "name": "BLINKY", "inHouse": false, "dir": "left" }
     }
   ],
   "fields": { "music": "maze" }
@@ -106,6 +106,13 @@ Status: **draft for review** with the pilot game and Sound DSP Studio; the sound
 
 - The difference from Levels' game JSON today: each grid names its values (`values`), so a game reads cells by name (`cellName`) and renumbering in the editor never breaks it.
 - Tile layers name their sprite sheet and its tile sprites (`tiles`), cells hold tile id + 1 with flip flags (bits 29 and 30), as now.
+
+## The exporters
+
+- **Pixel and Packer:** the **Game Studio 2D** data format writes `name.sheet.json` and, when there are animations, `name.animation.json` (Packer's animations; Pixel's frames as one clip). Packer reads `.sheet.json` back when unpacking. In `@gs2d/formats` (`gs2d.ts`), so both tools share it.
+- **Levels:** **Export (Game Studio 2D)** writes a ZIP with `name.level.json` and, for each tileset its tile layers use, `tileset.sheet.json` (a sprite per tile, `tile_<id>`) and the tileset image. Number lists (cells) are on one line each. In `apps/levels/src/io/contractFormat.ts`.
+- **Not in the contract yet:** auto-layer tile stacks (a cell keeps its top tile); they can come as an optional field within version 1.
+- **Checked:** the tests validate every file the exporters write against the contracts, and read sheets back.
 
 ## The manifest (draft, roadmap 12.2)
 
@@ -135,11 +142,31 @@ Status: **draft for review** with the pilot game and Sound DSP Studio; the sound
 - `assets`: where each kind is written, relative to the game's folder.
 - `workFiles`: where the tools keep their work files (`.gs2dsprite`…) in the game's repository.
 
-## Pac-Man notes
+## The pilot game's names (agreed 2026-11-28)
 
-- **Mazes:** today a string grid (`mazes.ts`) with tile types `WALL`, `DOT`, `ENERGIZER`, `GATE`, `GHOST_HOUSE`, `TUNNEL`, `NO_UP_ZONE`. Through the level contract they become a `collision` grid (`wall`, `gate`, `ghost_house`, `tunnel`, `no_up`) and a `collectibles` grid (`dot`, `energizer`). The Pac-Man preset in Levels has `intersection_a/b` values the game derives itself (`deriveIntersections`) and lacks `ghost_house` and `no_up`; the preset should follow the game.
-- **Spawns:** Pac-Man, ghost and fruit spawns are entities; the game's seat between two tiles (`seamPx`) is the entity's pivot position.
-- **Sprites:** the game draws its actors in code today; sprites and an animation system are game-side work, which the `spritesheet` and `animation` contracts are shaped for.
+The pilot (Pac-Man, now titled "Arcade Maze Lab": the player and the enemies) reads the `spritesheet`, `animation` and `level` contracts, copied from `@gs2d/contracts` for now. It loads assets through one `replace(asset)` entry, which takes a validated contract object (and a sheet's image), so the channel for live updates (12.4) stays open.
+
+**Level** (the Levels preset follows it): `tileSize` 8, 28 × 36 cells (rows 0–2 and 34–35 are HUD rows).
+
+- `collision` grid: `wall`, `gate`, `enemy_house`, `tunnel`, `no_up`. Intersections are derived by the game.
+- `collectibles` grid: `dot`, `energizer`.
+- Entities: `Player` (1, `dir`), `Enemy` (4, `name` BLINKY, PINKY, INKY or CLYDE, `inHouse`, `dir`), `Fruit` (1) and `ScatterTarget` (4, `name` of its enemy, a cell on or outside the maze's edge). An entity's `x`, `y` is its pivot, so a spawn between two tiles (the game's `seamPx`) is exact.
+
+**Animation clips**, drawn with pivot 0.5, 0.5 unless the sheet says otherwise; `frames` at `fpsBasis` 60.606 or `ms`:
+
+| Clips                                                                                     | Playback | Notes                                                                    |
+| ----------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------ |
+| `player.move.left`, `.right`, `.up`, `.down`                                              | loop     | 4 frames; stepped by distance moved (durations ignored); frame 0 at rest |
+| `player.death`                                                                            | once     | about 11 frames                                                          |
+| `player.giant.move.right`                                                                 | loop     | the intermission's giant; falls back to `player.move.right` at 2×        |
+| `enemy.<NAME>.move.<dir>` (BLINKY, PINKY, INKY, CLYDE × left, right, up, down)            | loop     | 2 frames, eyes looking that way                                          |
+| `enemy.frightened`, `enemy.frightened.flash`                                              | loop     | 2 frames each, alternated near the end of frightened time                |
+| `enemy.eyes.<dir>`                                                                        | –        | 1 frame each                                                             |
+| `fruit.Cherry`, `.Strawberry`, `.Peach`, `.Apple`, `.Melon`, `.Galaxian`, `.Bell`, `.Key` | –        | 1 frame each, also in the HUD                                            |
+| `life`                                                                                    | –        | 1 frame; falls back to a `player.move.left` frame                        |
+| `score.200`, `.400`, `.800`, `.1600`; `score.100` … `score.5000` (fruit)                  | –        | optional; the game falls back to text                                    |
+
+Later, optional: maze wall tiles, `dot`, `energizer`. The game draws its actors in code today; until a sheet is supplied, a default skin baked from those drawings keeps its look.
 
 ## The sound contract (decided 2026-11-28)
 

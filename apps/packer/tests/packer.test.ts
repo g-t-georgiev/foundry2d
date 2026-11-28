@@ -182,14 +182,14 @@ describe("export files", () => {
     expect(
       [...sheetFiles("My pack", one.sheets, DEFAULT_SETTINGS)].map((f) => [
         f.imageName,
-        f.data?.name,
+        f.data[0]?.name,
       ])
     ).toEqual([["My_pack.png", "My_pack.json"]]);
     const many = buildAtlas(inputs, { algorithm: "maxrects", maxWidth: 64, maxHeight: 64 });
     const files = [...sheetFiles("p", many.sheets, DEFAULT_SETTINGS)];
     expect(files.map((f) => f.imageName)).toEqual(["p-0.png", "p-1.png"]);
     const metas = files.map(
-      (f) => JSON.parse(f.data!.text) as { meta: { image: string }; frames: object }
+      (f) => JSON.parse(f.data[0].text) as { meta: { image: string }; frames: object }
     );
     expect(metas.map((m) => m.meta.image)).toEqual(["p-0.png", "p-1.png"]);
     expect(metas.flatMap((m) => Object.keys(m.frames))).toHaveLength(5);
@@ -199,7 +199,7 @@ describe("export files", () => {
     const atlas = buildAtlas(inputs, { algorithm: "grid" });
     expect(
       [...sheetFiles("p", atlas.sheets, { ...DEFAULT_SETTINGS, dataFormat: "none" })][0].data
-    ).toBeNull();
+    ).toEqual([]);
   });
 });
 
@@ -365,11 +365,11 @@ describe("export variants", () => {
     const settings = parseSettings({ scales: [2, 1, 9], imageFormat: "webp" });
     expect(settings.scales).toEqual([1, 2]);
     const files = [...sheetFiles("p", atlas.sheets, settings, detectAnimations(["w_1", "w_2"]))];
-    expect(files.map((f) => [f.imageName, f.image.width, f.data!.name])).toEqual([
+    expect(files.map((f) => [f.imageName, f.image.width, f.data[0].name])).toEqual([
       ["p.webp", 20, "p.json"],
       ["p@2x.webp", 40, "p@2x.json"],
     ]);
-    const data = JSON.parse(files[1].data!.text) as {
+    const data = JSON.parse(files[1].data[0].text) as {
       frames: Record<string, { frame: unknown; anchor: unknown; duration: number }>;
       animations: unknown;
       meta: { image: string; scale: string };

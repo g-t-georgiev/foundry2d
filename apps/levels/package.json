@@ -14,7 +14,8 @@
     "@gs2d/render": "workspace:*",
     "@gs2d/workspace": "workspace:*",
     "@gs2d/ui": "workspace:*",
-    "@gs2d/store": "workspace:*"
+    "@gs2d/store": "workspace:*",
+    "@gs2d/contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",

@@ -16,6 +16,7 @@ A `.gs2dsprite` file comes in frame by frame: a one-frame sprite becomes one spr
 
 Add a sheet **together with its data file** (select both, or drop both) and it is cut back into its sprites: trimmed borders are restored and rotated sprites turned upright, pixel for pixel. This reads:
 
+- Game Studio 2D sheets (`.sheet.json`),
 - TexturePacker JSON (Hash, Array and Phaser's multi-atlas),
 - Starling/Sparrow XML,
 - LibGDX `.atlas` files.

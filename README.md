@@ -5,7 +5,7 @@ A studio of tools for 2D games, built on one shared engine. Three apps today, wh
 | App        | What it is for                                                                                                                                                                                       |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Pixel**  | Drawing sprites pixel by pixel, with layers, frames, onion skin and an animated preview. Exports images, GIFs and spritesheets with data for game engines.                                           |
-| **Levels** | Building levels from grids of values, tiles and placed entities, laid out in a world. Tiles can be generated from rules (auto-layers). Exports game JSON, CSV and PNG.                               |
+| **Levels** | Building levels from grids of values, tiles and placed entities, laid out in a world. Tiles can be generated from rules (auto-layers). Exports game JSON, Game Studio 2D contracts, CSV and PNG.     |
 | **Packer** | Packing many images into spritesheets: trimming, rotation, identical sprites stored once, several sheets when needed, animations and pivots. Writes data for Phaser, PixiJS, Godot, LibGDX and more. |
 
 ![The three apps](docs/images/apps.png)
